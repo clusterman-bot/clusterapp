@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole, useSetUserRole, AppRole } from '@/hooks/useUserRole';
 import { Button } from '@/components/ui/button';
@@ -17,14 +17,22 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp, user, loading: authLoading } = useAuth();
   const { data: userRole, isLoading: roleLoading } = useUserRole();
   const setUserRole = useSetUserRole();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
-  // Redirect authenticated users appropriately
+  // Check if user just signed out (indicated by 'signout' param)
+  const justSignedOut = searchParams.get('signout') === 'true';
+
+  // Redirect authenticated users appropriately (but not if they just signed out)
   useEffect(() => {
+    // If user just signed out, don't redirect - wait for auth state to clear
+    if (justSignedOut) return;
+    // Wait for auth to finish loading
+    if (authLoading) return;
     if (!user) return;
     if (roleLoading) return;
     
@@ -42,7 +50,7 @@ export default function Auth() {
     } else {
       navigate('/dashboard', { replace: true });
     }
-  }, [user, userRole, roleLoading, navigate]);
+  }, [user, userRole, authLoading, roleLoading, navigate, justSignedOut]);
 
   // Show loading while checking auth state
   if (user && roleLoading) {
