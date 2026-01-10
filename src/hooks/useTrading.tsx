@@ -190,11 +190,11 @@ export function useOrders(status?: string) {
       let query = supabase
         .from('orders')
         .select('*, stocks(*)')
-        .eq('user_id', user.id) as any;
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       
       if (status && status !== 'all') {
-        query = query.eq('status', status);
+        query = query.eq('status', status as 'pending' | 'executed' | 'cancelled' | 'failed');
       }
       
       const { data, error } = await query;
