@@ -65,6 +65,20 @@ export default function Auth() {
     return null;
   }
 
+  const validateUsername = (username: string): string | null => {
+    const trimmed = username.trim();
+    if (!trimmed) {
+      return 'Username is required';
+    }
+    if (trimmed.length < 3 || trimmed.length > 30) {
+      return 'Username must be 3-30 characters';
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
+      return 'Username can only contain letters, numbers, underscores, and hyphens';
+    }
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -75,10 +89,11 @@ export default function Auth() {
         if (error) throw error;
         // useEffect will handle redirect
       } else {
-        if (!username.trim()) {
-          throw new Error('Username is required');
+        const usernameError = validateUsername(username);
+        if (usernameError) {
+          throw new Error(usernameError);
         }
-        const { error } = await signUp(email, password, username);
+        const { error } = await signUp(email, password, username.trim());
         if (error) throw error;
         setJustSignedUp(true); // Mark that we just signed up
         toast({ title: 'Account created!', description: 'Let\'s set up your profile.' });
