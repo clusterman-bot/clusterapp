@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useCreateModel } from '@/hooks/useModels';
+import { MainNav } from '@/components/MainNav';
+import { BackButton } from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { TrendingUp, ArrowLeft, Code, Blocks, Zap } from 'lucide-react';
+import { Code, Blocks, Zap } from 'lucide-react';
 
 type ModelType = 'sandbox' | 'no-code';
 
@@ -72,19 +74,11 @@ export default function ModelBuilder() {
   if (!modelType) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="border-b border-border">
-          <div className="container flex items-center h-16">
-            <Button variant="ghost" onClick={() => navigate('/dashboard')}>
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back
-            </Button>
-            <div className="flex items-center gap-2 ml-4">
-              <TrendingUp className="h-6 w-6 text-primary" />
-              <span className="text-xl font-bold">Cluster</span>
-            </div>
-          </div>
-        </header>
+        <MainNav />
 
-        <main className="container py-12">
+        <main className="container py-8">
+          <BackButton fallbackPath="/dashboard" className="mb-6" />
+          
           <div className="max-w-3xl mx-auto">
             <h1 className="text-3xl font-bold mb-2">Create New Model</h1>
             <p className="text-muted-foreground mb-8">Choose how you want to build your trading strategy</p>
@@ -144,24 +138,19 @@ export default function ModelBuilder() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
-        <div className="container flex items-center h-16">
-          <Button variant="ghost" onClick={() => setModelType(null)}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back
-          </Button>
-          <div className="flex items-center gap-2 ml-4">
-            <TrendingUp className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">Cluster</span>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            {modelType === 'sandbox' ? <Code className="h-4 w-4" /> : <Blocks className="h-4 w-4" />}
-            <span className="text-sm font-medium capitalize">{modelType} Mode</span>
-          </div>
-        </div>
-      </header>
+      <MainNav />
 
       <main className="container py-8">
+        <Button variant="ghost" onClick={() => setModelType(null)} className="mb-6">
+          ← Back to type selection
+        </Button>
+
         <div className="max-w-2xl mx-auto space-y-8">
+          <div className="flex items-center gap-2">
+            {modelType === 'sandbox' ? <Code className="h-5 w-5 text-primary" /> : <Blocks className="h-5 w-5 text-primary" />}
+            <span className="text-sm font-medium capitalize">{modelType} Mode</span>
+          </div>
+          
           <div>
             <h1 className="text-3xl font-bold mb-2">Configure Your Model</h1>
             <p className="text-muted-foreground">Set up your trading strategy details</p>

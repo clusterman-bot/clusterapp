@@ -323,3 +323,24 @@ export function useIsFollowing(userId: string | undefined) {
     enabled: !!user?.id && !!userId,
   });
 }
+
+export function useLikesForPosts(postIds: string[]) {
+  const { user } = useAuth();
+  
+  return useQuery({
+    queryKey: ['post-likes', user?.id, postIds],
+    queryFn: async () => {
+      if (!user?.id || postIds.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from('post_likes')
+        .select('post_id')
+        .eq('user_id', user.id)
+        .in('post_id', postIds);
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user?.id && postIds.length > 0,
+  });
+}
