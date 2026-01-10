@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   TrendingUp, Home, Compass, MessageSquare, 
-  LayoutDashboard, LogOut, User 
+  LayoutDashboard, LogOut, User, LineChart
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -75,6 +75,14 @@ export function MainNav() {
             >
               <MessageSquare className="mr-2 h-4 w-4" />
               Feed
+            </Button>
+            <Button 
+              variant={location.pathname.startsWith('/trade') ? 'secondary' : 'ghost'} 
+              size="sm"
+              onClick={() => navigate('/trade')}
+            >
+              <LineChart className="mr-2 h-4 w-4" />
+              Trade
             </Button>
             {user && (
               <Button 

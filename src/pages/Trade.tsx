@@ -12,6 +12,7 @@ import {
   Briefcase, Clock, BarChart3
 } from 'lucide-react';
 import { useStocks, useHoldings, useWatchlist, useBalance, Stock } from '@/hooks/useTrading';
+import { LivePriceUpdates } from '@/components/LivePriceUpdates';
 
 function formatPrice(price: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -201,8 +202,10 @@ export default function Trade() {
                   </CardContent>
                 </Card>
 
-                {/* Quick Stats */}
+                {/* Live Prices & Quick Stats */}
                 <div className="space-y-6">
+                  <LivePriceUpdates />
+                  
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-sm font-medium">Market Stats</CardTitle>
