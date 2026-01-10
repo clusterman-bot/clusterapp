@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useMyModels } from '@/hooks/useModels';
+import { useUserRole } from '@/hooks/useUserRole';
 import { MainNav } from '@/components/MainNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +13,10 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { data: profile } = useProfile();
   const { data: models, isLoading } = useMyModels();
+  const { data: userRole } = useUserRole();
   const navigate = useNavigate();
+  
+  const canCreateModels = userRole?.role === 'developer' || userRole?.role === 'admin';
 
   useEffect(() => {
     if (!user) {
@@ -34,9 +38,11 @@ export default function Dashboard() {
             <h1 className="text-3xl font-bold">Dashboard</h1>
             <p className="text-muted-foreground">Manage your trading models</p>
           </div>
-          <Button onClick={() => navigate('/models/new')}>
-            <Plus className="mr-2 h-4 w-4" /> New Model
-          </Button>
+          {canCreateModels && (
+            <Button onClick={() => navigate('/models/new')}>
+              <Plus className="mr-2 h-4 w-4" /> New Model
+            </Button>
+          )}
         </div>
 
         <div className="grid gap-4 md:grid-cols-3 mb-8">
@@ -106,11 +112,13 @@ export default function Dashboard() {
             ) : (
               <div className="text-center py-8">
                 <p className="text-muted-foreground mb-4">
-                  No models yet. Create your first trading model!
+                  {canCreateModels ? 'No models yet. Create your first trading model!' : 'No models yet.'}
                 </p>
-                <Button onClick={() => navigate('/models/new')}>
-                  <Plus className="mr-2 h-4 w-4" /> Create Model
-                </Button>
+                {canCreateModels && (
+                  <Button onClick={() => navigate('/models/new')}>
+                    <Plus className="mr-2 h-4 w-4" /> Create Model
+                  </Button>
+                )}
               </div>
             )}
           </CardContent>

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
+import { useUserRole } from '@/hooks/useUserRole';
 import { useIsFollowing, useFollow, useUnfollow } from '@/hooks/useSocial';
 import { MainNav } from '@/components/MainNav';
 import { Button } from '@/components/ui/button';
@@ -19,11 +20,13 @@ import { supabase } from '@/integrations/supabase/client';
 export default function Profile() {
   const { userId } = useParams<{ userId: string }>();
   const { user } = useAuth();
+  const { data: userRole } = useUserRole();
   const navigate = useNavigate();
   
   // If no userId, show current user's profile
   const profileId = userId || user?.id;
   const isOwnProfile = !userId || userId === user?.id;
+  const canCreateModels = userRole?.role === 'developer' || userRole?.role === 'admin';
 
   const { data: ownProfile } = useProfile();
   
@@ -279,7 +282,7 @@ export default function Profile() {
                   <div className="col-span-2 text-center py-12">
                     <Store className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <p className="text-muted-foreground mb-2">No public models yet</p>
-                    {isOwnProfile && (
+                    {isOwnProfile && canCreateModels && (
                       <Button onClick={() => navigate('/models/new')}>
                         Create Your First Model
                       </Button>
