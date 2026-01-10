@@ -1,33 +1,34 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { useModel, useDeleteModel } from '@/hooks/useModels';
 import { useBacktests } from '@/hooks/useBacktests';
 import { MainNav } from '@/components/MainNav';
 import { BackButton } from '@/components/BackButton';
+import { ModelSubscribeButton } from '@/components/ModelSubscribeButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { 
   TrendingUp, Play, Trash2, Edit, Users, 
-  BarChart3, TrendingDown, Target, Calendar 
+  BarChart3, TrendingDown, Target, Calendar, Shield
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function ModelDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { data: userRole } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data: model, isLoading } = useModel(id!);
   const { data: backtests } = useBacktests(id!);
   const deleteModel = useDeleteModel();
 
-  if (!user) {
-    navigate('/auth');
-    return null;
-  }
+  const isRetailTrader = userRole?.role === 'retail_trader';
 
   if (isLoading) {
     return (
@@ -42,13 +43,13 @@ export default function ModelDetail() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted-foreground mb-4">Model not found</p>
-          <Button onClick={() => navigate('/dashboard')}>Back to Dashboard</Button>
+          <Button onClick={() => navigate('/explore')}>Browse Models</Button>
         </div>
       </div>
     );
   }
 
-  const isOwner = model.user_id === user.id;
+  const isOwner = user && model.user_id === user.id;
 
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this model?')) return;
@@ -71,37 +72,82 @@ export default function ModelDetail() {
     { date: '2024-06', value: 125000 },
   ];
 
+  // Get model developer info
+  const developer = (model as any).profiles;
+
   return (
     <div className="min-h-screen bg-background">
       <MainNav />
 
       <main className="container py-8">
-        <BackButton fallbackPath="/dashboard" className="mb-4" />
+        <BackButton fallbackPath="/explore" className="mb-4" />
         
-        <div className="flex items-start justify-between mb-8">
-          <div>
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 mb-8">
+          <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-3xl font-bold">{model.name}</h1>
-              <Badge variant={model.status === 'active' ? 'default' : 'secondary'}>
+              <Badge variant={model.status === 'active' || model.status === 'published' ? 'default' : 'secondary'}>
                 {model.status}
               </Badge>
               {model.is_public && <Badge variant="outline">Public</Badge>}
             </div>
             <p className="text-muted-foreground">{model.description}</p>
-            <p className="text-sm text-muted-foreground mt-1">
+            
+            {/* Developer Info */}
+            {developer && (
+              <div 
+                className="flex items-center gap-3 mt-4 cursor-pointer group"
+                onClick={() => navigate(`/profile/${developer.id}`)}
+              >
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={developer.avatar_url || undefined} />
+                  <AvatarFallback>{developer.display_name?.[0] || developer.username?.[0] || 'D'}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium group-hover:underline">
+                      {developer.display_name || developer.username}
+                    </span>
+                    {developer.is_verified && (
+                      <Badge variant="secondary" className="text-xs">
+                        <Shield className="h-3 w-3 mr-1" />
+                        Verified
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">@{developer.username}</p>
+                </div>
+              </div>
+            )}
+            
+            <p className="text-sm text-muted-foreground mt-3">
               {model.model_type} • Created {new Date(model.created_at!).toLocaleDateString()}
             </p>
           </div>
-          {isOwner && (
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => navigate(`/models/${id}/edit`)}>
-                <Edit className="mr-2 h-4 w-4" /> Edit
-              </Button>
-              <Button variant="destructive" onClick={handleDelete}>
-                <Trash2 className="mr-2 h-4 w-4" /> Delete
-              </Button>
-            </div>
-          )}
+
+          {/* Actions */}
+          <div className="flex flex-wrap gap-3">
+            {/* Subscribe button for non-owners on public models */}
+            {!isOwner && model.is_public && (
+              <ModelSubscribeButton
+                modelId={model.id}
+                modelName={model.name}
+                performanceFee={model.performance_fee_percent || 20}
+                size="lg"
+              />
+            )}
+            
+            {isOwner && (
+              <>
+                <Button variant="outline" onClick={() => navigate(`/models/${id}/edit`)}>
+                  <Edit className="mr-2 h-4 w-4" /> Edit
+                </Button>
+                <Button variant="destructive" onClick={handleDelete}>
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-4 mb-8">
