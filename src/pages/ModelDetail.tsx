@@ -2,13 +2,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useModel, useDeleteModel } from '@/hooks/useModels';
 import { useBacktests } from '@/hooks/useBacktests';
+import { MainNav } from '@/components/MainNav';
+import { BackButton } from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  TrendingUp, ArrowLeft, Play, Trash2, Edit, Users, 
+  TrendingUp, Play, Trash2, Edit, Users, 
   BarChart3, TrendingDown, Target, Calendar 
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -71,19 +73,11 @@ export default function ModelDetail() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
-        <div className="container flex items-center h-16">
-          <Button variant="ghost" onClick={() => navigate('/dashboard')}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back
-          </Button>
-          <div className="flex items-center gap-2 ml-4">
-            <TrendingUp className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">Cluster</span>
-          </div>
-        </div>
-      </header>
+      <MainNav />
 
       <main className="container py-8">
+        <BackButton fallbackPath="/dashboard" className="mb-4" />
+        
         <div className="flex items-start justify-between mb-8">
           <div>
             <div className="flex items-center gap-3 mb-2">

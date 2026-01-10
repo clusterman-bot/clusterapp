@@ -3,13 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useModel } from '@/hooks/useModels';
 import { useCreateBacktest } from '@/hooks/useBacktests';
+import { MainNav } from '@/components/MainNav';
+import { BackButton } from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { TrendingUp, ArrowLeft, Play, Calendar, DollarSign } from 'lucide-react';
+import { Play, Calendar, DollarSign } from 'lucide-react';
 
 export default function RunBacktest() {
   const { id } = useParams<{ id: string }>();
@@ -73,19 +75,11 @@ export default function RunBacktest() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
-        <div className="container flex items-center h-16">
-          <Button variant="ghost" onClick={() => navigate(`/models/${id}`)}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back
-          </Button>
-          <div className="flex items-center gap-2 ml-4">
-            <TrendingUp className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">Cluster</span>
-          </div>
-        </div>
-      </header>
+      <MainNav />
 
       <main className="container py-8">
+        <BackButton fallbackPath={`/models/${id}`} className="mb-6" />
+
         <div className="max-w-2xl mx-auto">
           <div className="mb-8">
             <h1 className="text-3xl font-bold mb-2">Run Backtest</h1>

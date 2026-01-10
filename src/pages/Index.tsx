@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { usePublicFeed, Post as SocialPost } from '@/hooks/useSocial';
+import { useUserRole } from '@/hooks/useUserRole';
+import { usePublicFeed, useLikesForPosts, useLikePost, useUnlikePost, Post as SocialPost } from '@/hooks/useSocial';
 import { MainNav } from '@/components/MainNav';
+import { UserProfileSidebar } from '@/components/UserProfileSidebar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -9,18 +11,25 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   TrendingUp, Heart, MessageCircle, Code, LineChart, 
-  Compass, BarChart3, Users, ArrowUpRight, Zap
+  Compass, BarChart3, Users, ArrowUpRight, Zap, Plus
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function Index() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
   const navigate = useNavigate();
   const { data: feedPosts, isLoading: feedLoading } = usePublicFeed();
+  
+  const postIds = feedPosts?.map(p => p.id) || [];
+  const { data: userLikes } = useLikesForPosts(postIds);
+  const likePost = useLikePost();
+  const unlikePost = useUnlikePost();
+  const likedPostIds = new Set(userLikes?.map(l => l.post_id) || []);
 
-  // Fetch all public models for the landing page (regardless of status)
+  // Fetch all public models
   const { data: models, isLoading: modelsLoading } = useQuery({
     queryKey: ['models', 'landing'],
     queryFn: async () => {
@@ -54,14 +63,30 @@ export default function Index() {
     (p) => p.post_type === 'update' || p.post_type === 'insight'
   );
 
-  // Get top models
   const topModels = models || [];
+  const isLoggedIn = !!user && !authLoading;
+  const hasRole = !!userRole && !roleLoading;
+
+  const handleLike = (postId: string) => {
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
+    if (likedPostIds.has(postId)) {
+      unlikePost.mutate(postId);
+    } else {
+      likePost.mutate(postId);
+    }
+  };
 
   const PostCard = ({ post }: { post: SocialPost }) => (
     <Card className="mb-4 hover:border-primary/50 transition-colors">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
+          <div 
+            className="flex items-center gap-3 cursor-pointer"
+            onClick={() => navigate(`/profile/${post.profiles?.id}`)}
+          >
             <Avatar>
               <AvatarImage src={post.profiles?.avatar_url || undefined} />
               <AvatarFallback>
@@ -70,7 +95,9 @@ export default function Index() {
             </Avatar>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-medium">{post.profiles?.display_name || post.profiles?.username}</span>
+                <span className="font-medium hover:underline">
+                  {post.profiles?.display_name || post.profiles?.username}
+                </span>
                 {post.profiles?.is_verified && (
                   <Badge variant="secondary" className="text-xs">Verified</Badge>
                 )}
@@ -109,15 +136,15 @@ export default function Index() {
 
         <div className="flex items-center gap-6 text-muted-foreground">
           <button 
-            className="flex items-center gap-2 hover:text-primary transition-colors"
-            onClick={() => navigate('/auth')}
+            className={`flex items-center gap-2 hover:text-primary transition-colors ${likedPostIds.has(post.id) ? 'text-red-500' : ''}`}
+            onClick={() => handleLike(post.id)}
           >
-            <Heart className="h-4 w-4" />
+            <Heart className={`h-4 w-4 ${likedPostIds.has(post.id) ? 'fill-current' : ''}`} />
             <span className="text-sm">{post.likes_count || 0}</span>
           </button>
           <button 
             className="flex items-center gap-2 hover:text-primary transition-colors"
-            onClick={() => navigate('/auth')}
+            onClick={() => user ? null : navigate('/auth')}
           >
             <MessageCircle className="h-4 w-4" />
             <span className="text-sm">{post.comments_count || 0}</span>
@@ -164,6 +191,171 @@ export default function Index() {
     </Card>
   );
 
+  // Logged-in Home View (Twitter/LinkedIn style)
+  if (isLoggedIn && hasRole) {
+    return (
+      <div className="min-h-screen bg-background">
+        <MainNav />
+
+        <main className="container py-6">
+          <div className="grid lg:grid-cols-4 gap-6">
+            {/* Left Sidebar - User Profile */}
+            <div className="hidden lg:block">
+              <UserProfileSidebar />
+            </div>
+
+            {/* Main Feed */}
+            <div className="lg:col-span-2">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Home</h2>
+                <Button size="sm" onClick={() => navigate('/feed')}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Post
+                </Button>
+              </div>
+
+              <Tabs defaultValue="all">
+                <TabsList className="grid w-full grid-cols-3 mb-4">
+                  <TabsTrigger value="all">All</TabsTrigger>
+                  <TabsTrigger value="developers">
+                    <Code className="h-4 w-4 mr-2" />
+                    Developers
+                  </TabsTrigger>
+                  <TabsTrigger value="traders">
+                    <LineChart className="h-4 w-4 mr-2" />
+                    Traders
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="all">
+                  {feedLoading ? (
+                    <div className="space-y-4">
+                      {[...Array(3)].map((_, i) => (
+                        <Card key={i} className="animate-pulse">
+                          <CardHeader><div className="h-12 bg-muted rounded" /></CardHeader>
+                          <CardContent><div className="h-20 bg-muted rounded" /></CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : allPosts.length > 0 ? (
+                    allPosts.map((post) => <PostCard key={post.id} post={post} />)
+                  ) : (
+                    <Card className="text-center py-12">
+                      <CardContent>
+                        <p className="text-muted-foreground mb-4">No posts yet. Start the conversation!</p>
+                        <Button onClick={() => navigate('/feed')}>Create Post</Button>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="developers">
+                  {developerPosts.length > 0 ? (
+                    developerPosts.map((post) => <PostCard key={post.id} post={post} />)
+                  ) : (
+                    <Card className="text-center py-12">
+                      <CardContent>
+                        <p className="text-muted-foreground">No developer posts yet</p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="traders">
+                  {retailPosts.length > 0 ? (
+                    retailPosts.map((post) => <PostCard key={post.id} post={post} />)
+                  ) : (
+                    <Card className="text-center py-12">
+                      <CardContent>
+                        <p className="text-muted-foreground">No trader posts yet</p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </div>
+
+            {/* Right Sidebar - Top Models */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Trending Models</h3>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/explore')}>
+                  View all
+                </Button>
+              </div>
+
+              {modelsLoading ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, i) => (
+                    <Card key={i} className="animate-pulse">
+                      <CardContent className="py-3"><div className="h-12 bg-muted rounded" /></CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : topModels.length > 0 ? (
+                <div className="space-y-3">
+                  {topModels.slice(0, 3).map((model) => (
+                    <ModelCard key={model.id} model={model} />
+                  ))}
+                </div>
+              ) : (
+                <Card className="text-center py-6">
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground mb-2">No models yet</p>
+                    {userRole?.role === 'developer' && (
+                      <Button size="sm" onClick={() => navigate('/models/new')}>
+                        Create Model
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Quick Actions */}
+              <Card className="mt-4">
+                <CardContent className="pt-4">
+                  <h4 className="font-medium mb-3 text-sm">Quick Actions</h4>
+                  <div className="space-y-2">
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start" 
+                      size="sm"
+                      onClick={() => navigate('/explore')}
+                    >
+                      <Compass className="h-4 w-4 mr-2" />
+                      Explore Models
+                    </Button>
+                    {userRole?.role === 'developer' && (
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start" 
+                        size="sm"
+                        onClick={() => navigate('/models/new')}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create New Model
+                      </Button>
+                    )}
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start" 
+                      size="sm"
+                      onClick={() => navigate('/dashboard')}
+                    >
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      Dashboard
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Landing Page for logged-out users
   return (
     <div className="min-h-screen bg-background">
       <MainNav />
