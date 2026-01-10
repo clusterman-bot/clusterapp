@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSetUserRole, useUserRole, AppRole } from '@/hooks/useUserRole';
@@ -15,6 +15,25 @@ export default function Onboarding() {
   const { toast } = useToast();
   const [selectedRole, setSelectedRole] = useState<AppRole | null>(null);
 
+  // Redirect users appropriately
+  useEffect(() => {
+    if (authLoading || roleLoading) return;
+
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
+
+    // If user already has a role, redirect to appropriate dashboard
+    if (existingRole) {
+      if (existingRole.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
+    }
+  }, [user, existingRole, authLoading, roleLoading, navigate]);
+
   if (authLoading || roleLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -23,18 +42,7 @@ export default function Onboarding() {
     );
   }
 
-  if (!user) {
-    navigate('/auth');
-    return null;
-  }
-
-  // If user already has a role, redirect to appropriate dashboard
-  if (existingRole) {
-    if (existingRole.role === 'admin') {
-      navigate('/admin');
-    } else {
-      navigate('/dashboard');
-    }
+  if (!user || existingRole) {
     return null;
   }
 

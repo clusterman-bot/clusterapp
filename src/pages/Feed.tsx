@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useFeed, useCreatePost, useLikePost, useUnlikePost, Post as SocialPost } from '@/hooks/useSocial';
+import { MainNav } from '@/components/MainNav';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -13,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   TrendingUp, Heart, MessageCircle, Share2, Send, 
-  Code, LineChart, LogOut, Home, Compass, User, Settings 
+  Code, LineChart
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -67,8 +68,13 @@ export default function Feed() {
     fetchLikedPosts();
   }, [user?.id]);
 
+  useEffect(() => {
+    if (!user) {
+      navigate('/auth');
+    }
+  }, [user, navigate]);
+
   if (!user) {
-    navigate('/auth');
     return null;
   }
 
@@ -194,31 +200,7 @@ export default function Feed() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border sticky top-0 bg-background z-10">
-        <div className="container flex items-center justify-between h-16">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">Cluster</span>
-          </div>
-          <nav className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/feed')}>
-              <Home className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => navigate('/explore')}>
-              <Compass className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => navigate('/profile')}>
-              <User className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
-              <Settings className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={handleSignOut}>
-              <LogOut className="h-4 w-4" />
-            </Button>
-          </nav>
-        </div>
-      </header>
+      <MainNav />
 
       <main className="container py-6">
         <div className="max-w-2xl mx-auto">

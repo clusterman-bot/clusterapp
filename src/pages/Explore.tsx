@@ -1,24 +1,49 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { usePublicModels } from '@/hooks/useModels';
-import { Button } from '@/components/ui/button';
+import { MainNav } from '@/components/MainNav';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   TrendingUp, Search, BarChart3, Users, TrendingDown, 
   Target, ArrowUpRight, Filter 
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Explore() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: models, isLoading } = usePublicModels();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('return');
   const [filterType, setFilterType] = useState('all');
+
+  // Fetch all public models (regardless of status for marketplace visibility)
+  const { data: models, isLoading } = useQuery({
+    queryKey: ['models', 'marketplace'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('models')
+        .select(`
+          *,
+          profiles:user_id (
+            id,
+            username,
+            display_name,
+            avatar_url,
+            is_verified
+          )
+        `)
+        .eq('is_public', true)
+        .order('total_subscribers', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+  });
 
   const filteredModels = models?.filter(model => {
     const matchesSearch = model.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -42,21 +67,7 @@ export default function Explore() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
-        <div className="container flex items-center justify-between h-16">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">Cluster</span>
-          </div>
-          <nav className="flex items-center gap-4">
-            {user ? (
-              <Button onClick={() => navigate('/dashboard')}>Dashboard</Button>
-            ) : (
-              <Button onClick={() => navigate('/auth')}>Get Started</Button>
-            )}
-          </nav>
-        </div>
-      </header>
+      <MainNav />
 
       <main className="container py-8">
         <div className="mb-8">
