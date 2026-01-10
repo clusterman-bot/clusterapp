@@ -41,8 +41,6 @@ export interface Comment {
 }
 
 export function useFeed() {
-  const { user } = useAuth();
-  
   return useQuery({
     queryKey: ['feed'],
     queryFn: async () => {
@@ -64,6 +62,35 @@ export function useFeed() {
         `)
         .order('created_at', { ascending: false })
         .limit(50);
+      
+      if (error) throw error;
+      return data as Post[];
+    },
+  });
+}
+
+export function usePublicFeed() {
+  return useQuery({
+    queryKey: ['public-feed'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          profiles:user_id (
+            id,
+            username,
+            display_name,
+            avatar_url,
+            is_verified
+          ),
+          models:model_id (
+            id,
+            name
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(20);
       
       if (error) throw error;
       return data as Post[];

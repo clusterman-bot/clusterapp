@@ -31,7 +31,7 @@ export default function Auth() {
       if (isLogin) {
         const { error } = await signIn(email, password);
         if (error) throw error;
-        navigate('/onboarding');
+        navigate('/dashboard');
       } else {
         if (!username.trim()) {
           throw new Error('Username is required');
@@ -39,7 +39,7 @@ export default function Auth() {
         const { error } = await signUp(email, password, username);
         if (error) throw error;
         toast({ title: 'Account created!', description: 'Welcome to Cluster.' });
-        navigate('/dashboard');
+        navigate('/onboarding');
       }
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
