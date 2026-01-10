@@ -176,6 +176,51 @@ export type Database = {
           },
         ]
       }
+      holdings: {
+        Row: {
+          average_cost: number
+          created_at: string
+          id: string
+          quantity: number
+          stock_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          average_cost?: number
+          created_at?: string
+          id?: string
+          quantity?: number
+          stock_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          average_cost?: number
+          created_at?: string
+          id?: string
+          quantity?: number
+          stock_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holdings_stock_id_fkey"
+            columns: ["stock_id"]
+            isOneToOne: false
+            referencedRelation: "stocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "holdings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       models: {
         Row: {
           configuration: Json | null
@@ -237,6 +282,78 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "models_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          created_at: string
+          executed_at: string | null
+          executed_price: number | null
+          id: string
+          limit_price: number | null
+          next_execution_at: string | null
+          order_side: Database["public"]["Enums"]["order_side"]
+          order_type: Database["public"]["Enums"]["order_type"]
+          price: number | null
+          quantity: number
+          recurring_interval: string | null
+          status: Database["public"]["Enums"]["order_status"]
+          stock_id: string
+          stop_price: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          executed_at?: string | null
+          executed_price?: number | null
+          id?: string
+          limit_price?: number | null
+          next_execution_at?: string | null
+          order_side: Database["public"]["Enums"]["order_side"]
+          order_type?: Database["public"]["Enums"]["order_type"]
+          price?: number | null
+          quantity: number
+          recurring_interval?: string | null
+          status?: Database["public"]["Enums"]["order_status"]
+          stock_id: string
+          stop_price?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          executed_at?: string | null
+          executed_price?: number | null
+          id?: string
+          limit_price?: number | null
+          next_execution_at?: string | null
+          order_side?: Database["public"]["Enums"]["order_side"]
+          order_type?: Database["public"]["Enums"]["order_type"]
+          price?: number | null
+          quantity?: number
+          recurring_interval?: string | null
+          status?: Database["public"]["Enums"]["order_status"]
+          stock_id?: string
+          stop_price?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_stock_id_fkey"
+            columns: ["stock_id"]
+            isOneToOne: false
+            referencedRelation: "stocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -382,6 +499,51 @@ export type Database = {
         }
         Relationships: []
       }
+      stocks: {
+        Row: {
+          current_price: number
+          day_high: number | null
+          day_low: number | null
+          id: string
+          logo_url: string | null
+          market_cap: number | null
+          name: string
+          previous_close: number | null
+          sector: string | null
+          symbol: string
+          updated_at: string
+          volume: number | null
+        }
+        Insert: {
+          current_price?: number
+          day_high?: number | null
+          day_low?: number | null
+          id?: string
+          logo_url?: string | null
+          market_cap?: number | null
+          name: string
+          previous_close?: number | null
+          sector?: string | null
+          symbol: string
+          updated_at?: string
+          volume?: number | null
+        }
+        Update: {
+          current_price?: number
+          day_high?: number | null
+          day_low?: number | null
+          id?: string
+          logo_url?: string | null
+          market_cap?: number | null
+          name?: string
+          previous_close?: number | null
+          sector?: string | null
+          symbol?: string
+          updated_at?: string
+          volume?: number | null
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           cancelled_at: string | null
@@ -489,6 +651,38 @@ export type Database = {
           },
         ]
       }
+      user_balances: {
+        Row: {
+          cash_balance: number
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cash_balance?: number
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cash_balance?: number
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_balances_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -510,6 +704,42 @@ export type Database = {
         }
         Relationships: []
       }
+      watchlist: {
+        Row: {
+          created_at: string
+          id: string
+          stock_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          stock_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          stock_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchlist_stock_id_fkey"
+            columns: ["stock_id"]
+            isOneToOne: false
+            referencedRelation: "stocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchlist_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -529,6 +759,9 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "developer" | "retail_trader"
+      order_side: "buy" | "sell"
+      order_status: "pending" | "executed" | "cancelled" | "failed"
+      order_type: "market" | "limit" | "stop_loss" | "recurring"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -657,6 +890,9 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "developer", "retail_trader"],
+      order_side: ["buy", "sell"],
+      order_status: ["pending", "executed", "cancelled", "failed"],
+      order_type: ["market", "limit", "stop_loss", "recurring"],
     },
   },
 } as const

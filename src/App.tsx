@@ -16,6 +16,10 @@ import RunBacktest from "./pages/RunBacktest";
 import Feed from "./pages/Feed";
 import Onboarding from "./pages/Onboarding";
 import AdminDashboard from "./pages/AdminDashboard";
+import Trade from "./pages/Trade";
+import StockDetail from "./pages/StockDetail";
+import Portfolio from "./pages/Portfolio";
+import Orders from "./pages/Orders";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -39,6 +43,10 @@ const App = () => (
             <Route path="/models/:id" element={<ModelDetail />} />
             <Route path="/models/:id/backtest" element={<RunBacktest />} />
             <Route path="/explore" element={<Explore />} />
+            <Route path="/trade" element={<Trade />} />
+            <Route path="/trade/stocks/:symbol" element={<StockDetail />} />
+            <Route path="/trade/portfolio" element={<Portfolio />} />
+            <Route path="/trade/orders" element={<Orders />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/profile/:userId" element={<Profile />} />
             <Route path="*" element={<NotFound />} />
