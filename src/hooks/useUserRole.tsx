@@ -42,6 +42,11 @@ export function useIsDeveloper() {
   return { isDeveloper: role?.role === 'developer', isLoading };
 }
 
+export function useIsRetailTrader() {
+  const { data: role, isLoading } = useUserRole();
+  return { isRetailTrader: role?.role === 'retail_trader', isLoading };
+}
+
 export function useSetUserRole() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
