@@ -2,6 +2,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
@@ -20,12 +21,15 @@ export function MainNav() {
   const { user, signOut } = useAuth();
   const { data: profile } = useProfile();
   const { data: userRole } = useUserRole();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/');
+    // Clear all query cache to remove stale user data
+    queryClient.clear();
+    navigate('/auth', { replace: true });
   };
 
   const isActive = (path: string) => location.pathname === path;
