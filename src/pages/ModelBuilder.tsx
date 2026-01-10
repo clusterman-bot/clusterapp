@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { useCreateModel } from '@/hooks/useModels';
 import { MainNav } from '@/components/MainNav';
 import { BackButton } from '@/components/BackButton';
@@ -18,9 +19,12 @@ type ModelType = 'sandbox' | 'no-code';
 
 export default function ModelBuilder() {
   const { user } = useAuth();
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
   const createModel = useCreateModel();
+  
+  const canCreateModels = userRole?.role === 'developer' || userRole?.role === 'admin';
 
   const [modelType, setModelType] = useState<ModelType | null>(null);
   const [name, setName] = useState('');
@@ -35,8 +39,30 @@ export default function ModelBuilder() {
   const [assetClass, setAssetClass] = useState('stocks');
   const [timeframe, setTimeframe] = useState('daily');
 
-  if (!user) {
-    navigate('/auth');
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!user) {
+      navigate('/auth');
+    }
+  }, [user, navigate]);
+
+  // Redirect retail traders - they can't create models
+  useEffect(() => {
+    if (!roleLoading && userRole && !canCreateModels) {
+      toast({ 
+        title: 'Access Denied', 
+        description: 'Only developers can create models.', 
+        variant: 'destructive' 
+      });
+      navigate('/dashboard');
+    }
+  }, [userRole, roleLoading, canCreateModels, navigate, toast]);
+
+  if (!user || roleLoading) {
+    return null;
+  }
+
+  if (!canCreateModels) {
     return null;
   }
 
