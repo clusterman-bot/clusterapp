@@ -2,35 +2,28 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
-import { useFeed, useCreatePost, useLikePost, useUnlikePost, Post as SocialPost } from '@/hooks/useSocial';
+import { useFeed, useLikePost, useUnlikePost, Post as SocialPost } from '@/hooks/useSocial';
 import { MainNav } from '@/components/MainNav';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
+import { SocialPostCard } from '@/components/SocialPostCard';
+import { CreatePostBox } from '@/components/CreatePostBox';
+import { WhoToFollow } from '@/components/WhoToFollow';
+import { TrendingTopics } from '@/components/TrendingTopics';
+import { UserProfileSidebar } from '@/components/UserProfileSidebar';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/hooks/use-toast';
+import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  TrendingUp, Heart, MessageCircle, Share2, Send, 
-  Code, LineChart
-} from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { Search, Code, LineChart, Sparkles } from 'lucide-react';
 
 export default function Feed() {
   const { user, signOut } = useAuth();
   const { data: userRole } = useUserRole();
   const { data: feedPosts, isLoading, refetch } = useFeed();
-  const createPost = useCreatePost();
   const likePost = useLikePost();
   const unlikePost = useUnlikePost();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const [newPostContent, setNewPostContent] = useState('');
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
-
-  const isDeveloper = userRole?.role === 'developer';
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Subscribe to realtime updates
   useEffect(() => {
@@ -78,21 +71,6 @@ export default function Feed() {
     return null;
   }
 
-  const handleCreatePost = async () => {
-    if (!newPostContent.trim()) return;
-
-    try {
-      await createPost.mutateAsync({
-        content: newPostContent,
-        post_type: isDeveloper ? 'model_update' : 'update',
-      });
-      setNewPostContent('');
-      toast({ title: 'Posted!', description: 'Your post has been published' });
-    } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    }
-  };
-
   const handleLike = async (postId: string) => {
     try {
       if (likedPosts.has(postId)) {
@@ -107,13 +85,8 @@ export default function Feed() {
         setLikedPosts(prev => new Set([...prev, postId]));
       }
     } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      console.error('Error liking post:', error);
     }
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/');
   };
 
   // Filter posts for different tabs
@@ -125,167 +98,142 @@ export default function Feed() {
     (p) => p.post_type === 'update' || p.post_type === 'insight'
   );
 
-  const PostCard = ({ post }: { post: SocialPost }) => (
-    <Card className="mb-4">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div 
-            className="flex items-center gap-3 cursor-pointer"
-            onClick={() => navigate(`/profile/${post.profiles?.id}`)}
-          >
-            <Avatar>
-              <AvatarImage src={post.profiles?.avatar_url || undefined} />
-              <AvatarFallback>
-                {post.profiles?.display_name?.[0] || post.profiles?.username?.[0] || '?'}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{post.profiles?.display_name || post.profiles?.username}</span>
-                {post.profiles?.is_verified && (
-                  <Badge variant="secondary" className="text-xs">Verified</Badge>
-                )}
-                {post.post_type === 'model_update' && (
-                  <Badge variant="outline" className="text-xs">
-                    <Code className="h-3 w-3 mr-1" />
-                    Developer
-                  </Badge>
-                )}
-              </div>
-              <span className="text-sm text-muted-foreground">
-                @{post.profiles?.username} • {post.created_at && formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
-              </span>
-            </div>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="whitespace-pre-wrap mb-4">{post.content}</p>
+  // Filter by search query
+  const filterPosts = (posts: SocialPost[]) => {
+    if (!searchQuery.trim()) return posts;
+    const query = searchQuery.toLowerCase();
+    return posts.filter(
+      p => 
+        p.content.toLowerCase().includes(query) ||
+        p.profiles?.username?.toLowerCase().includes(query) ||
+        p.profiles?.display_name?.toLowerCase().includes(query)
+    );
+  };
 
-        {post.models && (
-          <Card 
-            className="mb-4 cursor-pointer hover:bg-muted/50 transition-colors"
-            onClick={() => navigate(`/models/${post.models?.id}`)}
-          >
-            <CardContent className="py-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                  <span className="font-medium">{post.models.name}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        <div className="flex items-center gap-6 text-muted-foreground">
-          <button 
-            className={`flex items-center gap-2 hover:text-primary transition-colors ${likedPosts.has(post.id) ? 'text-red-500' : ''}`}
-            onClick={() => handleLike(post.id)}
-          >
-            <Heart className={`h-4 w-4 ${likedPosts.has(post.id) ? 'fill-current' : ''}`} />
-            <span className="text-sm">{post.likes_count || 0}</span>
-          </button>
-          <button className="flex items-center gap-2 hover:text-primary transition-colors">
-            <MessageCircle className="h-4 w-4" />
-            <span className="text-sm">{post.comments_count || 0}</span>
-          </button>
-          <button className="flex items-center gap-2 hover:text-primary transition-colors">
-            <Share2 className="h-4 w-4" />
-          </button>
+  const renderPosts = (posts: SocialPost[]) => {
+    const filtered = filterPosts(posts);
+    if (isLoading) {
+      return (
+        <div className="space-y-4">
+          {[...Array(3)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="h-32" />
+            </Card>
+          ))}
         </div>
-      </CardContent>
-    </Card>
-  );
+      );
+    }
+    
+    if (filtered.length === 0) {
+      return (
+        <Card className="text-center py-12">
+          <CardContent>
+            <Sparkles className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <p className="text-lg font-medium mb-2">No posts yet</p>
+            <p className="text-muted-foreground text-sm">Be the first to share something!</p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <div className="divide-y divide-border rounded-lg border">
+        {filtered.map((post) => (
+          <SocialPostCard
+            key={post.id}
+            post={post}
+            isLiked={likedPosts.has(post.id)}
+            onLike={handleLike}
+          />
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
       <MainNav />
 
-      <main className="container py-6">
-        <div className="max-w-2xl mx-auto">
-          {/* Create Post */}
-          <Card className="mb-6">
-            <CardContent className="pt-4">
-              <Textarea
-                placeholder={isDeveloper ? "Share an update about your models..." : "What's on your mind?"}
-                value={newPostContent}
-                onChange={(e) => setNewPostContent(e.target.value)}
-                rows={3}
-                className="mb-3"
+      <main className="container py-4">
+        <div className="grid lg:grid-cols-4 gap-6">
+          {/* Left Sidebar */}
+          <div className="hidden lg:block">
+            <div className="sticky top-20">
+              <UserProfileSidebar />
+            </div>
+          </div>
+
+          {/* Main Feed */}
+          <div className="lg:col-span-2">
+            {/* Search */}
+            <div className="mb-4 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search posts..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
               />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {isDeveloper ? (
-                    <Badge variant="outline">
-                      <Code className="h-3 w-3 mr-1" />
-                      Posting as Developer
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline">
-                      <LineChart className="h-3 w-3 mr-1" />
-                      Posting as Trader
-                    </Badge>
-                  )}
-                </div>
-                <Button 
-                  onClick={handleCreatePost} 
-                  disabled={!newPostContent.trim() || createPost.isPending}
+            </div>
+
+            {/* Create Post */}
+            <CreatePostBox onPostCreated={() => refetch()} />
+
+            {/* Feed Tabs */}
+            <Tabs defaultValue="for-you" className="mt-4">
+              <TabsList className="w-full grid grid-cols-3 h-12 p-0 bg-transparent border-b rounded-none">
+                <TabsTrigger 
+                  value="for-you" 
+                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
                 >
-                  <Send className="h-4 w-4 mr-2" />
-                  Post
-                </Button>
+                  For You
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="developers"
+                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
+                >
+                  <Code className="h-4 w-4 mr-2" />
+                  Developers
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="traders"
+                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
+                >
+                  <LineChart className="h-4 w-4 mr-2" />
+                  Traders
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="for-you" className="mt-4">
+                {renderPosts(allPosts)}
+              </TabsContent>
+
+              <TabsContent value="developers" className="mt-4">
+                {renderPosts(developerPosts)}
+              </TabsContent>
+
+              <TabsContent value="traders" className="mt-4">
+                {renderPosts(retailPosts)}
+              </TabsContent>
+            </Tabs>
+          </div>
+
+          {/* Right Sidebar */}
+          <div className="hidden lg:block">
+            <div className="sticky top-20 space-y-4">
+              <TrendingTopics />
+              <WhoToFollow />
+              
+              {/* Footer Links */}
+              <div className="text-xs text-muted-foreground space-x-2 px-2">
+                <a href="#" className="hover:underline">Terms</a>
+                <a href="#" className="hover:underline">Privacy</a>
+                <a href="#" className="hover:underline">About</a>
+                <a href="#" className="hover:underline">Help</a>
+                <span>© 2024 Cluster</span>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Feed Tabs */}
-          <Tabs defaultValue="all">
-            <TabsList className="grid w-full grid-cols-3 mb-6">
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="developers">
-                <Code className="h-4 w-4 mr-2" />
-                Developers
-              </TabsTrigger>
-              <TabsTrigger value="traders">
-                <LineChart className="h-4 w-4 mr-2" />
-                Traders
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="all">
-              {isLoading ? (
-                <p className="text-center text-muted-foreground py-8">Loading feed...</p>
-              ) : allPosts.length > 0 ? (
-                allPosts.map((post) => <PostCard key={post.id} post={post} />)
-              ) : (
-                <div className="text-center py-12">
-                  <p className="text-muted-foreground mb-4">No posts yet</p>
-                  <p className="text-sm text-muted-foreground">Follow some users to see their updates here!</p>
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="developers">
-              {developerPosts.length > 0 ? (
-                developerPosts.map((post) => <PostCard key={post.id} post={post} />)
-              ) : (
-                <div className="text-center py-12">
-                  <p className="text-muted-foreground">No developer posts yet</p>
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="traders">
-              {retailPosts.length > 0 ? (
-                retailPosts.map((post) => <PostCard key={post.id} post={post} />)
-              ) : (
-                <div className="text-center py-12">
-                  <p className="text-muted-foreground">No trader posts yet</p>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+            </div>
+          </div>
         </div>
       </main>
     </div>

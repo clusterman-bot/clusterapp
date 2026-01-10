@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Button } from '@/components/ui/button';
@@ -15,33 +15,54 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
+  const [justSignedUp, setJustSignedUp] = useState(false);
   const { signIn, signUp, user } = useAuth();
   const { data: userRole, isLoading: roleLoading } = useUserRole();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
 
   // Redirect authenticated users appropriately
   useEffect(() => {
-    if (user && !roleLoading) {
-      if (!userRole) {
-        navigate('/onboarding');
-      } else if (userRole.role === 'admin') {
-        navigate('/admin');
-      } else if (userRole.role === 'retail_trader') {
-        navigate('/trader-dashboard');
-      } else {
-        navigate('/dashboard');
-      }
+    if (!user) return;
+    
+    // If we just signed up, always go to onboarding
+    if (justSignedUp) {
+      navigate('/onboarding', { replace: true });
+      return;
     }
-  }, [user, userRole, roleLoading, navigate]);
+    
+    // Wait for role to be checked
+    if (roleLoading) return;
+    
+    // If no role, go to onboarding
+    if (!userRole) {
+      navigate('/onboarding', { replace: true });
+      return;
+    }
+    
+    // Route based on role
+    if (userRole.role === 'admin') {
+      navigate('/admin', { replace: true });
+    } else if (userRole.role === 'retail_trader') {
+      navigate('/trader-dashboard', { replace: true });
+    } else {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, userRole, roleLoading, navigate, justSignedUp]);
 
   // Show loading while checking auth state
-  if (user && roleLoading) {
+  if (user && (roleLoading || justSignedUp)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Loading...</p>
       </div>
     );
+  }
+
+  // If already logged in with role, the useEffect will handle redirect
+  if (user && userRole) {
+    return null;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,11 +80,13 @@ export default function Auth() {
         }
         const { error } = await signUp(email, password, username);
         if (error) throw error;
-        toast({ title: 'Account created!', description: 'Welcome to Cluster.' });
-        // useEffect will handle redirect to onboarding
+        setJustSignedUp(true); // Mark that we just signed up
+        toast({ title: 'Account created!', description: 'Let\'s set up your profile.' });
+        // The useEffect will now redirect to onboarding
       }
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      setJustSignedUp(false);
     } finally {
       setLoading(false);
     }
