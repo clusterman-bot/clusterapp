@@ -103,7 +103,7 @@ export function useCreateBacktest() {
   const { user } = useAuth();
   
   return useMutation({
-    mutationFn: async (backtest: { model_id: string; name?: string; start_date: string; end_date: string; initial_capital?: number; benchmark?: string }) => {
+    mutationFn: async (backtest: { model_id: string; user_id: string; name?: string; start_date: string; end_date: string; initial_capital?: number; benchmark?: string; status?: string }) => {
       if (!user?.id) throw new Error('Not authenticated');
       
       const { data, error } = await supabase
