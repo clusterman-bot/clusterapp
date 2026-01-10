@@ -28,6 +28,8 @@ export default function Onboarding() {
     if (existingRole) {
       if (existingRole.role === 'admin') {
         navigate('/admin');
+      } else if (existingRole.role === 'retail_trader') {
+        navigate('/trader-dashboard');
       } else {
         navigate('/dashboard');
       }
@@ -55,7 +57,12 @@ export default function Onboarding() {
     try {
       await setUserRole.mutateAsync(selectedRole);
       toast({ title: 'Welcome!', description: `You're now set up as a ${selectedRole === 'developer' ? 'Developer' : 'Retail Trader'}` });
-      navigate('/dashboard');
+      // Redirect based on role
+      if (selectedRole === 'retail_trader') {
+        navigate('/trader-dashboard');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     }
