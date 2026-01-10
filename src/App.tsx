@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
+import RetailTraderDashboard from "./pages/RetailTraderDashboard";
 import ModelBuilder from "./pages/ModelBuilder";
 import ModelDetail from "./pages/ModelDetail";
 import Explore from "./pages/Explore";
@@ -31,6 +32,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/trader-dashboard" element={<RetailTraderDashboard />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/feed" element={<Feed />} />
             <Route path="/models/new" element={<ModelBuilder />} />

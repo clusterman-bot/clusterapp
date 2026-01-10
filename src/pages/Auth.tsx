@@ -25,6 +25,10 @@ export default function Auth() {
     if (user && !roleLoading) {
       if (!userRole) {
         navigate('/onboarding');
+      } else if (userRole.role === 'admin') {
+        navigate('/admin');
+      } else if (userRole.role === 'retail_trader') {
+        navigate('/trader-dashboard');
       } else {
         navigate('/dashboard');
       }

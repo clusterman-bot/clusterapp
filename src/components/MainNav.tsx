@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
+import { useUserRole } from '@/hooks/useUserRole';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
@@ -18,6 +19,7 @@ import {
 export function MainNav() {
   const { user, signOut } = useAuth();
   const { data: profile } = useProfile();
+  const { data: userRole } = useUserRole();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -27,6 +29,15 @@ export function MainNav() {
   };
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Determine dashboard path based on role
+  const getDashboardPath = () => {
+    if (userRole?.role === 'admin') return '/admin';
+    if (userRole?.role === 'retail_trader') return '/trader-dashboard';
+    return '/dashboard';
+  };
+
+  const dashboardPath = getDashboardPath();
 
   return (
     <header className="border-b border-border sticky top-0 bg-background z-50">
@@ -67,9 +78,9 @@ export function MainNav() {
             </Button>
             {user && (
               <Button 
-                variant={isActive('/dashboard') ? 'secondary' : 'ghost'} 
+                variant={location.pathname === dashboardPath ? 'secondary' : 'ghost'} 
                 size="sm"
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate(dashboardPath)}
               >
                 <LayoutDashboard className="mr-2 h-4 w-4" />
                 Dashboard
@@ -103,7 +114,7 @@ export function MainNav() {
                   <User className="mr-2 h-4 w-4" />
                   Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                <DropdownMenuItem onClick={() => navigate(dashboardPath)}>
                   <LayoutDashboard className="mr-2 h-4 w-4" />
                   Dashboard
                 </DropdownMenuItem>
