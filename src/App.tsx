@@ -7,6 +7,11 @@ import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
+import ModelBuilder from "./pages/ModelBuilder";
+import ModelDetail from "./pages/ModelDetail";
+import Explore from "./pages/Explore";
+import Profile from "./pages/Profile";
+import RunBacktest from "./pages/RunBacktest";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +27,12 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/models/new" element={<ModelBuilder />} />
+            <Route path="/models/:id" element={<ModelDetail />} />
+            <Route path="/models/:id/backtest" element={<RunBacktest />} />
+            <Route path="/explore" element={<Explore />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/profile/:userId" element={<Profile />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
