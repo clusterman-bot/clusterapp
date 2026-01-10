@@ -12,6 +12,9 @@ import ModelDetail from "./pages/ModelDetail";
 import Explore from "./pages/Explore";
 import Profile from "./pages/Profile";
 import RunBacktest from "./pages/RunBacktest";
+import Feed from "./pages/Feed";
+import Onboarding from "./pages/Onboarding";
+import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,7 +29,10 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/feed" element={<Feed />} />
             <Route path="/models/new" element={<ModelBuilder />} />
             <Route path="/models/:id" element={<ModelDetail />} />
             <Route path="/models/:id/backtest" element={<RunBacktest />} />
