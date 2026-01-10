@@ -168,3 +168,67 @@ export function useUpdateUserRole() {
     },
   });
 }
+
+export function useAllModels() {
+  const { isAdmin } = useIsAdmin();
+
+  return useQuery({
+    queryKey: ['admin', 'all-models'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('models')
+        .select(`
+          *,
+          profiles:user_id (
+            id,
+            username,
+            display_name,
+            avatar_url
+          )
+        `)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: isAdmin,
+  });
+}
+
+export function useAdminUpdateModel() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: { status?: string; is_public?: boolean } }) => {
+      const { data, error } = await supabase
+        .from('models')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'all-models'] });
+      queryClient.invalidateQueries({ queryKey: ['models'] });
+    },
+  });
+}
+
+export function useAdminDeleteModel() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('models')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'all-models'] });
+      queryClient.invalidateQueries({ queryKey: ['models'] });
+    },
+  });
+}
