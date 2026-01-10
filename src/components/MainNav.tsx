@@ -26,10 +26,11 @@ export function MainNav() {
   const location = useLocation();
 
   const handleSignOut = async () => {
-    await signOut();
-    // Clear all query cache to remove stale user data
+    // Clear all query cache first to remove stale user data
     queryClient.clear();
-    navigate('/auth', { replace: true });
+    await signOut();
+    // Navigate with signout param to prevent Auth page from redirecting back
+    navigate('/auth?signout=true', { replace: true });
   };
 
   const isActive = (path: string) => location.pathname === path;
