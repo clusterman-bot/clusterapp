@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,12 +16,28 @@ export default function Auth() {
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn, signUp, user } = useAuth();
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  if (user) {
-    navigate('/dashboard');
-    return null;
+  // Redirect authenticated users appropriately
+  useEffect(() => {
+    if (user && !roleLoading) {
+      if (!userRole) {
+        navigate('/onboarding');
+      } else {
+        navigate('/dashboard');
+      }
+    }
+  }, [user, userRole, roleLoading, navigate]);
+
+  // Show loading while checking auth state
+  if (user && roleLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,7 +48,7 @@ export default function Auth() {
       if (isLogin) {
         const { error } = await signIn(email, password);
         if (error) throw error;
-        navigate('/dashboard');
+        // useEffect will handle redirect
       } else {
         if (!username.trim()) {
           throw new Error('Username is required');
@@ -39,7 +56,7 @@ export default function Auth() {
         const { error } = await signUp(email, password, username);
         if (error) throw error;
         toast({ title: 'Account created!', description: 'Welcome to Cluster.' });
-        navigate('/onboarding');
+        // useEffect will handle redirect to onboarding
       }
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });

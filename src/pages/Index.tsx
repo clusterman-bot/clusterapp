@@ -1,24 +1,49 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { usePublicFeed, Post as SocialPost } from '@/hooks/useSocial';
-import { usePublicModels } from '@/hooks/useModels';
+import { MainNav } from '@/components/MainNav';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardDescription, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   TrendingUp, Heart, MessageCircle, Code, LineChart, 
-  Compass, BarChart3, Users, Target, ArrowUpRight, Zap
+  Compass, BarChart3, Users, ArrowUpRight, Zap
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Index() {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { data: feedPosts, isLoading: feedLoading } = usePublicFeed();
-  const { data: models, isLoading: modelsLoading } = usePublicModels();
+
+  // Fetch all public models for the landing page (regardless of status)
+  const { data: models, isLoading: modelsLoading } = useQuery({
+    queryKey: ['models', 'landing'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('models')
+        .select(`
+          *,
+          profiles:user_id (
+            id,
+            username,
+            display_name,
+            avatar_url,
+            is_verified
+          )
+        `)
+        .eq('is_public', true)
+        .order('total_subscribers', { ascending: false })
+        .limit(4);
+      
+      if (error) throw error;
+      return data;
+    },
+  });
 
   // Filter posts for different tabs
   const allPosts = feedPosts || [];
@@ -30,7 +55,7 @@ export default function Index() {
   );
 
   // Get top models
-  const topModels = models?.slice(0, 4) || [];
+  const topModels = models || [];
 
   const PostCard = ({ post }: { post: SocialPost }) => (
     <Card className="mb-4 hover:border-primary/50 transition-colors">
@@ -141,25 +166,7 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border sticky top-0 bg-background z-10">
-        <div className="container flex items-center justify-between h-16">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">Cluster</span>
-          </div>
-          <nav className="flex items-center gap-2">
-            <Button variant="ghost" onClick={() => navigate('/explore')}>
-              <Compass className="h-4 w-4 mr-2" />
-              Explore
-            </Button>
-            {user ? (
-              <Button onClick={() => navigate('/dashboard')}>Dashboard</Button>
-            ) : (
-              <Button onClick={() => navigate('/auth')}>Get Started</Button>
-            )}
-          </nav>
-        </div>
-      </header>
+      <MainNav />
 
       <main className="container py-6">
         {/* Hero Section */}

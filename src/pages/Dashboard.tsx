@@ -1,52 +1,42 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useMyModels } from '@/hooks/useModels';
+import { MainNav } from '@/components/MainNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, TrendingUp, Users, DollarSign, BarChart3, LogOut } from 'lucide-react';
+import { Plus, Users, DollarSign, BarChart3 } from 'lucide-react';
+
 export default function Dashboard() {
-  const {
-    user,
-    signOut
-  } = useAuth();
-  const {
-    data: profile
-  } = useProfile();
-  const {
-    data: models,
-    isLoading
-  } = useMyModels();
+  const { user } = useAuth();
+  const { data: profile } = useProfile();
+  const { data: models, isLoading } = useMyModels();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) {
+      navigate('/auth');
+    }
+  }, [user, navigate]);
+
   if (!user) {
-    navigate('/auth');
     return null;
   }
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/');
-  };
-  return <div className="min-h-screen bg-background dark">
-      <header className="border-b border-border">
-        <div className="container flex items-center justify-between h-16">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold text-secondary-foreground">Cluster</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-secondary-foreground">{profile?.display_name || profile?.username}</span>
-            <Button variant="ghost" size="icon" onClick={handleSignOut}><LogOut className="h-4 w-4" /></Button>
-          </div>
-        </div>
-      </header>
+
+  return (
+    <div className="min-h-screen bg-background">
+      <MainNav />
 
       <main className="container py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-secondary-foreground">Dashboard</h1>
-            <p className="text-secondary-foreground">Manage your trading models</p>
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="text-muted-foreground">Manage your trading models</p>
           </div>
-          <Button onClick={() => navigate('/models/new')}><Plus className="mr-2 h-4 w-4" /> New Model</Button>
+          <Button onClick={() => navigate('/models/new')}>
+            <Plus className="mr-2 h-4 w-4" /> New Model
+          </Button>
         </div>
 
         <div className="grid gap-4 md:grid-cols-3 mb-8">
@@ -74,7 +64,9 @@ export default function Dashboard() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-profit">${profile?.total_earnings?.toFixed(2) || '0.00'}</div>
+              <div className="text-2xl font-bold text-profit">
+                ${profile?.total_earnings?.toFixed(2) || '0.00'}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -85,24 +77,45 @@ export default function Dashboard() {
             <CardDescription>Create and manage your trading strategies</CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoading ? <p className="text-muted-foreground">Loading...</p> : models && models.length > 0 ? <div className="space-y-4">
-                {models.map(model => <div key={model.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 cursor-pointer" onClick={() => navigate(`/models/${model.id}`)}>
+            {isLoading ? (
+              <p className="text-muted-foreground">Loading...</p>
+            ) : models && models.length > 0 ? (
+              <div className="space-y-4">
+                {models.map((model) => (
+                  <div 
+                    key={model.id} 
+                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 cursor-pointer" 
+                    onClick={() => navigate(`/models/${model.id}`)}
+                  >
                     <div>
                       <h3 className="font-medium">{model.name}</h3>
-                      <p className="text-sm text-muted-foreground">{model.model_type} • {model.status}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {model.model_type} • {model.status}
+                      </p>
                     </div>
                     <div className="text-right">
-                      {model.total_return !== null && <span className={model.total_return >= 0 ? 'text-profit' : 'text-loss'}>
+                      {model.total_return !== null && (
+                        <span className={model.total_return >= 0 ? 'text-profit' : 'text-loss'}>
                           {model.total_return >= 0 ? '+' : ''}{(model.total_return * 100).toFixed(2)}%
-                        </span>}
+                        </span>
+                      )}
                     </div>
-                  </div>)}
-              </div> : <div className="text-center py-8">
-                <p className="text-muted-foreground mb-4">No models yet. Create your first trading model!</p>
-                <Button onClick={() => navigate('/models/new')}><Plus className="mr-2 h-4 w-4" /> Create Model</Button>
-              </div>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground mb-4">
+                  No models yet. Create your first trading model!
+                </p>
+                <Button onClick={() => navigate('/models/new')}>
+                  <Plus className="mr-2 h-4 w-4" /> Create Model
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>
-    </div>;
+    </div>
+  );
 }
