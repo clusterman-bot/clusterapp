@@ -47,7 +47,7 @@ export function MainNav() {
             className="flex items-center gap-2 cursor-pointer" 
             onClick={() => navigate('/')}
           >
-            <TrendingUp className="h-6 w-6 text-primary" />
+            <img src="/favicon.png" alt="Cluster" className="h-7 w-7" />
             <span className="text-xl font-bold">Cluster</span>
           </div>
 
