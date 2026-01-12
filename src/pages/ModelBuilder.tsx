@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useCreateModel } from '@/hooks/useModels';
-import { useStartTraining, useTrainingRun, useTrainingRealtimeUpdates, useStartValidation, useValidationRuns, IndicatorsConfig as IndicatorsConfigType, HyperparametersConfig as HyperparametersConfigType } from '@/hooks/useMLTraining';
+import { useStartTraining, useStopTraining, useTrainingRun, useTrainingRealtimeUpdates, useStartValidation, useValidationRuns, IndicatorsConfig as IndicatorsConfigType, HyperparametersConfig as HyperparametersConfigType } from '@/hooks/useMLTraining';
 import { MainNav } from '@/components/MainNav';
 import { BackButton } from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { IndicatorsConfig } from '@/components/ml/IndicatorsConfig';
 import { HyperparametersConfig } from '@/components/ml/HyperparametersConfig';
 import { ModelSelection } from '@/components/ml/ModelSelection';
 import { TrainingProgress } from '@/components/ml/TrainingProgress';
-import { Code, Brain, Calendar, TrendingUp, Rocket, FlaskConical, CheckCircle2 } from 'lucide-react';
+import { Code, Brain, Calendar, TrendingUp, Rocket, FlaskConical, CheckCircle2, StopCircle } from 'lucide-react';
 
 type ModelType = 'sandbox' | 'ml';
 
@@ -44,6 +44,7 @@ export default function ModelBuilder() {
   const { toast } = useToast();
   const createModel = useCreateModel();
   const startTraining = useStartTraining();
+  const stopTraining = useStopTraining();
   const startValidation = useStartValidation();
   
   const canCreateModels = userRole?.role === 'developer' || userRole?.role === 'admin';
@@ -427,6 +428,43 @@ export default function ModelBuilder() {
 
               <TabsContent value="training" className="space-y-6">
                 <TrainingProgress trainingRun={trainingRun || null} isLoading={trainingLoading} />
+                
+                {/* Stop Training Button - shown when training is in progress */}
+                {trainingRun && (trainingRun.status === 'pending' || trainingRun.status === 'running') && (
+                  <Card className="border-destructive/50 bg-destructive/5">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3">
+                        <div className="animate-pulse">
+                          <div className="h-6 w-6 rounded-full bg-destructive/20 flex items-center justify-center">
+                            <div className="h-3 w-3 rounded-full bg-destructive" />
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium">Training in Progress</p>
+                          <p className="text-sm text-muted-foreground">
+                            You can stop the training if needed
+                          </p>
+                        </div>
+                        <Button 
+                          variant="destructive"
+                          onClick={async () => {
+                            if (!trainingRunId) return;
+                            try {
+                              await stopTraining.mutateAsync(trainingRunId);
+                              toast({ title: 'Training Stopped', description: 'The training run has been cancelled.' });
+                            } catch (error: any) {
+                              toast({ title: 'Error', description: error.message, variant: 'destructive' });
+                            }
+                          }}
+                          disabled={stopTraining.isPending}
+                        >
+                          <StopCircle className="h-4 w-4 mr-2" />
+                          {stopTraining.isPending ? 'Stopping...' : 'Stop Training'}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
                 
                 {trainingRun?.status === 'completed' && (
                   <Card className="border-green-500/50 bg-green-500/5">
