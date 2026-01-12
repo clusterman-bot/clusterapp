@@ -52,18 +52,13 @@ export default function Auth() {
     }
   }, [user, userRole, authLoading, roleLoading, navigate, justSignedOut]);
 
-  // Show loading while checking auth state
-  if (user && roleLoading) {
+  // Show loading while checking auth state or waiting for redirect
+  if (user && !justSignedOut) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Loading...</p>
       </div>
     );
-  }
-
-  // If already logged in with role, the useEffect will handle redirect
-  if (user && userRole) {
-    return null;
   }
 
   const validateUsername = (username: string): string | null => {
