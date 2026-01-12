@@ -49,6 +49,11 @@ serve(async (req) => {
       const body = await req.json();
 
       if (action === 'train') {
+        const isDemoMode = body.demo_mode === true;
+        const dataLimit = isDemoMode ? 5 : body.limit;
+        
+        console.log(`Training request - Demo mode: ${isDemoMode}, Data limit: ${dataLimit || 'none'}`);
+        
         // Create a training run record
         const { data: trainingRun, error: insertError } = await supabase
           .from('training_runs')
@@ -59,7 +64,7 @@ serve(async (req) => {
             start_date: body.start_date,
             end_date: body.end_date,
             indicators_enabled: body.indicators,
-            hyperparameters: body.hyperparameters,
+            hyperparameters: { ...body.hyperparameters, demo_mode: isDemoMode, data_limit: dataLimit },
             status: 'pending',
           })
           .select()
@@ -70,10 +75,10 @@ serve(async (req) => {
           throw insertError;
         }
 
-        console.log(`Created training run ${trainingRun.id}`);
+        console.log(`Created training run ${trainingRun.id}${isDemoMode ? ' (DEMO MODE)' : ''}`);
 
         // If ML backend is configured, forward the request
-        if (ML_BACKEND_URL) {
+        if (ML_BACKEND_URL && !isDemoMode) {
           try {
             const mlResponse = await fetch(`${ML_BACKEND_URL}/train`, {
               method: 'POST',
@@ -95,17 +100,18 @@ serve(async (req) => {
           } catch (mlError) {
             console.log('ML Backend not available, using simulated training');
             // Simulate training for demo purposes
-            await simulateTraining(supabase, trainingRun.id, body);
+            await simulateTraining(supabase, trainingRun.id, body, isDemoMode);
           }
         } else {
-          // Simulate training for demo purposes
-          await simulateTraining(supabase, trainingRun.id, body);
+          // Simulate training for demo purposes (or when in demo mode)
+          await simulateTraining(supabase, trainingRun.id, body, isDemoMode);
         }
 
         return new Response(JSON.stringify({ 
           success: true, 
           training_run_id: trainingRun.id,
-          message: 'Training started'
+          message: isDemoMode ? 'Demo training started (limited data, no API calls)' : 'Training started',
+          demo_mode: isDemoMode
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -194,32 +200,38 @@ serve(async (req) => {
 });
 
 // Simulate training for demo purposes when ML backend is not available
-async function simulateTraining(supabase: any, trainingRunId: string, config: any) {
+async function simulateTraining(supabase: any, trainingRunId: string, config: any, isDemoMode: boolean = false) {
+  console.log(`Starting simulated training for ${trainingRunId}${isDemoMode ? ' (DEMO MODE)' : ''}`);
+  
   // Update to running
   await supabase
     .from('training_runs')
     .update({ status: 'running' })
     .eq('id', trainingRunId);
 
-  // Simulate processing time
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  // Simulate processing time - shorter for demo mode
+  const processingTime = isDemoMode ? 1000 : 2000;
+  await new Promise(resolve => setTimeout(resolve, processingTime));
 
-  // Generate simulated results
+  // Generate simulated results - more consistent for demo mode
+  const baseAccuracy = isDemoMode ? 0.70 : 0.65;
+  const variance = isDemoMode ? 0.05 : 0.15;
+  
   const results = {
     random_forest: {
-      accuracy: 0.65 + Math.random() * 0.15,
-      f1: 0.60 + Math.random() * 0.15,
-      recall: 0.58 + Math.random() * 0.17,
+      accuracy: baseAccuracy + Math.random() * variance,
+      f1: (baseAccuracy - 0.05) + Math.random() * variance,
+      recall: (baseAccuracy - 0.07) + Math.random() * variance,
     },
     gradient_boosting: {
-      accuracy: 0.67 + Math.random() * 0.13,
-      f1: 0.62 + Math.random() * 0.13,
-      recall: 0.60 + Math.random() * 0.15,
+      accuracy: (baseAccuracy + 0.02) + Math.random() * (variance - 0.02),
+      f1: (baseAccuracy - 0.03) + Math.random() * variance,
+      recall: (baseAccuracy - 0.05) + Math.random() * variance,
     },
     logistic_regression: {
-      accuracy: 0.55 + Math.random() * 0.15,
-      f1: 0.50 + Math.random() * 0.15,
-      recall: 0.48 + Math.random() * 0.17,
+      accuracy: (baseAccuracy - 0.10) + Math.random() * variance,
+      f1: (baseAccuracy - 0.15) + Math.random() * variance,
+      recall: (baseAccuracy - 0.17) + Math.random() * variance,
     },
   };
 
@@ -242,7 +254,7 @@ async function simulateTraining(supabase: any, trainingRunId: string, config: an
     })
     .eq('id', trainingRunId);
 
-  console.log(`Simulated training completed for ${trainingRunId}`);
+  console.log(`Simulated training completed for ${trainingRunId}${isDemoMode ? ' (DEMO MODE)' : ''}`);
 }
 
 // Simulate validation for demo purposes
