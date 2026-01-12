@@ -292,25 +292,59 @@ serve(async (req) => {
         );
       }
 
-      case 'orders': {
-        if (req.method === 'GET') {
-          // Get orders
-          const status = url.searchParams.get('status') || 'all';
-          const response = await fetch(`${alpacaBaseUrl}/v2/orders?status=${status}`, {
-            headers: alpacaHeaders,
-          });
-          const data = await response.json();
-
-          if (!response.ok) {
-            throw new Error(data.message || 'Failed to fetch orders');
-          }
-
-          return new Response(
-            JSON.stringify({ success: true, orders: data }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+      case 'portfolio-history': {
+        // Get portfolio history for charting
+        const period = body.period || '1M'; // 1D, 1W, 1M, 3M, 1A
+        const timeframe = body.timeframe || '1D'; // 1Min, 5Min, 15Min, 1H, 1D
+        
+        console.log(`[Alpaca] Getting portfolio history: period=${period}, timeframe=${timeframe}`);
+        
+        const response = await fetch(
+          `${alpacaBaseUrl}/v2/account/portfolio/history?period=${period}&timeframe=${timeframe}`,
+          { headers: alpacaHeaders }
+        );
+        const data = await response.json();
+        
+        if (!response.ok) {
+          console.error('[Alpaca] Portfolio history error:', data);
+          throw new Error(data.message || 'Failed to fetch portfolio history');
         }
-        break;
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            history: {
+              timestamp: data.timestamp,
+              equity: data.equity,
+              profit_loss: data.profit_loss,
+              profit_loss_pct: data.profit_loss_pct,
+              base_value: data.base_value,
+              timeframe: data.timeframe,
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'orders': {
+        // Get orders - support both GET params and POST body
+        const status = body.status || 'all';
+        const limit = body.limit || 50;
+        
+        const response = await fetch(
+          `${alpacaBaseUrl}/v2/orders?status=${status}&limit=${limit}&direction=desc`, 
+          { headers: alpacaHeaders }
+        );
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to fetch orders');
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, orders: data }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
       case 'place-order': {
