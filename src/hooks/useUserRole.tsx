@@ -53,19 +53,32 @@ export function useSetUserRole() {
 
   return useMutation({
     mutationFn: async (role: AppRole) => {
-      if (!user?.id) throw new Error('Not authenticated');
+      // Wait for user to be available (max 3 seconds)
+      let currentUser = user;
+      let attempts = 0;
+      while (!currentUser && attempts < 6) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        // Re-check auth state
+        const { data: { session } } = await supabase.auth.getSession();
+        currentUser = session?.user ?? null;
+        attempts++;
+      }
+      
+      if (!currentUser?.id) {
+        throw new Error('Not authenticated - please try again');
+      }
 
       const { data: existing } = await supabase
         .from('user_roles' as any)
         .select('id')
-        .eq('user_id', user.id)
+        .eq('user_id', currentUser.id)
         .maybeSingle();
 
       if (existing) {
         const { data, error } = await supabase
           .from('user_roles' as any)
           .update({ role })
-          .eq('user_id', user.id)
+          .eq('user_id', currentUser.id)
           .select()
           .single();
         if (error) throw error;
@@ -73,15 +86,18 @@ export function useSetUserRole() {
       } else {
         const { data, error } = await supabase
           .from('user_roles' as any)
-          .insert({ user_id: user.id, role })
+          .insert({ user_id: currentUser.id, role })
           .select()
           .single();
         if (error) throw error;
         return data as unknown as UserRole;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-role', user?.id] });
+    onSuccess: (_, __, ___) => {
+      // Invalidate with a slight delay to ensure the query picks up the new data
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['user-role'] });
+      }, 100);
     },
   });
 }

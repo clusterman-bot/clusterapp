@@ -94,8 +94,19 @@ export default function Auth() {
       const { error } = await signUp(email, password, username.trim());
       if (error) throw error;
       
-      // Set the role immediately after signup
-      await setUserRole.mutateAsync(role);
+      // Wait a moment for auth state to fully propagate
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Now set the role - user should be authenticated
+      try {
+        await setUserRole.mutateAsync(role);
+      } catch (roleError: any) {
+        console.error('Error setting role:', roleError);
+        // Role setting failed, but user is created - they can set role on onboarding
+      }
+      
+      // Mark as first-time user for onboarding tour
+      localStorage.setItem('show_onboarding_tour', role);
       
       toast({ 
         title: 'Account created!', 

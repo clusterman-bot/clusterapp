@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
@@ -8,6 +8,7 @@ import { MainNav } from '@/components/MainNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Users, DollarSign, BarChart3 } from 'lucide-react';
+import OnboardingTour from '@/components/OnboardingTour';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -15,6 +16,7 @@ export default function Dashboard() {
   const { data: models, isLoading } = useMyModels();
   const { data: userRole } = useUserRole();
   const navigate = useNavigate();
+  const [showTour, setShowTour] = useState(false);
   
   const canCreateModels = userRole?.role === 'developer' || userRole?.role === 'admin';
 
@@ -24,12 +26,24 @@ export default function Dashboard() {
     }
   }, [user, navigate]);
 
+  // Check if we should show onboarding tour
+  useEffect(() => {
+    const tourRole = localStorage.getItem('show_onboarding_tour');
+    if (tourRole === 'developer' && !localStorage.getItem('onboarding_completed')) {
+      setShowTour(true);
+      localStorage.removeItem('show_onboarding_tour');
+    }
+  }, []);
+
   if (!user) {
     return null;
   }
 
   return (
     <div className="min-h-screen bg-background">
+      {showTour && (
+        <OnboardingTour role="developer" onComplete={() => setShowTour(false)} />
+      )}
       <MainNav />
 
       <main className="container py-8">

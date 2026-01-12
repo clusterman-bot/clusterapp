@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
@@ -24,6 +24,7 @@ import {
   Target,
   Shield
 } from 'lucide-react';
+import OnboardingTour from '@/components/OnboardingTour';
 
 export default function RetailTraderDashboard() {
   const { user, loading: authLoading } = useAuth();
@@ -32,12 +33,22 @@ export default function RetailTraderDashboard() {
   const { data: subscriptions = [], isLoading: subsLoading } = useMySubscriptions();
   const { data: publicModels = [] } = usePublicModels();
   const navigate = useNavigate();
+  const [showTour, setShowTour] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth');
     }
   }, [user, authLoading, navigate]);
+
+  // Check if we should show onboarding tour
+  useEffect(() => {
+    const tourRole = localStorage.getItem('show_onboarding_tour');
+    if (tourRole === 'retail_trader' && !localStorage.getItem('onboarding_completed')) {
+      setShowTour(true);
+      localStorage.removeItem('show_onboarding_tour');
+    }
+  }, []);
 
   if (authLoading || roleLoading) {
     return (
@@ -60,6 +71,9 @@ export default function RetailTraderDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
+      {showTour && (
+        <OnboardingTour role="retail_trader" onComplete={() => setShowTour(false)} />
+      )}
       <MainNav />
 
       <main className="container py-8">
