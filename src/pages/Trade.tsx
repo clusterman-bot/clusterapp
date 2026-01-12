@@ -9,12 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Search, TrendingUp, TrendingDown, Star, 
-  Briefcase, Clock, BarChart3, Settings
+  Briefcase, Clock, BarChart3, Settings, Link2
 } from 'lucide-react';
-import { useStocks, useHoldings, useWatchlist, useBalance, Stock } from '@/hooks/useTrading';
+import { useStocks, useWatchlist, Stock } from '@/hooks/useTrading';
 import { useAlpacaAccount, useAlpacaPositions, useAlpacaSearch, AlpacaAsset } from '@/hooks/useAlpaca';
+import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
 import { LivePriceUpdates } from '@/components/LivePriceUpdates';
-import { TradingModeToggle, TradingModeIndicator } from '@/components/TradingModeToggle';
+import { TradingModeToggle } from '@/components/TradingModeToggle';
 import { Loader2 } from 'lucide-react';
 
 function formatPrice(price: number): string {
@@ -98,24 +99,19 @@ export default function Trade() {
   const [activeTab, setActiveTab] = useState('explore');
   
   const { data: stocks, isLoading: stocksLoading } = useStocks(searchQuery);
-  const { data: holdings } = useHoldings();
   const { data: watchlist } = useWatchlist();
-  const { data: balance } = useBalance();
-  const { data: alpacaAccount, isLoading: alpacaLoading } = useAlpacaAccount();
-  const { data: alpacaPositions } = useAlpacaPositions();
+  const { data: brokerageAccounts } = useBrokerageAccounts();
+  const { data: alpacaAccount } = useAlpacaAccount();
   const { data: alpacaSearchResults, isLoading: alpacaSearchLoading } = useAlpacaSearch(searchQuery);
 
-  // Use Alpaca account data if available, otherwise fall back to local balance
-  const portfolioValue = alpacaAccount 
-    ? alpacaAccount.portfolio_value 
-    : holdings?.reduce((total, holding) => {
-        const currentValue = holding.stocks ? Number(holding.quantity) * holding.stocks.current_price : 0;
-        return total + currentValue;
-      }, 0) || 0;
+  // Check if user has connected a brokerage account
+  const hasConnectedAccount = brokerageAccounts && brokerageAccounts.length > 0;
 
-  const cashAvailable = alpacaAccount ? alpacaAccount.cash : (balance?.cash_balance || 0);
-  const investedValue = alpacaAccount ? alpacaAccount.equity - alpacaAccount.cash : portfolioValue;
-  const totalValue = alpacaAccount ? alpacaAccount.portfolio_value : (balance?.cash_balance || 0) + portfolioValue;
+  // Only show portfolio data if user has connected their own account
+  const portfolioValue = hasConnectedAccount && alpacaAccount ? alpacaAccount.portfolio_value : 0;
+  const cashAvailable = hasConnectedAccount && alpacaAccount ? alpacaAccount.cash : 0;
+  const investedValue = hasConnectedAccount && alpacaAccount ? alpacaAccount.equity - alpacaAccount.cash : 0;
+  const totalValue = hasConnectedAccount && alpacaAccount ? alpacaAccount.portfolio_value : 0;
 
   // Group stocks by sector
   const topGainers = stocks?.filter(s => s.previous_close && s.current_price > s.previous_close)
@@ -144,45 +140,66 @@ export default function Trade() {
           </div>
         )}
 
-        {/* Portfolio Summary */}
+        {/* Portfolio Summary or Connect Prompt */}
         {user && (
-          <Card className="mb-6 bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
-            <CardContent className="pt-6">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Portfolio Value</p>
-                  <p className="text-3xl font-bold">{formatPrice(totalValue)}</p>
-                </div>
-                <div className="flex gap-6">
+          hasConnectedAccount ? (
+            <Card className="mb-6 bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
+              <CardContent className="pt-6">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                   <div>
-                    <p className="text-sm text-muted-foreground">Cash Available</p>
-                    <p className="text-xl font-semibold">{formatPrice(cashAvailable)}</p>
+                    <p className="text-sm text-muted-foreground">Total Portfolio Value</p>
+                    <p className="text-3xl font-bold">{formatPrice(totalValue)}</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Invested</p>
-                    <p className="text-xl font-semibold">{formatPrice(investedValue)}</p>
-                  </div>
-                  {alpacaAccount && (
+                  <div className="flex gap-6">
                     <div>
-                      <p className="text-sm text-muted-foreground">Buying Power</p>
-                      <p className="text-xl font-semibold">{formatPrice(alpacaAccount.buying_power)}</p>
+                      <p className="text-sm text-muted-foreground">Cash Available</p>
+                      <p className="text-xl font-semibold">{formatPrice(cashAvailable)}</p>
                     </div>
-                  )}
+                    <div>
+                      <p className="text-sm text-muted-foreground">Invested</p>
+                      <p className="text-xl font-semibold">{formatPrice(investedValue)}</p>
+                    </div>
+                    {alpacaAccount && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Buying Power</p>
+                        <p className="text-xl font-semibold">{formatPrice(alpacaAccount.buying_power)}</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={() => navigate('/trade/portfolio')}>
+                      <Briefcase className="mr-2 h-4 w-4" /> Portfolio
+                    </Button>
+                    <Button variant="outline" onClick={() => navigate('/trade/orders')}>
+                      <Clock className="mr-2 h-4 w-4" /> Orders
+                    </Button>
+                    <Button variant="outline" onClick={() => navigate('/settings/brokerage')}>
+                      <Settings className="mr-2 h-4 w-4" /> Accounts
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button onClick={() => navigate('/trade/portfolio')}>
-                    <Briefcase className="mr-2 h-4 w-4" /> Portfolio
-                  </Button>
-                  <Button variant="outline" onClick={() => navigate('/trade/orders')}>
-                    <Clock className="mr-2 h-4 w-4" /> Orders
-                  </Button>
-                  <Button variant="outline" onClick={() => navigate('/settings/brokerage')}>
-                    <Settings className="mr-2 h-4 w-4" /> Accounts
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="mb-6 border-dashed border-2 border-primary/30 bg-primary/5">
+              <CardContent className="py-8">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Link2 className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg">Connect Your Brokerage</h3>
+                      <p className="text-muted-foreground">Link your Alpaca account to start trading with real or paper money</p>
+                    </div>
+                  </div>
+                  <Button onClick={() => navigate('/settings/brokerage')} size="lg">
+                    <Settings className="mr-2 h-4 w-4" /> Connect Account
                   </Button>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )
         )}
 
         {/* Search */}
