@@ -708,6 +708,72 @@ export type Database = {
           },
         ]
       }
+      trading_activity_logs: {
+        Row: {
+          action_type: string
+          amount: number | null
+          brokerage_account_id: string | null
+          created_at: string
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          order_type: string | null
+          quantity: number | null
+          side: string | null
+          status: string | null
+          symbol: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          amount?: number | null
+          brokerage_account_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          order_type?: string | null
+          quantity?: number | null
+          side?: string | null
+          status?: string | null
+          symbol?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          amount?: number | null
+          brokerage_account_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          order_type?: string | null
+          quantity?: number | null
+          side?: string | null
+          status?: string | null
+          symbol?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trading_activity_logs_brokerage_account_id_fkey"
+            columns: ["brokerage_account_id"]
+            isOneToOne: false
+            referencedRelation: "user_brokerage_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trading_activity_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       training_runs: {
         Row: {
           best_model_metrics: Json | null
@@ -797,6 +863,65 @@ export type Database = {
             foreignKeyName: "user_balances_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_brokerage_accounts: {
+        Row: {
+          account_id: string | null
+          account_status: string | null
+          account_type: string
+          api_key_encrypted: string
+          api_secret_encrypted: string
+          broker_name: string
+          created_at: string
+          daily_trade_limit: number | null
+          id: string
+          is_active: boolean | null
+          last_verified_at: string | null
+          per_trade_limit: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          account_status?: string | null
+          account_type: string
+          api_key_encrypted: string
+          api_secret_encrypted: string
+          broker_name?: string
+          created_at?: string
+          daily_trade_limit?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_verified_at?: string | null
+          per_trade_limit?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string | null
+          account_status?: string | null
+          account_type?: string
+          api_key_encrypted?: string
+          api_secret_encrypted?: string
+          broker_name?: string
+          created_at?: string
+          daily_trade_limit?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_verified_at?: string | null
+          per_trade_limit?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_brokerage_accounts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
