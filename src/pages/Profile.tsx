@@ -19,10 +19,12 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   TrendingUp, Users, BarChart3, Settings, 
   CheckCircle, UserPlus, UserMinus, TrendingDown, Target, Store,
-  User, Calendar, Award, Briefcase
+  User, Calendar, Award, Briefcase, Twitter, Linkedin, Github, Globe
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { AvatarUpload } from '@/components/profile/AvatarUpload';
+import { SocialLinks } from '@/components/profile/SocialLinks';
 
 export default function Profile() {
   const { userId } = useParams<{ userId: string }>();
@@ -40,6 +42,10 @@ export default function Profile() {
     bio: '',
     trading_philosophy: '',
     experience_level: '',
+    twitter_handle: '',
+    linkedin_url: '',
+    github_handle: '',
+    website_url: '',
   });
   
   // If no userId, show current user's profile
@@ -98,6 +104,10 @@ export default function Profile() {
         bio: profile.bio || '',
         trading_philosophy: profile.trading_philosophy || '',
         experience_level: profile.experience_level || 'beginner',
+        twitter_handle: profile.twitter_handle || '',
+        linkedin_url: profile.linkedin_url || '',
+        github_handle: profile.github_handle || '',
+        website_url: profile.website_url || '',
       });
     }
     setIsEditOpen(true);
@@ -111,6 +121,10 @@ export default function Profile() {
         bio: editForm.bio || null,
         trading_philosophy: editForm.trading_philosophy || null,
         experience_level: editForm.experience_level || 'beginner',
+        twitter_handle: editForm.twitter_handle || null,
+        linkedin_url: editForm.linkedin_url || null,
+        github_handle: editForm.github_handle || null,
+        website_url: editForm.website_url || null,
       });
       toast({ title: 'Profile updated successfully' });
       setIsEditOpen(false);
@@ -166,12 +180,21 @@ export default function Profile() {
           <Card className="mb-8">
             <CardContent className="pt-6">
               <div className="flex flex-col md:flex-row items-start gap-6">
-                <Avatar className="h-24 w-24">
-                  <AvatarImage src={profile.avatar_url || undefined} />
-                  <AvatarFallback className="text-2xl">
-                    {profile.display_name?.[0] || profile.username?.[0] || '?'}
-                  </AvatarFallback>
-                </Avatar>
+                {isOwnProfile ? (
+                  <AvatarUpload
+                    currentAvatarUrl={profile.avatar_url}
+                    displayName={profile.display_name}
+                    username={profile.username}
+                    size="lg"
+                  />
+                ) : (
+                  <Avatar className="h-24 w-24">
+                    <AvatarImage src={profile.avatar_url || undefined} />
+                    <AvatarFallback className="text-2xl">
+                      {profile.display_name?.[0] || profile.username?.[0] || '?'}
+                    </AvatarFallback>
+                  </Avatar>
+                )}
 
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
@@ -185,9 +208,20 @@ export default function Profile() {
                       {profile.user_type === 'retail_trader' ? 'Trader' : profile.user_type || 'developer'}
                     </Badge>
                   </div>
-                  <p className="text-muted-foreground mb-4">
+                  <p className="text-muted-foreground mb-2">
                     @{profile.username}
                   </p>
+                  
+                  {/* Social Links */}
+                  <div className="mb-4">
+                    <SocialLinks
+                      twitterHandle={profile.twitter_handle}
+                      linkedinUrl={profile.linkedin_url}
+                      githubHandle={profile.github_handle}
+                      websiteUrl={profile.website_url}
+                    />
+                  </div>
+                  
                   {profile.bio && (
                     <p className="text-foreground mb-4">{profile.bio}</p>
                   )}
@@ -279,6 +313,57 @@ export default function Profile() {
                               placeholder="Describe your trading approach..."
                               rows={3}
                             />
+                          </div>
+                          
+                          {/* Social Media Section */}
+                          <div className="pt-4 border-t">
+                            <Label className="text-sm font-medium mb-3 block">Social Links</Label>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <Label htmlFor="twitter" className="text-xs flex items-center gap-1">
+                                  <Twitter className="h-3 w-3" /> Twitter
+                                </Label>
+                                <Input
+                                  id="twitter"
+                                  value={editForm.twitter_handle}
+                                  onChange={(e) => setEditForm(prev => ({ ...prev, twitter_handle: e.target.value }))}
+                                  placeholder="@username"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label htmlFor="github" className="text-xs flex items-center gap-1">
+                                  <Github className="h-3 w-3" /> GitHub
+                                </Label>
+                                <Input
+                                  id="github"
+                                  value={editForm.github_handle}
+                                  onChange={(e) => setEditForm(prev => ({ ...prev, github_handle: e.target.value }))}
+                                  placeholder="username"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label htmlFor="linkedin" className="text-xs flex items-center gap-1">
+                                  <Linkedin className="h-3 w-3" /> LinkedIn
+                                </Label>
+                                <Input
+                                  id="linkedin"
+                                  value={editForm.linkedin_url}
+                                  onChange={(e) => setEditForm(prev => ({ ...prev, linkedin_url: e.target.value }))}
+                                  placeholder="linkedin.com/in/..."
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label htmlFor="website" className="text-xs flex items-center gap-1">
+                                  <Globe className="h-3 w-3" /> Website
+                                </Label>
+                                <Input
+                                  id="website"
+                                  value={editForm.website_url}
+                                  onChange={(e) => setEditForm(prev => ({ ...prev, website_url: e.target.value }))}
+                                  placeholder="yoursite.com"
+                                />
+                              </div>
+                            </div>
                           </div>
                         </div>
                         <DialogFooter>

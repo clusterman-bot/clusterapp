@@ -15,6 +15,10 @@ export interface Profile {
   total_followers: number;
   total_following: number;
   total_earnings: number;
+  twitter_handle: string | null;
+  linkedin_url: string | null;
+  github_handle: string | null;
+  website_url: string | null;
   created_at: string;
   updated_at: string;
 }
