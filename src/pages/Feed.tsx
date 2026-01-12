@@ -9,6 +9,7 @@ import { CreatePostBox } from '@/components/CreatePostBox';
 import { WhoToFollow } from '@/components/WhoToFollow';
 import { TrendingTopics } from '@/components/TrendingTopics';
 import { UserProfileSidebar } from '@/components/UserProfileSidebar';
+import { OnlineUsers } from '@/components/OnlineUsers';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -213,6 +214,7 @@ export default function Feed() {
           {/* Right Sidebar */}
           <div className="hidden lg:block">
             <div className="sticky top-20 space-y-4">
+              <OnlineUsers />
               <TrendingTopics />
               <WhoToFollow />
               
