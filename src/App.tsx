@@ -22,6 +22,7 @@ import Trade from "./pages/Trade";
 import StockDetail from "./pages/StockDetail";
 import Portfolio from "./pages/Portfolio";
 import Orders from "./pages/Orders";
+import BrokerageSettings from "./pages/BrokerageSettings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,6 +52,7 @@ const App = () => (
               <Route path="/trade/stocks/:symbol" element={<StockDetail />} />
               <Route path="/trade/portfolio" element={<Portfolio />} />
               <Route path="/trade/orders" element={<Orders />} />
+              <Route path="/settings/brokerage" element={<BrokerageSettings />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/profile/:userId" element={<Profile />} />
               <Route path="*" element={<NotFound />} />

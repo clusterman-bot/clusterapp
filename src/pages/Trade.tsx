@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Search, TrendingUp, TrendingDown, Star, 
-  Briefcase, Clock, BarChart3
+  Briefcase, Clock, BarChart3, Settings
 } from 'lucide-react';
 import { useStocks, useHoldings, useWatchlist, useBalance, Stock } from '@/hooks/useTrading';
 import { useAlpacaAccount, useAlpacaPositions, useAlpacaSearch, AlpacaAsset } from '@/hooks/useAlpaca';
@@ -175,6 +175,9 @@ export default function Trade() {
                   </Button>
                   <Button variant="outline" onClick={() => navigate('/trade/orders')}>
                     <Clock className="mr-2 h-4 w-4" /> Orders
+                  </Button>
+                  <Button variant="outline" onClick={() => navigate('/settings/brokerage')}>
+                    <Settings className="mr-2 h-4 w-4" /> Accounts
                   </Button>
                 </div>
               </div>
