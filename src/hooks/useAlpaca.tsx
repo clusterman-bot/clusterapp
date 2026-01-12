@@ -163,6 +163,61 @@ export function useAlpacaQuote(symbol: string | undefined) {
   });
 }
 
+// Fetch Alpaca portfolio history for charting
+export function useAlpacaPortfolioHistory(period: string = '1M') {
+  const { user } = useAuth();
+  const { isPaper } = useTradingMode();
+  
+  return useQuery({
+    queryKey: ['alpaca-portfolio-history', user?.id, isPaper, period],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('alpaca-trading/portfolio-history', {
+        body: { isPaper, period, timeframe: '1D' },
+      });
+      
+      if (data?.needsConnection) return null;
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      
+      return data.history as {
+        timestamp: number[];
+        equity: number[];
+        profit_loss: number[];
+        profit_loss_pct: number[];
+        base_value: number;
+        timeframe: string;
+      };
+    },
+    enabled: !!user,
+    refetchInterval: 60000, // Refresh every minute
+    retry: false,
+  });
+}
+
+// Fetch Alpaca orders
+export function useAlpacaOrders(status: string = 'all') {
+  const { user } = useAuth();
+  const { isPaper } = useTradingMode();
+  
+  return useQuery({
+    queryKey: ['alpaca-orders', user?.id, isPaper, status],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('alpaca-trading/orders', {
+        body: { isPaper, status, limit: 20 },
+      });
+      
+      if (data?.needsConnection) return [];
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      
+      return data.orders as AlpacaOrder[];
+    },
+    enabled: !!user,
+    refetchInterval: 30000,
+    retry: false,
+  });
+}
+
 // Place order via Alpaca
 export function useAlpacaPlaceOrder() {
   const { user } = useAuth();

@@ -1,62 +1,18 @@
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useAlpacaOrders } from '@/hooks/useAlpaca';
+import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowUpRight, ArrowDownRight, Clock } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Clock, Link2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-
-interface Order {
-  id: string;
-  order_side: 'buy' | 'sell';
-  order_type: string;
-  quantity: number;
-  executed_price: number | null;
-  price: number | null;
-  status: string;
-  created_at: string;
-  executed_at: string | null;
-  stocks: {
-    symbol: string;
-    name: string;
-  } | null;
-}
 
 export function RecentTrades() {
   const { user } = useAuth();
+  const { data: brokerageAccounts } = useBrokerageAccounts();
+  const { data: orders, isLoading } = useAlpacaOrders('all');
 
-  const { data: recentOrders, isLoading } = useQuery({
-    queryKey: ['recent-orders', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          id,
-          order_side,
-          order_type,
-          quantity,
-          executed_price,
-          price,
-          status,
-          created_at,
-          executed_at,
-          stocks (
-            symbol,
-            name
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      return data as Order[];
-    },
-    enabled: !!user?.id,
-  });
+  const hasConnectedAccount = brokerageAccounts && brokerageAccounts.length > 0;
 
   if (!user) {
     return (
@@ -70,6 +26,24 @@ export function RecentTrades() {
           <p className="text-muted-foreground text-center py-4">
             Sign in to see your trades
           </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!hasConnectedAccount) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Clock className="h-5 w-5" /> Recent Trades
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <Link2 className="h-10 w-10 text-muted-foreground mb-3" />
+            <p className="text-muted-foreground">Connect your brokerage to see trades</p>
+          </div>
         </CardContent>
       </Card>
     );
@@ -92,6 +66,22 @@ export function RecentTrades() {
     );
   }
 
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case 'filled':
+        return 'default';
+      case 'partially_filled':
+        return 'secondary';
+      case 'canceled':
+      case 'expired':
+        return 'outline';
+      case 'rejected':
+        return 'destructive';
+      default:
+        return 'secondary';
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -100,20 +90,20 @@ export function RecentTrades() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {recentOrders && recentOrders.length > 0 ? (
-          <div className="space-y-3">
-            {recentOrders.map((order) => (
+        {orders && orders.length > 0 ? (
+          <div className="space-y-3 max-h-[300px] overflow-y-auto">
+            {orders.slice(0, 10).map((order) => (
               <div 
                 key={order.id}
                 className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
               >
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded-full ${
-                    order.order_side === 'buy' 
+                    order.side === 'buy' 
                       ? 'bg-profit/10 text-profit' 
                       : 'bg-loss/10 text-loss'
                   }`}>
-                    {order.order_side === 'buy' ? (
+                    {order.side === 'buy' ? (
                       <ArrowUpRight className="h-4 w-4" />
                     ) : (
                       <ArrowDownRight className="h-4 w-4" />
@@ -122,23 +112,24 @@ export function RecentTrades() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">
-                        {order.stocks?.symbol || 'Unknown'}
+                        {order.symbol}
                       </span>
                       <Badge variant="outline" className="text-xs capitalize">
-                        {order.order_side}
+                        {order.side}
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {order.quantity} shares @ ${(order.executed_price || order.price || 0).toFixed(2)}
+                      {order.filled_qty || order.qty} shares
+                      {order.filled_avg_price && ` @ $${parseFloat(order.filled_avg_price).toFixed(2)}`}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
                   <Badge 
-                    variant={order.status === 'executed' ? 'default' : 'secondary'}
+                    variant={getStatusBadgeVariant(order.status)}
                     className="capitalize"
                   >
-                    {order.status}
+                    {order.status.replace('_', ' ')}
                   </Badge>
                   <p className="text-xs text-muted-foreground mt-1">
                     {formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
