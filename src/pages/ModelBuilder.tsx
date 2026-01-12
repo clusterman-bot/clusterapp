@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useCreateModel } from '@/hooks/useModels';
-import { useStartTraining, useTrainingRun, useTrainingRealtimeUpdates, IndicatorsConfig as IndicatorsConfigType, HyperparametersConfig as HyperparametersConfigType } from '@/hooks/useMLTraining';
+import { useStartTraining, useTrainingRun, useTrainingRealtimeUpdates, useStartValidation, useValidationRuns, IndicatorsConfig as IndicatorsConfigType, HyperparametersConfig as HyperparametersConfigType } from '@/hooks/useMLTraining';
 import { MainNav } from '@/components/MainNav';
 import { BackButton } from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
@@ -19,9 +19,9 @@ import { IndicatorsConfig } from '@/components/ml/IndicatorsConfig';
 import { HyperparametersConfig } from '@/components/ml/HyperparametersConfig';
 import { ModelSelection } from '@/components/ml/ModelSelection';
 import { TrainingProgress } from '@/components/ml/TrainingProgress';
-import { Code, Blocks, Brain, Calendar, TrendingUp, Rocket } from 'lucide-react';
+import { Code, Brain, Calendar, TrendingUp, Rocket, FlaskConical, CheckCircle2 } from 'lucide-react';
 
-type ModelType = 'sandbox' | 'no-code' | 'ml';
+type ModelType = 'sandbox' | 'ml';
 
 const defaultIndicators: IndicatorsConfigType = {
   sma: { enabled: true, windows: [5, 10, 20, 50] },
@@ -44,6 +44,7 @@ export default function ModelBuilder() {
   const { toast } = useToast();
   const createModel = useCreateModel();
   const startTraining = useStartTraining();
+  const startValidation = useStartValidation();
   
   const canCreateModels = userRole?.role === 'developer' || userRole?.role === 'admin';
 
@@ -72,11 +73,10 @@ export default function ModelBuilder() {
   const { data: trainingRun, isLoading: trainingLoading } = useTrainingRun(trainingRunId || undefined);
   useTrainingRealtimeUpdates(trainingRunId || undefined);
 
-  // No-code configuration
-  const [entryCondition, setEntryCondition] = useState('');
-  const [exitCondition, setExitCondition] = useState('');
-  const [assetClass, setAssetClass] = useState('stocks');
-  const [timeframe, setTimeframe] = useState('daily');
+  // Validation state
+  const [validationStartDate, setValidationStartDate] = useState('2024-01-01');
+  const [validationEndDate, setValidationEndDate] = useState('2024-06-01');
+  const { data: validationRuns, isLoading: validationRunsLoading } = useValidationRuns(trainingRunId || undefined);
 
   useEffect(() => {
     if (!user) {
@@ -149,11 +149,6 @@ export default function ModelBuilder() {
       hyperparameters: JSON.parse(JSON.stringify(hyperparameters)),
       selectedModels,
       trainingRunId,
-    } : modelType === 'no-code' ? {
-      entryCondition,
-      exitCondition,
-      assetClass,
-      timeframe,
     } : {};
 
     try {
@@ -186,7 +181,7 @@ export default function ModelBuilder() {
             <h1 className="text-3xl font-bold mb-2">Create New Model</h1>
             <p className="text-muted-foreground mb-8">Choose how you want to build your trading strategy</p>
 
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-2 gap-6 max-w-2xl">
               {/* ML Training Card */}
               <Card 
                 className="cursor-pointer hover:border-primary transition-colors border-2"
@@ -234,30 +229,6 @@ export default function ModelBuilder() {
                   </ul>
                 </CardContent>
               </Card>
-
-              {/* No-Code Card */}
-              <Card 
-                className="cursor-pointer hover:border-primary transition-colors"
-                onClick={() => setModelType('no-code')}
-              >
-                <CardHeader>
-                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-                    <Blocks className="h-6 w-6 text-primary" />
-                  </div>
-                  <CardTitle>No-Code Builder</CardTitle>
-                  <CardDescription>
-                    Use our visual strategy builder with pre-built indicators.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ul className="text-sm text-muted-foreground space-y-2">
-                    <li>• Drag-and-drop interface</li>
-                    <li>• Pre-built indicators</li>
-                    <li>• Visual condition builder</li>
-                    <li>• Instant backtesting</li>
-                  </ul>
-                </CardContent>
-              </Card>
             </div>
           </div>
         </main>
@@ -287,11 +258,14 @@ export default function ModelBuilder() {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-4 mb-6">
+              <TabsList className="grid w-full grid-cols-5 mb-6">
                 <TabsTrigger value="config">Configuration</TabsTrigger>
                 <TabsTrigger value="indicators">Indicators</TabsTrigger>
                 <TabsTrigger value="models">Models & Params</TabsTrigger>
                 <TabsTrigger value="training">Training</TabsTrigger>
+                <TabsTrigger value="validation" disabled={!trainingRun || trainingRun.status !== 'completed'}>
+                  Validation
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="config" className="space-y-6">
@@ -455,10 +429,201 @@ export default function ModelBuilder() {
                 <TrainingProgress trainingRun={trainingRun || null} isLoading={trainingLoading} />
                 
                 {trainingRun?.status === 'completed' && (
+                  <Card className="border-green-500/50 bg-green-500/5">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle2 className="h-6 w-6 text-green-500" />
+                        <div>
+                          <p className="font-medium">Training Complete!</p>
+                          <p className="text-sm text-muted-foreground">
+                            Best model: {trainingRun.best_model_name} • 
+                            Accuracy: {((trainingRun.best_model_metrics?.accuracy || 0) * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                        <Button 
+                          className="ml-auto"
+                          onClick={() => setActiveTab('validation')}
+                        >
+                          <FlaskConical className="h-4 w-4 mr-2" />
+                          Proceed to Validation
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {!trainingRun && (
+                  <div className="text-center py-12">
+                    <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">
+                      Configure your model and start training to see results here
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      className="mt-4"
+                      onClick={() => setActiveTab('config')}
+                    >
+                      Go to Configuration
+                    </Button>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="validation" className="space-y-6">
+                {/* Validation Configuration */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FlaskConical className="h-5 w-5 text-primary" />
+                      Validation Configuration
+                    </CardTitle>
+                    <CardDescription>
+                      Test your trained model on out-of-sample data
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Validation Start Date</Label>
+                        <Input
+                          type="date"
+                          value={validationStartDate}
+                          onChange={(e) => setValidationStartDate(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Should be after training end date ({endDate})
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Validation End Date</Label>
+                        <Input
+                          type="date"
+                          value={validationEndDate}
+                          onChange={(e) => setValidationEndDate(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    
+                    <Button 
+                      onClick={async () => {
+                        if (!trainingRunId) return;
+                        try {
+                          await startValidation.mutateAsync({
+                            training_run_id: trainingRunId,
+                            start_date: validationStartDate,
+                            end_date: validationEndDate,
+                          });
+                          toast({ title: 'Validation Started', description: 'Your model is being validated.' });
+                        } catch (error: any) {
+                          toast({ title: 'Error', description: error.message, variant: 'destructive' });
+                        }
+                      }}
+                      disabled={startValidation.isPending || !trainingRunId}
+                      className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                    >
+                      <FlaskConical className="h-4 w-4 mr-2" />
+                      {startValidation.isPending ? 'Starting Validation...' : 'Run Validation'}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Validation Results */}
+                {validationRunsLoading ? (
+                  <Card>
+                    <CardContent className="py-8">
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : validationRuns && validationRuns.length > 0 ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Validation Results</CardTitle>
+                      <CardDescription>Performance on out-of-sample data</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {validationRuns.map((run) => (
+                        <div key={run.id} className="border rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-sm text-muted-foreground">
+                              {run.start_date} → {run.end_date}
+                            </span>
+                            <span className={`text-sm font-medium px-2 py-0.5 rounded ${
+                              run.status === 'completed' ? 'bg-green-500/10 text-green-500' :
+                              run.status === 'running' ? 'bg-blue-500/10 text-blue-500' :
+                              run.status === 'failed' ? 'bg-red-500/10 text-red-500' :
+                              'bg-muted text-muted-foreground'
+                            }`}>
+                              {run.status}
+                            </span>
+                          </div>
+                          
+                          {run.status === 'completed' && run.metrics && (
+                            <div className="grid grid-cols-4 gap-4">
+                              <div>
+                                <p className="text-xs text-muted-foreground">Accuracy</p>
+                                <p className="text-lg font-semibold">
+                                  {(run.metrics.accuracy * 100).toFixed(1)}%
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Precision</p>
+                                <p className="text-lg font-semibold">
+                                  {(run.metrics.precision * 100).toFixed(1)}%
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Recall</p>
+                                <p className="text-lg font-semibold">
+                                  {(run.metrics.recall * 100).toFixed(1)}%
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">F1 Score</p>
+                                <p className="text-lg font-semibold">
+                                  {(run.metrics.f1 * 100).toFixed(1)}%
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {run.status === 'completed' && run.signal_distribution && (
+                            <div className="mt-4 pt-4 border-t">
+                              <p className="text-sm font-medium mb-2">Signal Distribution</p>
+                              <div className="flex gap-4">
+                                <span className="text-green-500">BUY: {run.signal_distribution.BUY}</span>
+                                <span className="text-red-500">SELL: {run.signal_distribution.SELL}</span>
+                                <span className="text-muted-foreground">HOLD: {run.signal_distribution.HOLD}</span>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {run.status === 'failed' && run.error_message && (
+                            <p className="text-sm text-red-500">{run.error_message}</p>
+                          )}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardContent className="py-8 text-center">
+                      <FlaskConical className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">
+                        No validation runs yet. Configure dates above and run validation.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Publishing Settings - After Validation */}
+                {validationRuns && validationRuns.some(r => r.status === 'completed') && (
                   <>
                     <Card>
                       <CardHeader>
                         <CardTitle>Publishing Settings</CardTitle>
+                        <CardDescription>Configure how others can access your model</CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="flex items-center justify-between">
@@ -497,22 +662,6 @@ export default function ModelBuilder() {
                     </div>
                   </>
                 )}
-
-                {!trainingRun && (
-                  <div className="text-center py-12">
-                    <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">
-                      Configure your model and start training to see results here
-                    </p>
-                    <Button 
-                      variant="outline" 
-                      className="mt-4"
-                      onClick={() => setActiveTab('config')}
-                    >
-                      Go to Configuration
-                    </Button>
-                  </div>
-                )}
               </TabsContent>
             </Tabs>
           </div>
@@ -521,7 +670,7 @@ export default function ModelBuilder() {
     );
   }
 
-  // Original sandbox/no-code flow
+  // Sandbox mode flow
   return (
     <div className="min-h-screen bg-background">
       <MainNav />
@@ -532,7 +681,7 @@ export default function ModelBuilder() {
 
         <div className="max-w-2xl mx-auto space-y-8">
           <div className="flex items-center gap-2">
-            {modelType === 'sandbox' ? <Code className="h-5 w-5 text-primary" /> : <Blocks className="h-5 w-5 text-primary" />}
+            <Code className="h-5 w-5 text-primary" />
             <span className="text-sm font-medium capitalize">{modelType} Mode</span>
           </div>
           
@@ -578,91 +727,27 @@ export default function ModelBuilder() {
             </CardContent>
           </Card>
 
-          {modelType === 'no-code' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Strategy Configuration</CardTitle>
-                <CardDescription>Define your entry and exit conditions</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Asset Class</Label>
-                    <Select value={assetClass} onValueChange={setAssetClass}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="stocks">Stocks</SelectItem>
-                        <SelectItem value="crypto">Crypto</SelectItem>
-                        <SelectItem value="forex">Forex</SelectItem>
-                        <SelectItem value="commodities">Commodities</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Timeframe</Label>
-                    <Select value={timeframe} onValueChange={setTimeframe}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1m">1 Minute</SelectItem>
-                        <SelectItem value="5m">5 Minutes</SelectItem>
-                        <SelectItem value="1h">1 Hour</SelectItem>
-                        <SelectItem value="daily">Daily</SelectItem>
-                        <SelectItem value="weekly">Weekly</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="entry">Entry Condition</Label>
-                  <Textarea 
-                    id="entry" 
-                    value={entryCondition} 
-                    onChange={(e) => setEntryCondition(e.target.value)}
-                    placeholder="e.g., RSI crosses above 30 AND price above 50-day MA"
-                    rows={2}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="exit">Exit Condition</Label>
-                  <Textarea 
-                    id="exit" 
-                    value={exitCondition} 
-                    onChange={(e) => setExitCondition(e.target.value)}
-                    placeholder="e.g., RSI crosses below 70 OR 10% profit target hit"
-                    rows={2}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {modelType === 'sandbox' && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Code className="h-5 w-5 text-primary" />
-                  Sandbox Environment
-                </CardTitle>
-                <CardDescription>Your code will run in an isolated Python environment</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-muted rounded-lg p-4 font-mono text-sm">
-                  <p className="text-muted-foreground"># Your strategy code will be configured after creation</p>
-                  <p className="text-muted-foreground"># Available libraries: pandas, numpy, sklearn, ta</p>
-                  <p className="mt-4 text-foreground">def generate_signals(data):</p>
-                  <p className="text-foreground ml-4">    # Your logic here</p>
-                  <p className="text-foreground ml-4">    return signals</p>
-                </div>
-                <p className="text-sm text-muted-foreground mt-4">
-                  Full code editor available after model creation.
-                </p>
-              </CardContent>
-            </Card>
-          )}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Code className="h-5 w-5 text-primary" />
+                Sandbox Environment
+              </CardTitle>
+              <CardDescription>Your code will run in an isolated Python environment</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="bg-muted rounded-lg p-4 font-mono text-sm">
+                <p className="text-muted-foreground"># Your strategy code will be configured after creation</p>
+                <p className="text-muted-foreground"># Available libraries: pandas, numpy, sklearn, ta</p>
+                <p className="mt-4 text-foreground">def generate_signals(data):</p>
+                <p className="text-foreground ml-4">    # Your logic here</p>
+                <p className="text-foreground ml-4">    return signals</p>
+              </div>
+              <p className="text-sm text-muted-foreground mt-4">
+                Full code editor available after model creation.
+              </p>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
