@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
 import { useTradingMode } from './useTradingMode';
+import { useBrokerageAccounts } from './useBrokerageAccounts';
 
 export interface AlpacaAccount {
   id: string;
@@ -61,10 +62,17 @@ export interface AlpacaQuote {
   timestamp?: string;
 }
 
-// Fetch Alpaca account info
+// Fetch Alpaca account info - only when brokerage is connected
 export function useAlpacaAccount() {
   const { user } = useAuth();
   const { isPaper } = useTradingMode();
+  const { data: brokerageAccounts } = useBrokerageAccounts();
+  
+  // Check if user has the right type of account connected
+  const accountType = isPaper ? 'paper' : 'live';
+  const hasConnectedAccount = brokerageAccounts?.some(
+    acc => acc.account_type === accountType && acc.is_active
+  );
   
   return useQuery({
     queryKey: ['alpaca-account', user?.id, isPaper],
@@ -78,16 +86,22 @@ export function useAlpacaAccount() {
       
       return data.account as AlpacaAccount;
     },
-    enabled: !!user,
+    enabled: !!user && !!hasConnectedAccount,
     refetchInterval: 30000, // Refresh every 30 seconds
     retry: false,
   });
 }
 
-// Fetch Alpaca positions
+// Fetch Alpaca positions - only when brokerage is connected
 export function useAlpacaPositions() {
   const { user } = useAuth();
   const { isPaper } = useTradingMode();
+  const { data: brokerageAccounts } = useBrokerageAccounts();
+  
+  const accountType = isPaper ? 'paper' : 'live';
+  const hasConnectedAccount = brokerageAccounts?.some(
+    acc => acc.account_type === accountType && acc.is_active
+  );
   
   return useQuery({
     queryKey: ['alpaca-positions', user?.id, isPaper],
@@ -101,16 +115,19 @@ export function useAlpacaPositions() {
       
       return data.positions as AlpacaPosition[];
     },
-    enabled: !!user,
+    enabled: !!user && !!hasConnectedAccount,
     refetchInterval: 30000,
     retry: false,
   });
 }
 
-// Search for stocks via Alpaca
+// Search for stocks via Alpaca - only when any brokerage is connected
 export function useAlpacaSearch(query: string) {
   const { user } = useAuth();
   const { isPaper } = useTradingMode();
+  const { data: brokerageAccounts } = useBrokerageAccounts();
+  
+  const hasAnyConnectedAccount = brokerageAccounts && brokerageAccounts.length > 0;
   
   return useQuery({
     queryKey: ['alpaca-search', query],
@@ -126,16 +143,19 @@ export function useAlpacaSearch(query: string) {
       
       return data.assets as AlpacaAsset[];
     },
-    enabled: !!user && query.length >= 1,
+    enabled: !!user && query.length >= 1 && !!hasAnyConnectedAccount,
     staleTime: 60000, // Cache for 1 minute
     retry: false,
   });
 }
 
-// Get real-time quote for a symbol
+// Get real-time quote for a symbol - only when brokerage is connected
 export function useAlpacaQuote(symbol: string | undefined) {
   const { user } = useAuth();
   const { isPaper } = useTradingMode();
+  const { data: brokerageAccounts } = useBrokerageAccounts();
+  
+  const hasAnyConnectedAccount = brokerageAccounts && brokerageAccounts.length > 0;
   
   return useQuery({
     queryKey: ['alpaca-quote', symbol],
@@ -149,7 +169,7 @@ export function useAlpacaQuote(symbol: string | undefined) {
       
       return data.quote as AlpacaQuote;
     },
-    enabled: !!user && !!symbol,
+    enabled: !!user && !!symbol && !!hasAnyConnectedAccount,
     refetchInterval: 10000, // Refresh every 10 seconds
     retry: false,
   });
