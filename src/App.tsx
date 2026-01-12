@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import RetailTraderDashboard from "./pages/RetailTraderDashboard";
 import ModelBuilder from "./pages/ModelBuilder";
 import ModelDetail from "./pages/ModelDetail";
+import TrainingDashboard from "./pages/TrainingDashboard";
 import Explore from "./pages/Explore";
 import Profile from "./pages/Profile";
 import RunBacktest from "./pages/RunBacktest";
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="/models/new" element={<ModelBuilder />} />
             <Route path="/models/:id" element={<ModelDetail />} />
             <Route path="/models/:id/backtest" element={<RunBacktest />} />
+            <Route path="/training" element={<TrainingDashboard />} />
             <Route path="/explore" element={<Explore />} />
             <Route path="/trade" element={<Trade />} />
             <Route path="/trade/stocks/:symbol" element={<StockDetail />} />
