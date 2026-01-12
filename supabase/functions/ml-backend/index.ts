@@ -43,17 +43,26 @@ serve(async (req) => {
     const path = url.pathname.split('/').filter(Boolean);
     const action = path[path.length - 1];
 
-    console.log(`ML Backend request: ${action} from user ${user.id}`);
+    console.log(`[ML-Backend] ===== ${action.toUpperCase()} REQUEST =====`);
+    console.log(`[ML-Backend] User: ${user.id}`);
+    console.log(`[ML-Backend] ML_BACKEND_URL configured: ${ML_BACKEND_URL ? 'YES' : 'NO'}`);
 
     if (req.method === 'POST') {
       const body = await req.json();
+      console.log(`[ML-Backend] Request body:`, JSON.stringify(body, null, 2));
 
       if (action === 'train') {
         const isDemoMode = body.demo_mode === true;
         const dataLimit = isDemoMode ? 5 : body.limit;
-        const horizonMinutes = body.horizon || 5; // Horizon in minutes
+        const horizonMinutes = body.horizon || 5;
         
-        console.log(`Training request - Demo mode: ${isDemoMode}, Horizon: ${horizonMinutes} minutes, Data limit: ${dataLimit || 'none'}`);
+        console.log(`[ML-Backend] ===== TRAINING CONFIG =====`);
+        console.log(`[ML-Backend] Demo mode: ${isDemoMode}`);
+        console.log(`[ML-Backend] Ticker: ${body.ticker}`);
+        console.log(`[ML-Backend] Date range: ${body.start_date} to ${body.end_date}`);
+        console.log(`[ML-Backend] Horizon: ${horizonMinutes} minutes`);
+        console.log(`[ML-Backend] Indicators:`, JSON.stringify(body.indicators, null, 2));
+        console.log(`[ML-Backend] Hyperparameters:`, JSON.stringify(body.hyperparameters, null, 2));
         
         // Create a training run record
         const { data: trainingRun, error: insertError } = await supabase
@@ -77,50 +86,66 @@ serve(async (req) => {
           .single();
 
         if (insertError) {
-          console.error('Error creating training run:', insertError);
+          console.error('[ML-Backend] Error creating training run:', insertError);
           throw insertError;
         }
 
-        console.log(`Created training run ${trainingRun.id}${isDemoMode ? ' (DEMO MODE)' : ''}`);
+        console.log(`[ML-Backend] Created training run: ${trainingRun.id}`);
 
         // If ML backend is configured, forward the request
         if (ML_BACKEND_URL && !isDemoMode) {
+          const mlPayload = {
+            model_id: body.model_id,
+            training_run_id: trainingRun.id,
+            ticker: body.ticker,
+            start_date: body.start_date,
+            end_date: body.end_date,
+            horizon_minutes: horizonMinutes,
+            indicators: body.indicators,
+            hyperparameters: body.hyperparameters,
+            callback_url: `${SUPABASE_URL}/functions/v1/ml-backend/callback`,
+          };
+
+          console.log(`[ML-Backend] ===== SENDING TO YOUR ENGINE =====`);
+          console.log(`[ML-Backend] URL: ${ML_BACKEND_URL}/train`);
+          console.log(`[ML-Backend] Payload:`, JSON.stringify(mlPayload, null, 2));
+
           try {
-            console.log(`Forwarding to ML backend: ${ML_BACKEND_URL}/train`);
+            const startTime = Date.now();
             const mlResponse = await fetch(`${ML_BACKEND_URL}/train`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                ...body,
-                horizon_minutes: horizonMinutes,
-                training_run_id: trainingRun.id,
-                callback_url: `${SUPABASE_URL}/functions/v1/ml-backend/callback`,
-              }),
+              body: JSON.stringify(mlPayload),
             });
+            const responseTime = Date.now() - startTime;
+
+            console.log(`[ML-Backend] ===== ENGINE RESPONSE =====`);
+            console.log(`[ML-Backend] Status: ${mlResponse.status} ${mlResponse.statusText}`);
+            console.log(`[ML-Backend] Response time: ${responseTime}ms`);
 
             if (mlResponse.ok) {
               const mlData = await mlResponse.json();
-              console.log('ML Backend response:', mlData);
+              console.log(`[ML-Backend] Response data:`, JSON.stringify(mlData, null, 2));
               
-              // Update status to running
               await supabase
                 .from('training_runs')
                 .update({ status: 'running' })
                 .eq('id', trainingRun.id);
+
+              console.log(`[ML-Backend] ✅ Training request sent to your engine successfully`);
             } else {
               const errorText = await mlResponse.text();
-              console.log('ML Backend error response:', errorText);
-              // Fall back to simulation if ML backend fails
+              console.error(`[ML-Backend] ❌ Engine error response:`, errorText);
+              console.log(`[ML-Backend] Falling back to simulation...`);
               await simulateTraining(supabase, trainingRun.id, body, isDemoMode);
             }
-          } catch (mlError) {
-            console.log('ML Backend not available:', mlError);
-            // Simulate training for demo purposes
+          } catch (mlError: any) {
+            console.error(`[ML-Backend] ❌ Failed to reach engine:`, mlError.message);
+            console.log(`[ML-Backend] Falling back to simulation...`);
             await simulateTraining(supabase, trainingRun.id, body, isDemoMode);
           }
         } else {
-          // Simulate training for demo purposes (or when in demo mode)
-          console.log('Using simulated training' + (isDemoMode ? ' (demo mode)' : ' (no ML backend configured)'));
+          console.log(`[ML-Backend] Using simulation (demo mode: ${isDemoMode}, no ML URL: ${!ML_BACKEND_URL})`);
           await simulateTraining(supabase, trainingRun.id, body, isDemoMode);
         }
 
@@ -129,13 +154,19 @@ serve(async (req) => {
           training_run_id: trainingRun.id,
           message: isDemoMode ? 'Demo training started (limited data, no API calls)' : 'Training started',
           demo_mode: isDemoMode,
-          horizon_minutes: horizonMinutes
+          horizon_minutes: horizonMinutes,
+          ml_backend_configured: !!ML_BACKEND_URL
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
       if (action === 'validate') {
+        console.log(`[ML-Backend] ===== VALIDATION REQUEST =====`);
+        console.log(`[ML-Backend] Model ID: ${body.model_id}`);
+        console.log(`[ML-Backend] Training Run ID: ${body.training_run_id}`);
+        console.log(`[ML-Backend] Date range: ${body.start_date} to ${body.end_date}`);
+
         // Create a validation run record
         const { data: validationRun, error: insertError } = await supabase
           .from('validation_runs')
@@ -152,34 +183,147 @@ serve(async (req) => {
 
         if (insertError) throw insertError;
 
-        // Simulate validation
-        await simulateValidation(supabase, validationRun.id);
+        console.log(`[ML-Backend] Created validation run: ${validationRun.id}`);
+
+        // If ML backend is configured, forward the validation request
+        if (ML_BACKEND_URL) {
+          const validatePayload = {
+            model_id: body.model_id,
+            validation_run_id: validationRun.id,
+            training_run_id: body.training_run_id,
+            start_date: body.start_date,
+            end_date: body.end_date,
+            callback_url: `${SUPABASE_URL}/functions/v1/ml-backend/callback`,
+          };
+
+          console.log(`[ML-Backend] ===== SENDING VALIDATION TO ENGINE =====`);
+          console.log(`[ML-Backend] URL: ${ML_BACKEND_URL}/validate`);
+          console.log(`[ML-Backend] Payload:`, JSON.stringify(validatePayload, null, 2));
+
+          try {
+            const startTime = Date.now();
+            const mlResponse = await fetch(`${ML_BACKEND_URL}/validate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(validatePayload),
+            });
+            const responseTime = Date.now() - startTime;
+
+            console.log(`[ML-Backend] ===== VALIDATION ENGINE RESPONSE =====`);
+            console.log(`[ML-Backend] Status: ${mlResponse.status} ${mlResponse.statusText}`);
+            console.log(`[ML-Backend] Response time: ${responseTime}ms`);
+
+            if (mlResponse.ok) {
+              const mlData = await mlResponse.json();
+              console.log(`[ML-Backend] Response data:`, JSON.stringify(mlData, null, 2));
+              
+              await supabase
+                .from('validation_runs')
+                .update({ status: 'running' })
+                .eq('id', validationRun.id);
+
+              console.log(`[ML-Backend] ✅ Validation request sent to engine successfully`);
+            } else {
+              const errorText = await mlResponse.text();
+              console.error(`[ML-Backend] ❌ Validation engine error:`, errorText);
+              await simulateValidation(supabase, validationRun.id);
+            }
+          } catch (mlError: any) {
+            console.error(`[ML-Backend] ❌ Failed to reach engine for validation:`, mlError.message);
+            await simulateValidation(supabase, validationRun.id);
+          }
+        } else {
+          console.log(`[ML-Backend] Using simulated validation (no ML URL configured)`);
+          await simulateValidation(supabase, validationRun.id);
+        }
 
         return new Response(JSON.stringify({ 
           success: true, 
-          validation_run_id: validationRun.id 
+          validation_run_id: validationRun.id,
+          ml_backend_configured: !!ML_BACKEND_URL
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
       if (action === 'callback') {
-        // Handle callback from ML backend
-        const { training_run_id, status, results, best_model_name, best_model_metrics, error_message } = body;
+        console.log(`[ML-Backend] ===== CALLBACK FROM ENGINE =====`);
+        console.log(`[ML-Backend] Callback data:`, JSON.stringify(body, null, 2));
+
+        const { training_run_id, validation_run_id, status, results, best_model_name, best_model_metrics, metrics, signal_distribution, error_message } = body;
         
-        await supabase
-          .from('training_runs')
-          .update({
-            status,
-            results,
-            best_model_name,
-            best_model_metrics,
-            error_message,
-            completed_at: status === 'completed' || status === 'failed' ? new Date().toISOString() : null,
-          })
-          .eq('id', training_run_id);
+        if (training_run_id) {
+          await supabase
+            .from('training_runs')
+            .update({
+              status,
+              results,
+              best_model_name,
+              best_model_metrics,
+              error_message,
+              completed_at: status === 'completed' || status === 'failed' ? new Date().toISOString() : null,
+            })
+            .eq('id', training_run_id);
+          console.log(`[ML-Backend] ✅ Training run ${training_run_id} updated with status: ${status}`);
+        }
+
+        if (validation_run_id) {
+          await supabase
+            .from('validation_runs')
+            .update({
+              status,
+              metrics,
+              signal_distribution,
+              error_message,
+              completed_at: status === 'completed' || status === 'failed' ? new Date().toISOString() : null,
+            })
+            .eq('id', validation_run_id);
+          console.log(`[ML-Backend] ✅ Validation run ${validation_run_id} updated with status: ${status}`);
+        }
 
         return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (action === 'health') {
+        console.log(`[ML-Backend] ===== HEALTH CHECK =====`);
+        
+        let engineStatus = 'not_configured';
+        let engineResponseTime = null;
+        let engineError = null;
+
+        if (ML_BACKEND_URL) {
+          try {
+            const startTime = Date.now();
+            const healthResponse = await fetch(`${ML_BACKEND_URL}/health`, {
+              method: 'GET',
+              headers: { 'Content-Type': 'application/json' },
+            });
+            engineResponseTime = Date.now() - startTime;
+
+            if (healthResponse.ok) {
+              engineStatus = 'healthy';
+              console.log(`[ML-Backend] ✅ Engine is healthy (${engineResponseTime}ms)`);
+            } else {
+              engineStatus = 'unhealthy';
+              engineError = `Status ${healthResponse.status}`;
+              console.log(`[ML-Backend] ⚠️ Engine unhealthy: ${engineError}`);
+            }
+          } catch (e: any) {
+            engineStatus = 'unreachable';
+            engineError = e.message;
+            console.log(`[ML-Backend] ❌ Engine unreachable: ${engineError}`);
+          }
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          ml_backend_url: ML_BACKEND_URL ? `${ML_BACKEND_URL.substring(0, 30)}...` : null,
+          engine_status: engineStatus,
+          engine_response_time_ms: engineResponseTime,
+          engine_error: engineError,
+        }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -209,7 +353,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
-    console.error('Error in ml-backend function:', error);
+    console.error('[ML-Backend] ❌ Error:', error);
     return new Response(JSON.stringify({ error: error.message || 'Unknown error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -219,19 +363,16 @@ serve(async (req) => {
 
 // Simulate training for demo purposes when ML backend is not available
 async function simulateTraining(supabase: any, trainingRunId: string, config: any, isDemoMode: boolean = false) {
-  console.log(`Starting simulated training for ${trainingRunId}${isDemoMode ? ' (DEMO MODE)' : ''}`);
+  console.log(`[ML-Backend] Starting SIMULATED training for ${trainingRunId}`);
   
-  // Update to running
   await supabase
     .from('training_runs')
     .update({ status: 'running' })
     .eq('id', trainingRunId);
 
-  // Simulate processing time - shorter for demo mode
   const processingTime = isDemoMode ? 1000 : 2000;
   await new Promise(resolve => setTimeout(resolve, processingTime));
 
-  // Generate simulated results - more consistent for demo mode
   const baseAccuracy = isDemoMode ? 0.70 : 0.65;
   const variance = isDemoMode ? 0.05 : 0.15;
   
@@ -253,14 +394,12 @@ async function simulateTraining(supabase: any, trainingRunId: string, config: an
     },
   };
 
-  // Find best model
   const models = Object.entries(results);
   const bestModel = models.reduce((best, [name, metrics]: [string, any]) => 
     metrics.accuracy > (best.metrics?.accuracy || 0) ? { name, metrics } : best,
     { name: '', metrics: null as any }
   );
 
-  // Update with results
   await supabase
     .from('training_runs')
     .update({
@@ -272,11 +411,13 @@ async function simulateTraining(supabase: any, trainingRunId: string, config: an
     })
     .eq('id', trainingRunId);
 
-  console.log(`Simulated training completed for ${trainingRunId}${isDemoMode ? ' (DEMO MODE)' : ''}`);
+  console.log(`[ML-Backend] SIMULATED training completed for ${trainingRunId}`);
 }
 
 // Simulate validation for demo purposes
 async function simulateValidation(supabase: any, validationRunId: string) {
+  console.log(`[ML-Backend] Starting SIMULATED validation for ${validationRunId}`);
+
   await supabase
     .from('validation_runs')
     .update({ status: 'running' })
@@ -306,4 +447,6 @@ async function simulateValidation(supabase: any, validationRunId: string) {
       completed_at: new Date().toISOString(),
     })
     .eq('id', validationRunId);
+
+  console.log(`[ML-Backend] SIMULATED validation completed for ${validationRunId}`);
 }
