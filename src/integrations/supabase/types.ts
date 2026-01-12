@@ -140,6 +140,63 @@ export type Database = {
           },
         ]
       }
+      deployed_models: {
+        Row: {
+          config: Json | null
+          deployed_at: string
+          error_message: string | null
+          id: string
+          last_signal_at: string | null
+          model_id: string
+          status: string
+          total_signals: number | null
+          total_trades: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          config?: Json | null
+          deployed_at?: string
+          error_message?: string | null
+          id?: string
+          last_signal_at?: string | null
+          model_id: string
+          status?: string
+          total_signals?: number | null
+          total_trades?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          config?: Json | null
+          deployed_at?: string
+          error_message?: string | null
+          id?: string
+          last_signal_at?: string | null
+          model_id?: string
+          status?: string
+          total_signals?: number | null
+          total_trades?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deployed_models_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: true
+            referencedRelation: "models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deployed_models_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       follows: {
         Row: {
           created_at: string | null
@@ -253,6 +310,56 @@ export type Database = {
           timespan?: string
         }
         Relationships: []
+      }
+      model_signals: {
+        Row: {
+          confidence: number | null
+          executed_at: string | null
+          generated_at: string
+          id: string
+          metadata: Json | null
+          model_id: string
+          price_at_signal: number | null
+          quantity: number | null
+          signal_type: string
+          status: string
+          ticker: string
+        }
+        Insert: {
+          confidence?: number | null
+          executed_at?: string | null
+          generated_at?: string
+          id?: string
+          metadata?: Json | null
+          model_id: string
+          price_at_signal?: number | null
+          quantity?: number | null
+          signal_type: string
+          status?: string
+          ticker: string
+        }
+        Update: {
+          confidence?: number | null
+          executed_at?: string | null
+          generated_at?: string
+          id?: string
+          metadata?: Json | null
+          model_id?: string
+          price_at_signal?: number | null
+          quantity?: number | null
+          signal_type?: string
+          status?: string
+          ticker?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_signals_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "models"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       models: {
         Row: {
@@ -600,6 +707,79 @@ export type Database = {
           volume?: number | null
         }
         Relationships: []
+      }
+      subscriber_trades: {
+        Row: {
+          alpaca_order_id: string | null
+          created_at: string
+          error_message: string | null
+          executed_at: string | null
+          executed_price: number | null
+          id: string
+          pnl: number | null
+          quantity: number
+          side: string
+          signal_id: string
+          status: string
+          subscription_id: string
+          ticker: string
+          user_id: string
+        }
+        Insert: {
+          alpaca_order_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          executed_at?: string | null
+          executed_price?: number | null
+          id?: string
+          pnl?: number | null
+          quantity: number
+          side: string
+          signal_id: string
+          status?: string
+          subscription_id: string
+          ticker: string
+          user_id: string
+        }
+        Update: {
+          alpaca_order_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          executed_at?: string | null
+          executed_price?: number | null
+          id?: string
+          pnl?: number | null
+          quantity?: number
+          side?: string
+          signal_id?: string
+          status?: string
+          subscription_id?: string
+          ticker?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriber_trades_signal_id_fkey"
+            columns: ["signal_id"]
+            isOneToOne: false
+            referencedRelation: "model_signals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriber_trades_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriber_trades_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subscriptions: {
         Row: {

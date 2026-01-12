@@ -51,8 +51,9 @@ serve(async (req) => {
       if (action === 'train') {
         const isDemoMode = body.demo_mode === true;
         const dataLimit = isDemoMode ? 5 : body.limit;
+        const horizonMinutes = body.horizon || 5; // Horizon in minutes
         
-        console.log(`Training request - Demo mode: ${isDemoMode}, Data limit: ${dataLimit || 'none'}`);
+        console.log(`Training request - Demo mode: ${isDemoMode}, Horizon: ${horizonMinutes} minutes, Data limit: ${dataLimit || 'none'}`);
         
         // Create a training run record
         const { data: trainingRun, error: insertError } = await supabase
@@ -64,7 +65,12 @@ serve(async (req) => {
             start_date: body.start_date,
             end_date: body.end_date,
             indicators_enabled: body.indicators,
-            hyperparameters: { ...body.hyperparameters, demo_mode: isDemoMode, data_limit: dataLimit },
+            hyperparameters: { 
+              ...body.hyperparameters, 
+              demo_mode: isDemoMode, 
+              data_limit: dataLimit,
+              horizon_minutes: horizonMinutes 
+            },
             status: 'pending',
           })
           .select()
@@ -80,30 +86,41 @@ serve(async (req) => {
         // If ML backend is configured, forward the request
         if (ML_BACKEND_URL && !isDemoMode) {
           try {
+            console.log(`Forwarding to ML backend: ${ML_BACKEND_URL}/train`);
             const mlResponse = await fetch(`${ML_BACKEND_URL}/train`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 ...body,
+                horizon_minutes: horizonMinutes,
                 training_run_id: trainingRun.id,
                 callback_url: `${SUPABASE_URL}/functions/v1/ml-backend/callback`,
               }),
             });
 
             if (mlResponse.ok) {
+              const mlData = await mlResponse.json();
+              console.log('ML Backend response:', mlData);
+              
               // Update status to running
               await supabase
                 .from('training_runs')
                 .update({ status: 'running' })
                 .eq('id', trainingRun.id);
+            } else {
+              const errorText = await mlResponse.text();
+              console.log('ML Backend error response:', errorText);
+              // Fall back to simulation if ML backend fails
+              await simulateTraining(supabase, trainingRun.id, body, isDemoMode);
             }
           } catch (mlError) {
-            console.log('ML Backend not available, using simulated training');
+            console.log('ML Backend not available:', mlError);
             // Simulate training for demo purposes
             await simulateTraining(supabase, trainingRun.id, body, isDemoMode);
           }
         } else {
           // Simulate training for demo purposes (or when in demo mode)
+          console.log('Using simulated training' + (isDemoMode ? ' (demo mode)' : ' (no ML backend configured)'));
           await simulateTraining(supabase, trainingRun.id, body, isDemoMode);
         }
 
@@ -111,7 +128,8 @@ serve(async (req) => {
           success: true, 
           training_run_id: trainingRun.id,
           message: isDemoMode ? 'Demo training started (limited data, no API calls)' : 'Training started',
-          demo_mode: isDemoMode
+          demo_mode: isDemoMode,
+          horizon_minutes: horizonMinutes
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
