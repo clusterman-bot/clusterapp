@@ -12,6 +12,7 @@ import {
   Briefcase, Clock, BarChart3
 } from 'lucide-react';
 import { useStocks, useHoldings, useWatchlist, useBalance, Stock } from '@/hooks/useTrading';
+import { useAlpacaAccount, useAlpacaPositions } from '@/hooks/useAlpaca';
 import { LivePriceUpdates } from '@/components/LivePriceUpdates';
 import { TradingModeToggle, TradingModeIndicator } from '@/components/TradingModeToggle';
 
@@ -73,14 +74,20 @@ export default function Trade() {
   const { data: holdings } = useHoldings();
   const { data: watchlist } = useWatchlist();
   const { data: balance } = useBalance();
+  const { data: alpacaAccount, isLoading: alpacaLoading } = useAlpacaAccount();
+  const { data: alpacaPositions } = useAlpacaPositions();
 
-  // Calculate portfolio value
-  const portfolioValue = holdings?.reduce((total, holding) => {
-    const currentValue = holding.stocks ? Number(holding.quantity) * holding.stocks.current_price : 0;
-    return total + currentValue;
-  }, 0) || 0;
+  // Use Alpaca account data if available, otherwise fall back to local balance
+  const portfolioValue = alpacaAccount 
+    ? alpacaAccount.portfolio_value 
+    : holdings?.reduce((total, holding) => {
+        const currentValue = holding.stocks ? Number(holding.quantity) * holding.stocks.current_price : 0;
+        return total + currentValue;
+      }, 0) || 0;
 
-  const totalValue = (balance?.cash_balance || 0) + portfolioValue;
+  const cashAvailable = alpacaAccount ? alpacaAccount.cash : (balance?.cash_balance || 0);
+  const investedValue = alpacaAccount ? alpacaAccount.equity - alpacaAccount.cash : portfolioValue;
+  const totalValue = alpacaAccount ? alpacaAccount.portfolio_value : (balance?.cash_balance || 0) + portfolioValue;
 
   // Group stocks by sector
   const topGainers = stocks?.filter(s => s.previous_close && s.current_price > s.previous_close)
@@ -121,12 +128,18 @@ export default function Trade() {
                 <div className="flex gap-6">
                   <div>
                     <p className="text-sm text-muted-foreground">Cash Available</p>
-                    <p className="text-xl font-semibold">{formatPrice(balance?.cash_balance || 0)}</p>
+                    <p className="text-xl font-semibold">{formatPrice(cashAvailable)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Invested</p>
-                    <p className="text-xl font-semibold">{formatPrice(portfolioValue)}</p>
+                    <p className="text-xl font-semibold">{formatPrice(investedValue)}</p>
                   </div>
+                  {alpacaAccount && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Buying Power</p>
+                      <p className="text-xl font-semibold">{formatPrice(alpacaAccount.buying_power)}</p>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button onClick={() => navigate('/trade/portfolio')}>
