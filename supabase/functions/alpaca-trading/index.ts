@@ -83,12 +83,14 @@ serve(async (req) => {
 
     if (accountError || !brokerageAccount) {
       console.log(`[Alpaca] No ${accountType} brokerage account found for user ${user.id}`);
+      // Return 200 with needsConnection flag so frontend can handle gracefully
       return new Response(
         JSON.stringify({ 
-          error: `No ${accountType} brokerage account connected. Please connect your Alpaca account first.`,
+          success: false,
           needsConnection: true,
+          message: `No ${accountType} brokerage account connected. Please connect your Alpaca account first.`,
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
