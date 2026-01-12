@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.brokerage-accounts]
 verify_jwt = false
+
+[functions.trading-bot]
+verify_jwt = false

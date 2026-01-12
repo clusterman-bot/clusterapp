@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useModel, useDeleteModel } from '@/hooks/useModels';
 import { useBacktests } from '@/hooks/useBacktests';
+import { useDeployedModel, useDeployModel, useStopModel, useModelSignals } from '@/hooks/useDeployedModels';
 import { MainNav } from '@/components/MainNav';
 import { BackButton } from '@/components/BackButton';
 import { ModelSubscribeButton } from '@/components/ModelSubscribeButton';
@@ -14,7 +15,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { 
   TrendingUp, Play, Trash2, Edit, Users, 
-  BarChart3, TrendingDown, Target, Calendar, Shield
+  BarChart3, TrendingDown, Target, Calendar, Shield,
+  Rocket, Square, Activity, Zap
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -26,7 +28,11 @@ export default function ModelDetail() {
   const { toast } = useToast();
   const { data: model, isLoading } = useModel(id!);
   const { data: backtests } = useBacktests(id!);
+  const { data: deployment, isLoading: deploymentLoading } = useDeployedModel(id!);
+  const { data: signals } = useModelSignals(id!);
   const deleteModel = useDeleteModel();
+  const deployModel = useDeployModel();
+  const stopModel = useStopModel();
 
   const isRetailTrader = userRole?.role === 'retail_trader';
 
@@ -139,6 +145,27 @@ export default function ModelDetail() {
             
             {isOwner && (
               <>
+                {/* Deploy/Stop buttons */}
+                {deployment?.status === 'running' ? (
+                  <Button 
+                    variant="destructive" 
+                    onClick={() => stopModel.mutate(model.id)}
+                    disabled={stopModel.isPending}
+                  >
+                    <Square className="mr-2 h-4 w-4" /> 
+                    {stopModel.isPending ? 'Stopping...' : 'Stop Bot'}
+                  </Button>
+                ) : (
+                  <Button 
+                    onClick={() => deployModel.mutate(model.id)}
+                    disabled={deployModel.isPending || model.status === 'draft'}
+                    className="bg-gradient-to-r from-primary to-chart-1"
+                  >
+                    <Rocket className="mr-2 h-4 w-4" /> 
+                    {deployModel.isPending ? 'Deploying...' : 'Deploy Bot'}
+                  </Button>
+                )}
+                
                 <Button variant="outline" onClick={() => navigate(`/models/${id}/edit`)}>
                   <Edit className="mr-2 h-4 w-4" /> Edit
                 </Button>
@@ -148,6 +175,24 @@ export default function ModelDetail() {
               </>
             )}
           </div>
+          
+          {/* Deployment Status Banner */}
+          {deployment?.status === 'running' && (
+            <div className="w-full mt-4 p-4 bg-primary/10 border border-primary/20 rounded-lg flex items-center gap-3">
+              <Activity className="h-5 w-5 text-primary animate-pulse" />
+              <div className="flex-1">
+                <p className="font-medium text-primary">Bot Active & Trading</p>
+                <p className="text-sm text-muted-foreground">
+                  {deployment.total_signals} signals generated • {deployment.total_trades} trades executed
+                </p>
+              </div>
+              {deployment.last_signal_at && (
+                <span className="text-sm text-muted-foreground">
+                  Last signal: {new Date(deployment.last_signal_at).toLocaleTimeString()}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="grid gap-4 md:grid-cols-4 mb-8">
@@ -196,6 +241,9 @@ export default function ModelDetail() {
         <Tabs defaultValue="performance" className="space-y-4">
           <TabsList>
             <TabsTrigger value="performance">Performance</TabsTrigger>
+            <TabsTrigger value="signals">
+              <Zap className="h-4 w-4 mr-1" /> Signals
+            </TabsTrigger>
             <TabsTrigger value="backtests">Backtests</TabsTrigger>
             <TabsTrigger value="subscribers">Subscribers</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -230,6 +278,73 @@ export default function ModelDetail() {
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="signals">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5" />
+                  Trading Signals
+                </CardTitle>
+                <CardDescription>
+                  Real-time signals generated by the deployed model
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {signals && signals.length > 0 ? (
+                  <div className="space-y-3">
+                    {signals.map((signal) => (
+                      <div 
+                        key={signal.id} 
+                        className="flex items-center justify-between p-4 border rounded-lg"
+                      >
+                        <div className="flex items-center gap-4">
+                          <Badge 
+                            variant={
+                              signal.signal_type === 'BUY' ? 'default' :
+                              signal.signal_type === 'SELL' ? 'destructive' : 'secondary'
+                            }
+                            className="w-16 justify-center"
+                          >
+                            {signal.signal_type}
+                          </Badge>
+                          <div>
+                            <p className="font-medium">{signal.ticker}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(signal.generated_at).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-6">
+                          <div className="text-right">
+                            <p className="text-sm text-muted-foreground">Price</p>
+                            <p className="font-medium">${signal.price_at_signal?.toFixed(2) || 'N/A'}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm text-muted-foreground">Confidence</p>
+                            <p className="font-medium">{((signal.confidence || 0) * 100).toFixed(0)}%</p>
+                          </div>
+                          <Badge variant={signal.status === 'executed' ? 'default' : 'secondary'}>
+                            {signal.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Zap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground mb-2">No signals yet</p>
+                    <p className="text-sm text-muted-foreground">
+                      {deployment?.status === 'running' 
+                        ? 'Signals will appear here when the model generates trading decisions.'
+                        : 'Deploy the model to start generating signals.'}
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
