@@ -432,16 +432,16 @@ def generate_signals(data: pd.DataFrame) -> pd.DataFrame:
                   <CardContent>
                     <div className="grid md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <Label>Horizon (days)</Label>
+                        <Label>Horizon (minutes)</Label>
                         <Input
                           type="number"
                           value={horizon}
                           onChange={(e) => setHorizon(parseInt(e.target.value) || 5)}
                           min={1}
-                          max={30}
+                          max={60}
                         />
                         <p className="text-xs text-muted-foreground">
-                          Look-ahead period for calculating future returns
+                          Look-ahead period in minutes for calculating future returns
                         </p>
                       </div>
                       <div className="space-y-2">
