@@ -34,20 +34,17 @@ export default function Auth() {
     // Wait for auth to finish loading
     if (authLoading) return;
     if (!user) return;
+    
+    // Wait for role to finish loading, but don't wait forever
     if (roleLoading) return;
     
-    if (!userRole) {
-      // User exists but no role - this shouldn't happen with new flow
-      // but handle it gracefully
-      return;
-    }
-    
-    // Route based on role
-    if (userRole.role === 'admin') {
+    // Route based on role (default to dashboard if no role found)
+    if (userRole?.role === 'admin') {
       navigate('/admin', { replace: true });
-    } else if (userRole.role === 'retail_trader') {
+    } else if (userRole?.role === 'retail_trader') {
       navigate('/trader-dashboard', { replace: true });
     } else {
+      // Default to dashboard for developers or users without a role yet
       navigate('/dashboard', { replace: true });
     }
   }, [user, userRole, authLoading, roleLoading, navigate, justSignedOut]);
@@ -61,8 +58,8 @@ export default function Auth() {
     );
   }
 
-  // If user is logged in and we have their role, show loading while redirect happens
-  if (user && userRole && !justSignedOut) {
+  // If user is logged in (and not just signed out), show loading while redirect happens
+  if (user && !justSignedOut && !roleLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Redirecting...</p>
