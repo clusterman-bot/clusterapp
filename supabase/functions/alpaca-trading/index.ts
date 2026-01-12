@@ -63,6 +63,8 @@ serve(async (req) => {
       : 'https://api.alpaca.markets';
 
     console.log(`[Alpaca] Action: ${action}, Mode: ${isPaper ? 'PAPER' : 'LIVE'}, User: ${user.id}`);
+    console.log(`[Alpaca] Using API Key starting with: ${alpacaApiKey.substring(0, 8)}...`);
+    console.log(`[Alpaca] Base URL: ${alpacaBaseUrl}`);
 
     const alpacaHeaders = {
       'APCA-API-KEY-ID': alpacaApiKey,
