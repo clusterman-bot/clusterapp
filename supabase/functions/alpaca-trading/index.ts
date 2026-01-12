@@ -43,23 +43,33 @@ serve(async (req) => {
 
     // Get auth token
     const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
         JSON.stringify({ error: 'unauthorized.' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Create client with user's auth header for proper JWT validation
+    const supabase = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
 
-    if (authError || !user) {
+    if (claimsError || !claimsData?.claims?.sub) {
+      console.error('[Alpaca] Auth error:', claimsError);
       return new Response(
         JSON.stringify({ error: 'unauthorized.' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const userId = claimsData.claims.sub;
+    
+    // Create service role client for database operations
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const url = new URL(req.url);
     const action = url.pathname.split('/').pop();
@@ -69,20 +79,20 @@ serve(async (req) => {
     const isPaper = body.isPaper !== false; // Default to paper trading
     const accountType = isPaper ? 'paper' : 'live';
 
-    console.log(`[Alpaca] Action: ${action}, Mode: ${accountType}, User: ${user.id}`);
+    console.log(`[Alpaca] Action: ${action}, Mode: ${accountType}, User: ${userId}`);
 
     // Fetch user's active brokerage account for this mode
-    const { data: brokerageAccount, error: accountError } = await supabase
+    const { data: brokerageAccount, error: accountError } = await supabaseAdmin
       .from('user_brokerage_accounts')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('broker_name', 'alpaca')
       .eq('account_type', accountType)
       .eq('is_active', true)
       .single();
 
     if (accountError || !brokerageAccount) {
-      console.log(`[Alpaca] No ${accountType} brokerage account found for user ${user.id}`);
+      console.log(`[Alpaca] No ${accountType} brokerage account found for user ${userId}`);
       // Return 200 with needsConnection flag so frontend can handle gracefully
       return new Response(
         JSON.stringify({ 
@@ -386,8 +396,8 @@ serve(async (req) => {
         }
 
         // Log the order in our database
-        await supabase.from('orders').insert({
-          user_id: user.id,
+        await supabaseAdmin.from('orders').insert({
+          user_id: userId,
           stock_id: body.stockId,
           order_type: orderType,
           order_side: side,
@@ -401,8 +411,8 @@ serve(async (req) => {
         });
 
         // Log trading activity
-        await supabase.from('trading_activity_logs').insert({
-          user_id: user.id,
+        await supabaseAdmin.from('trading_activity_logs').insert({
+          user_id: userId,
           brokerage_account_id: brokerageAccount.id,
           action_type: 'order_placed',
           symbol: symbol.toUpperCase(),
@@ -458,8 +468,8 @@ serve(async (req) => {
         console.log('[Alpaca] Order cancelled:', alpacaOrderId);
 
         // Log trading activity
-        await supabase.from('trading_activity_logs').insert({
-          user_id: user.id,
+        await supabaseAdmin.from('trading_activity_logs').insert({
+          user_id: userId,
           brokerage_account_id: brokerageAccount.id,
           action_type: 'order_cancelled',
           metadata: { alpaca_order_id: alpacaOrderId },
