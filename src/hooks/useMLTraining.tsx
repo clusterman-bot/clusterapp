@@ -150,6 +150,27 @@ export function useStartTraining() {
   });
 }
 
+export function useStopTraining() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  
+  return useMutation({
+    mutationFn: async (trainingRunId: string) => {
+      if (!user?.id) throw new Error('Not authenticated');
+      
+      const response = await supabase.functions.invoke('ml-backend/stop', {
+        body: { training_run_id: trainingRunId },
+      });
+      
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['training_runs'] });
+    },
+  });
+}
+
 export function useValidationRuns(trainingRunId?: string) {
   const { user } = useAuth();
   
