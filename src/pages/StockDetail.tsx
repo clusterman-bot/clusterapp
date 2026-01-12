@@ -20,6 +20,9 @@ import {
   useIsInWatchlist, useAddToWatchlist, useRemoveFromWatchlist, 
   usePlaceOrder
 } from '@/hooks/useTrading';
+import { useAlpacaPlaceOrder, useAlpacaAccount } from '@/hooks/useAlpaca';
+import { useTradingMode } from '@/hooks/useTradingMode';
+import { TradingModeToggle, TradingModeIndicator } from '@/components/TradingModeToggle';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 function formatPrice(price: number): string {
@@ -61,14 +64,17 @@ export default function StockDetail() {
   const { symbol } = useParams<{ symbol: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { isPaper, isLive } = useTradingMode();
   
   const { data: stock, isLoading } = useStockBySymbol(symbol);
   const { data: holdings } = useHoldings();
   const { data: balance } = useBalance();
+  const { data: alpacaAccount } = useAlpacaAccount();
   const { data: isInWatchlist } = useIsInWatchlist(stock?.id);
   const addToWatchlist = useAddToWatchlist();
   const removeFromWatchlist = useRemoveFromWatchlist();
-  const placeOrder = usePlaceOrder();
+  const placeLocalOrder = usePlaceOrder();
+  const placeAlpacaOrder = useAlpacaPlaceOrder();
 
   const [orderSide, setOrderSide] = useState<'buy' | 'sell'>('buy');
   const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop_loss' | 'recurring'>('market');
@@ -125,24 +131,42 @@ export default function StockDetail() {
 
   const chartData = generateMockPriceHistory(stock.current_price, stock.previous_close || stock.current_price);
 
+  // Use Alpaca balance if available
+  const effectiveBalance = alpacaAccount?.cash ?? balance?.cash_balance ?? 0;
+
   const orderQuantity = parseFloat(quantity) || 0;
   const estimatedCost = orderQuantity * stock.current_price;
   const canAfford = orderSide === 'buy' 
-    ? estimatedCost <= (balance?.cash_balance || 0) 
+    ? estimatedCost <= effectiveBalance
     : orderQuantity <= sharesOwned;
 
   const handlePlaceOrder = () => {
     if (!stock || orderQuantity <= 0) return;
     
-    placeOrder.mutate({
-      stockId: stock.id,
-      orderType,
-      orderSide,
-      quantity: orderQuantity,
-      limitPrice: orderType === 'limit' ? parseFloat(limitPrice) : undefined,
-      stopPrice: orderType === 'stop_loss' ? parseFloat(stopPrice) : undefined,
-      recurringInterval: orderType === 'recurring' ? recurringInterval : undefined,
-    });
+    // Use Alpaca for paper/live trading if not recurring order
+    const isRecurring = orderType === 'recurring';
+    if (!isRecurring && symbol) {
+      placeAlpacaOrder.mutate({
+        stockId: stock.id,
+        symbol: symbol.toUpperCase(),
+        quantity: orderQuantity,
+        side: orderSide,
+        orderType: orderType as 'market' | 'limit' | 'stop_loss',
+        limitPrice: orderType === 'limit' ? parseFloat(limitPrice) : undefined,
+        stopPrice: orderType === 'stop_loss' ? parseFloat(stopPrice) : undefined,
+      });
+    } else {
+      // Fall back to local order for recurring orders
+      placeLocalOrder.mutate({
+        stockId: stock.id,
+        orderType,
+        orderSide,
+        quantity: orderQuantity,
+        limitPrice: orderType === 'limit' ? parseFloat(limitPrice) : undefined,
+        stopPrice: orderType === 'stop_loss' ? parseFloat(stopPrice) : undefined,
+        recurringInterval: orderType === 'recurring' ? recurringInterval : undefined,
+      });
+    }
     
     setQuantity('');
     setLimitPrice('');
@@ -163,7 +187,10 @@ export default function StockDetail() {
       <MainNav />
 
       <main className="container py-6">
-        <BackButton />
+        <div className="flex items-center justify-between mb-4">
+          <BackButton />
+          {user && <TradingModeToggle />}
+        </div>
 
         {/* Stock Header */}
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
@@ -427,10 +454,10 @@ export default function StockDetail() {
                   <Button 
                     className={`w-full ${orderSide === 'buy' ? 'bg-profit hover:bg-profit/90' : 'bg-loss hover:bg-loss/90'}`}
                     size="lg"
-                    disabled={orderQuantity <= 0 || !canAfford || placeOrder.isPending}
+                    disabled={orderQuantity <= 0 || !canAfford || placeAlpacaOrder.isPending || placeLocalOrder.isPending}
                     onClick={handlePlaceOrder}
                   >
-                    {placeOrder.isPending ? 'Processing...' : `${orderSide === 'buy' ? 'Buy' : 'Sell'} ${stock.symbol}`}
+                    {(placeAlpacaOrder.isPending || placeLocalOrder.isPending) ? 'Processing...' : `${orderSide === 'buy' ? 'Buy' : 'Sell'} ${stock.symbol}`}
                   </Button>
                 </div>
               )}

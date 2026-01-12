@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useStocks, useHoldings, useWatchlist, useBalance, Stock } from '@/hooks/useTrading';
 import { LivePriceUpdates } from '@/components/LivePriceUpdates';
+import { TradingModeToggle, TradingModeIndicator } from '@/components/TradingModeToggle';
 
 function formatPrice(price: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -101,6 +102,13 @@ export default function Trade() {
       <MainNav />
 
       <main className="container py-6">
+        {/* Trading Mode Toggle */}
+        {user && (
+          <div className="mb-6 flex justify-end">
+            <TradingModeToggle />
+          </div>
+        )}
+
         {/* Portfolio Summary */}
         {user && (
           <Card className="mb-6 bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
