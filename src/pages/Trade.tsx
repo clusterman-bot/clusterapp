@@ -16,6 +16,8 @@ import { useAlpacaAccount, useAlpacaPositions, useAlpacaSearch, AlpacaAsset } fr
 import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
 import { LivePriceUpdates } from '@/components/LivePriceUpdates';
 import { TradingModeToggle } from '@/components/TradingModeToggle';
+import { RecentTrades } from '@/components/trade/RecentTrades';
+import { PortfolioHistoryChart } from '@/components/trade/PortfolioHistoryChart';
 import { Loader2 } from 'lucide-react';
 
 function formatPrice(price: number): string {
@@ -265,76 +267,86 @@ export default function Trade() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {/* All Stocks */}
-                <Card className="lg:col-span-2">
-                  <CardHeader>
-                    <CardTitle>All Stocks</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0 max-h-[500px] overflow-y-auto">
-                    {stocksLoading ? (
-                      <div className="p-8 text-center text-muted-foreground">Loading...</div>
-                    ) : stocks?.map(stock => (
-                      <StockRow 
-                        key={stock.id} 
-                        stock={stock} 
-                        onClick={() => navigate(`/trade/stocks/${stock.symbol}`)}
-                      />
-                    ))}
-                  </CardContent>
-                </Card>
-
-                {/* Live Prices & Quick Stats */}
-                <div className="space-y-6">
-                  <LivePriceUpdates />
-                  
-                  <Card>
+              <>
+                {/* Portfolio Chart and Recent Trades - Only show for logged in users */}
+                {user && (
+                  <div className="grid gap-6 md:grid-cols-2 mb-6">
+                    <PortfolioHistoryChart />
+                    <RecentTrades />
+                  </div>
+                )}
+                
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {/* All Stocks */}
+                  <Card className="lg:col-span-2">
                     <CardHeader>
-                      <CardTitle className="text-sm font-medium">Market Stats</CardTitle>
+                      <CardTitle>All Stocks</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Total Stocks</span>
-                        <span className="font-semibold">{stocks?.length || 0}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Gainers</span>
-                        <span className="font-semibold text-profit">{topGainers.length}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Losers</span>
-                        <span className="font-semibold text-loss">{topLosers.length}</span>
-                      </div>
+                    <CardContent className="p-0 max-h-[500px] overflow-y-auto">
+                      {stocksLoading ? (
+                        <div className="p-8 text-center text-muted-foreground">Loading...</div>
+                      ) : stocks?.map(stock => (
+                        <StockRow 
+                          key={stock.id} 
+                          stock={stock} 
+                          onClick={() => navigate(`/trade/stocks/${stock.symbol}`)}
+                        />
+                      ))}
                     </CardContent>
                   </Card>
-                  
-                  {user && watchlist && watchlist.length > 0 && (
+
+                  {/* Live Prices & Quick Stats */}
+                  <div className="space-y-6">
+                    <LivePriceUpdates />
+                    
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-sm font-medium">Your Watchlist</CardTitle>
+                        <CardTitle className="text-sm font-medium">Market Stats</CardTitle>
                       </CardHeader>
-                      <CardContent className="p-0">
-                        {watchlist.slice(0, 3).map(item => item.stocks && (
-                          <StockRow 
-                            key={item.id} 
-                            stock={item.stocks} 
-                            onClick={() => navigate(`/trade/stocks/${item.stocks?.symbol}`)}
-                          />
-                        ))}
-                        {watchlist.length > 3 && (
-                          <Button 
-                            variant="ghost" 
-                            className="w-full" 
-                            onClick={() => setActiveTab('watchlist')}
-                          >
-                            View all {watchlist.length} items
-                          </Button>
-                        )}
+                      <CardContent className="space-y-4">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Total Stocks</span>
+                          <span className="font-semibold">{stocks?.length || 0}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Gainers</span>
+                          <span className="font-semibold text-profit">{topGainers.length}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Losers</span>
+                          <span className="font-semibold text-loss">{topLosers.length}</span>
+                        </div>
                       </CardContent>
                     </Card>
-                  )}
+                    
+                    {user && watchlist && watchlist.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm font-medium">Your Watchlist</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                          {watchlist.slice(0, 3).map(item => item.stocks && (
+                            <StockRow 
+                              key={item.id} 
+                              stock={item.stocks} 
+                              onClick={() => navigate(`/trade/stocks/${item.stocks?.symbol}`)}
+                            />
+                          ))}
+                          {watchlist.length > 3 && (
+                            <Button 
+                              variant="ghost" 
+                              className="w-full" 
+                              onClick={() => setActiveTab('watchlist')}
+                            >
+                              View all {watchlist.length} items
+                            </Button>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </TabsContent>
 

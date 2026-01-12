@@ -619,15 +619,19 @@ export type Database = {
           created_at: string | null
           display_name: string | null
           experience_level: string | null
+          github_handle: string | null
           id: string
           is_verified: boolean | null
+          linkedin_url: string | null
           total_earnings: number | null
           total_followers: number | null
           total_following: number | null
           trading_philosophy: string | null
+          twitter_handle: string | null
           updated_at: string | null
           user_type: string | null
           username: string | null
+          website_url: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -635,15 +639,19 @@ export type Database = {
           created_at?: string | null
           display_name?: string | null
           experience_level?: string | null
+          github_handle?: string | null
           id: string
           is_verified?: boolean | null
+          linkedin_url?: string | null
           total_earnings?: number | null
           total_followers?: number | null
           total_following?: number | null
           trading_philosophy?: string | null
+          twitter_handle?: string | null
           updated_at?: string | null
           user_type?: string | null
           username?: string | null
+          website_url?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -651,15 +659,19 @@ export type Database = {
           created_at?: string | null
           display_name?: string | null
           experience_level?: string | null
+          github_handle?: string | null
           id?: string
           is_verified?: boolean | null
+          linkedin_url?: string | null
           total_earnings?: number | null
           total_followers?: number | null
           total_following?: number | null
           trading_philosophy?: string | null
+          twitter_handle?: string | null
           updated_at?: string | null
           user_type?: string | null
           username?: string | null
+          website_url?: string | null
         }
         Relationships: []
       }
