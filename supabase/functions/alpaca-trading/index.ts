@@ -16,6 +16,20 @@ interface AlpacaOrder {
   stop_price?: number;
 }
 
+// Simple XOR-based decryption (must match brokerage-accounts function)
+function decryptKey(encrypted: string, secret: string): string {
+  const encryptedBytes = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
+  const encoder = new TextEncoder();
+  const secretBytes = encoder.encode(secret.padEnd(encryptedBytes.length, secret));
+  
+  const decrypted = new Uint8Array(encryptedBytes.length);
+  for (let i = 0; i < encryptedBytes.length; i++) {
+    decrypted[i] = encryptedBytes[i] ^ secretBytes[i % secretBytes.length];
+  }
+  
+  return new TextDecoder().decode(decrypted);
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -25,18 +39,13 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const alpacaApiKey = Deno.env.get('ALPACA_API_KEY');
-    const alpacaApiSecret = Deno.env.get('ALPACA_API_SECRET');
-
-    if (!alpacaApiKey || !alpacaApiSecret) {
-      throw new Error('Alpaca API credentials not configured');
-    }
+    const encryptionSecret = Deno.env.get('ENCRYPTION_SECRET') || 'default-secret-change-in-production';
 
     // Get auth token
     const authHeader = req.headers.get('authorization');
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'unauthorized.' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -47,7 +56,7 @@ serve(async (req) => {
 
     if (authError || !user) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'unauthorized.' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -55,16 +64,43 @@ serve(async (req) => {
     const url = new URL(req.url);
     const action = url.pathname.split('/').pop();
 
-    // Determine base URL based on paper/live mode
+    // Determine paper/live mode from request body
     const body = req.method === 'POST' ? await req.json() : {};
     const isPaper = body.isPaper !== false; // Default to paper trading
+    const accountType = isPaper ? 'paper' : 'live';
+
+    console.log(`[Alpaca] Action: ${action}, Mode: ${accountType}, User: ${user.id}`);
+
+    // Fetch user's active brokerage account for this mode
+    const { data: brokerageAccount, error: accountError } = await supabase
+      .from('user_brokerage_accounts')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('broker_name', 'alpaca')
+      .eq('account_type', accountType)
+      .eq('is_active', true)
+      .single();
+
+    if (accountError || !brokerageAccount) {
+      console.log(`[Alpaca] No ${accountType} brokerage account found for user ${user.id}`);
+      return new Response(
+        JSON.stringify({ 
+          error: `No ${accountType} brokerage account connected. Please connect your Alpaca account first.`,
+          needsConnection: true,
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Decrypt the user's credentials
+    const alpacaApiKey = decryptKey(brokerageAccount.api_key_encrypted, encryptionSecret);
+    const alpacaApiSecret = decryptKey(brokerageAccount.api_secret_encrypted, encryptionSecret);
+
     const alpacaBaseUrl = isPaper 
       ? 'https://paper-api.alpaca.markets' 
       : 'https://api.alpaca.markets';
 
-    console.log(`[Alpaca] Action: ${action}, Mode: ${isPaper ? 'PAPER' : 'LIVE'}, User: ${user.id}`);
-    console.log(`[Alpaca] Using API Key starting with: ${alpacaApiKey.substring(0, 8)}...`);
-    console.log(`[Alpaca] Base URL: ${alpacaBaseUrl}`);
+    console.log(`[Alpaca] Using user's ${accountType} account: ${brokerageAccount.account_id}`);
 
     const alpacaHeaders = {
       'APCA-API-KEY-ID': alpacaApiKey,
@@ -80,9 +116,10 @@ serve(async (req) => {
           headers: alpacaHeaders,
         });
         const data = await response.json();
-        console.log('[Alpaca] Account response:', JSON.stringify(data));
+        console.log('[Alpaca] Account response status:', response.status);
         
         if (!response.ok) {
+          console.error('[Alpaca] Account error:', data);
           throw new Error(data.message || 'Failed to fetch account');
         }
 
@@ -113,9 +150,10 @@ serve(async (req) => {
           headers: alpacaHeaders,
         });
         const data = await response.json();
-        console.log('[Alpaca] Positions response:', JSON.stringify(data));
+        console.log('[Alpaca] Positions response status:', response.status);
 
         if (!response.ok) {
+          console.error('[Alpaca] Positions error:', data);
           throw new Error(data.message || 'Failed to fetch positions');
         }
 
@@ -326,6 +364,23 @@ serve(async (req) => {
           executed_at: data.filled_at || null,
         });
 
+        // Log trading activity
+        await supabase.from('trading_activity_logs').insert({
+          user_id: user.id,
+          brokerage_account_id: brokerageAccount.id,
+          action_type: 'order_placed',
+          symbol: symbol.toUpperCase(),
+          quantity: quantity,
+          side: side,
+          order_type: orderType,
+          status: data.status,
+          amount: data.filled_avg_price ? parseFloat(data.filled_avg_price) * quantity : null,
+          metadata: { 
+            alpaca_order_id: data.id,
+            client_order_id: data.client_order_id,
+          },
+        });
+
         return new Response(
           JSON.stringify({ 
             success: true, 
@@ -365,6 +420,14 @@ serve(async (req) => {
         }
 
         console.log('[Alpaca] Order cancelled:', alpacaOrderId);
+
+        // Log trading activity
+        await supabase.from('trading_activity_logs').insert({
+          user_id: user.id,
+          brokerage_account_id: brokerageAccount.id,
+          action_type: 'order_cancelled',
+          metadata: { alpaca_order_id: alpacaOrderId },
+        });
 
         return new Response(
           JSON.stringify({ success: true, message: 'Order cancelled' }),
