@@ -73,6 +73,8 @@ export function useAlpacaAccount() {
         body: { isPaper },
       });
       
+      // If no brokerage connected, return null instead of throwing
+      if (data?.needsConnection) return null;
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
       
@@ -81,8 +83,6 @@ export function useAlpacaAccount() {
     enabled: !!user,
     refetchInterval: 30000,
     retry: false,
-    // Don't show errors in console for missing brokerage accounts
-    meta: { suppressErrors: true },
   });
 }
 
@@ -98,6 +98,8 @@ export function useAlpacaPositions() {
         body: { isPaper },
       });
       
+      // If no brokerage connected, return empty array instead of throwing
+      if (data?.needsConnection) return [];
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
       
@@ -106,7 +108,6 @@ export function useAlpacaPositions() {
     enabled: !!user,
     refetchInterval: 30000,
     retry: false,
-    meta: { suppressErrors: true },
   });
 }
 
@@ -124,6 +125,8 @@ export function useAlpacaSearch(query: string) {
         body: { isPaper, query, limit: 30 },
       });
       
+      // If no brokerage connected, return empty array instead of throwing
+      if (data?.needsConnection) return [];
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
       
@@ -132,7 +135,6 @@ export function useAlpacaSearch(query: string) {
     enabled: !!user && query.length >= 1,
     staleTime: 60000,
     retry: false,
-    meta: { suppressErrors: true },
   });
 }
 
@@ -148,6 +150,8 @@ export function useAlpacaQuote(symbol: string | undefined) {
         body: { isPaper, symbol },
       });
       
+      // If no brokerage connected, return null instead of throwing
+      if (data?.needsConnection) return null;
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
       
@@ -156,7 +160,6 @@ export function useAlpacaQuote(symbol: string | undefined) {
     enabled: !!user && !!symbol,
     refetchInterval: 10000,
     retry: false,
-    meta: { suppressErrors: true },
   });
 }
 
