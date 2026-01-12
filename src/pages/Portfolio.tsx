@@ -4,13 +4,14 @@ import { MainNav } from '@/components/MainNav';
 import { BackButton } from '@/components/BackButton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { 
   TrendingUp, TrendingDown, Briefcase, DollarSign,
-  PieChart, ArrowRight
+  PieChart, ArrowRight, Link2, Settings
 } from 'lucide-react';
-import { useHoldings, useBalance } from '@/hooks/useTrading';
+import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
+import { useAlpacaAccount, useAlpacaPositions } from '@/hooks/useAlpaca';
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function formatPrice(price: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -31,8 +32,13 @@ export default function Portfolio() {
   const { user } = useAuth();
   const navigate = useNavigate();
   
-  const { data: holdings, isLoading: holdingsLoading } = useHoldings();
-  const { data: balance } = useBalance();
+  const { data: brokerageAccounts, isLoading: accountsLoading } = useBrokerageAccounts();
+  const { data: alpacaAccount, isLoading: alpacaLoading } = useAlpacaAccount();
+  const { data: alpacaPositions, isLoading: positionsLoading } = useAlpacaPositions();
+
+  // Check if user has any connected brokerage accounts
+  const hasConnectedAccount = brokerageAccounts && brokerageAccounts.length > 0;
+  const activeAccount = brokerageAccounts?.find(a => a.is_active);
 
   if (!user) {
     return (
@@ -50,35 +56,76 @@ export default function Portfolio() {
     );
   }
 
-  // Calculate portfolio metrics
-  const portfolioData = holdings?.map(holding => {
-    const currentValue = holding.stocks ? Number(holding.quantity) * holding.stocks.current_price : 0;
-    const costBasis = Number(holding.quantity) * Number(holding.average_cost);
-    const gain = currentValue - costBasis;
-    const gainPercent = costBasis > 0 ? (gain / costBasis) * 100 : 0;
-    
-    return {
-      ...holding,
-      currentValue,
-      costBasis,
-      gain,
-      gainPercent,
-    };
-  }) || [];
+  // Loading state
+  if (accountsLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <MainNav />
+        <main className="container py-6">
+          <BackButton />
+          <div className="space-y-6">
+            <Skeleton className="h-10 w-48" />
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {[1, 2, 3, 4].map(i => (
+                <Card key={i}>
+                  <CardContent className="pt-6">
+                    <Skeleton className="h-4 w-24 mb-2" />
+                    <Skeleton className="h-8 w-32" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
-  const totalInvested = portfolioData.reduce((sum, h) => sum + h.costBasis, 0);
-  const totalValue = portfolioData.reduce((sum, h) => sum + h.currentValue, 0);
-  const totalGain = totalValue - totalInvested;
-  const totalGainPercent = totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0;
-  const cashBalance = balance?.cash_balance || 0;
-  const netWorth = totalValue + cashBalance;
+  // Empty state - No connected brokerage account
+  if (!hasConnectedAccount) {
+    return (
+      <div className="min-h-screen bg-background">
+        <MainNav />
+        <main className="container py-6">
+          <BackButton />
+          <div className="text-center py-16 max-w-md mx-auto">
+            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
+              <Link2 className="h-10 w-10 text-primary" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Connect Your Brokerage</h2>
+            <p className="text-muted-foreground mb-6">
+              Link your Alpaca brokerage account to view your portfolio, track positions, and start trading.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button onClick={() => navigate('/settings/brokerage')} size="lg">
+                <Settings className="mr-2 h-4 w-4" />
+                Connect Account
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/trade')} size="lg">
+                Explore Markets
+              </Button>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
-  // Pie chart data
-  const pieData = portfolioData.map((h, i) => ({
-    name: h.stocks?.symbol || 'Unknown',
-    value: h.currentValue,
+  // Calculate portfolio metrics from Alpaca data
+  const netWorth = alpacaAccount?.portfolio_value || 0;
+  const cashBalance = alpacaAccount?.cash || 0;
+  const investedValue = alpacaAccount?.equity ? alpacaAccount.equity - cashBalance : 0;
+  
+  // Calculate total gain/loss from positions
+  const totalGain = alpacaPositions?.reduce((sum, pos) => sum + Number(pos.unrealized_pl || 0), 0) || 0;
+  const totalGainPercent = investedValue > 0 ? (totalGain / investedValue) * 100 : 0;
+
+  // Pie chart data from Alpaca positions
+  const pieData = alpacaPositions?.map((pos, i) => ({
+    name: pos.symbol,
+    value: Number(pos.market_value) || 0,
     color: COLORS[i % COLORS.length],
-  }));
+  })) || [];
 
   if (cashBalance > 0) {
     pieData.push({
@@ -88,6 +135,8 @@ export default function Portfolio() {
     });
   }
 
+  const isLoading = alpacaLoading || positionsLoading;
+
   return (
     <div className="min-h-screen bg-background">
       <MainNav />
@@ -96,10 +145,22 @@ export default function Portfolio() {
         <BackButton />
 
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">Portfolio</h1>
-          <Button onClick={() => navigate('/trade')}>
-            Trade <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">Portfolio</h1>
+            {activeAccount && (
+              <p className="text-sm text-muted-foreground mt-1">
+                {activeAccount.broker_name} • {activeAccount.account_type === 'paper' ? 'Paper Trading' : 'Live Trading'}
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate('/settings/brokerage')}>
+              <Settings className="mr-2 h-4 w-4" /> Manage
+            </Button>
+            <Button onClick={() => navigate('/trade')}>
+              Trade <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Portfolio Summary */}
@@ -110,7 +171,11 @@ export default function Portfolio() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">Net Worth</p>
               </div>
-              <p className="text-2xl font-bold">{formatPrice(netWorth)}</p>
+              {isLoading ? (
+                <Skeleton className="h-8 w-32" />
+              ) : (
+                <p className="text-2xl font-bold">{formatPrice(netWorth)}</p>
+              )}
             </CardContent>
           </Card>
 
@@ -120,7 +185,11 @@ export default function Portfolio() {
                 <Briefcase className="h-4 w-4 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">Invested</p>
               </div>
-              <p className="text-2xl font-bold">{formatPrice(totalValue)}</p>
+              {isLoading ? (
+                <Skeleton className="h-8 w-32" />
+              ) : (
+                <p className="text-2xl font-bold">{formatPrice(investedValue)}</p>
+              )}
             </CardContent>
           </Card>
 
@@ -132,14 +201,20 @@ export default function Portfolio() {
                 ) : (
                   <TrendingDown className="h-4 w-4 text-loss" />
                 )}
-                <p className="text-sm text-muted-foreground">Total Gain/Loss</p>
+                <p className="text-sm text-muted-foreground">Unrealized P&L</p>
               </div>
-              <p className={`text-2xl font-bold ${totalGain >= 0 ? 'text-profit' : 'text-loss'}`}>
-                {totalGain >= 0 ? '+' : ''}{formatPrice(totalGain)}
-              </p>
-              <p className={`text-sm ${totalGain >= 0 ? 'text-profit' : 'text-loss'}`}>
-                {totalGain >= 0 ? '+' : ''}{totalGainPercent.toFixed(2)}%
-              </p>
+              {isLoading ? (
+                <Skeleton className="h-8 w-32" />
+              ) : (
+                <>
+                  <p className={`text-2xl font-bold ${totalGain >= 0 ? 'text-profit' : 'text-loss'}`}>
+                    {totalGain >= 0 ? '+' : ''}{formatPrice(totalGain)}
+                  </p>
+                  <p className={`text-sm ${totalGain >= 0 ? 'text-profit' : 'text-loss'}`}>
+                    {totalGain >= 0 ? '+' : ''}{totalGainPercent.toFixed(2)}%
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -149,7 +224,11 @@ export default function Portfolio() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">Cash Available</p>
               </div>
-              <p className="text-2xl font-bold">{formatPrice(cashBalance)}</p>
+              {isLoading ? (
+                <Skeleton className="h-8 w-32" />
+              ) : (
+                <p className="text-2xl font-bold">{formatPrice(cashBalance)}</p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -161,7 +240,7 @@ export default function Portfolio() {
               <CardTitle>Holdings</CardTitle>
             </CardHeader>
             <CardContent>
-              {holdingsLoading ? (
+              {isLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map(i => (
                     <div key={i} className="animate-pulse flex items-center justify-between p-4 bg-muted rounded-lg">
@@ -179,7 +258,7 @@ export default function Portfolio() {
                     </div>
                   ))}
                 </div>
-              ) : portfolioData.length === 0 ? (
+              ) : !alpacaPositions || alpacaPositions.length === 0 ? (
                 <div className="text-center py-12">
                   <Briefcase className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-muted-foreground mb-4">No holdings yet</p>
@@ -187,29 +266,30 @@ export default function Portfolio() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {portfolioData.map((holding) => (
+                  {alpacaPositions.map((position) => (
                     <div 
-                      key={holding.id}
+                      key={position.asset_id}
                       className="flex items-center justify-between p-4 hover:bg-muted/50 rounded-lg cursor-pointer transition-colors"
-                      onClick={() => navigate(`/trade/stocks/${holding.stocks?.symbol}`)}
+                      onClick={() => navigate(`/trade/stocks/${position.symbol}`)}
                     >
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                           <span className="font-bold text-sm text-primary">
-                            {holding.stocks?.symbol.slice(0, 2)}
+                            {position.symbol.slice(0, 2)}
                           </span>
                         </div>
                         <div>
-                          <p className="font-semibold">{holding.stocks?.symbol}</p>
+                          <p className="font-semibold">{position.symbol}</p>
                           <p className="text-sm text-muted-foreground">
-                            {Number(holding.quantity).toFixed(2)} shares @ {formatPrice(Number(holding.average_cost))}
+                            {Number(position.qty).toFixed(2)} shares @ {formatPrice(Number(position.avg_entry_price))}
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-semibold">{formatPrice(holding.currentValue)}</p>
-                        <p className={`text-sm ${holding.gain >= 0 ? 'text-profit' : 'text-loss'}`}>
-                          {holding.gain >= 0 ? '+' : ''}{formatPrice(holding.gain)} ({holding.gainPercent.toFixed(2)}%)
+                        <p className="font-semibold">{formatPrice(Number(position.market_value) || 0)}</p>
+                        <p className={`text-sm ${Number(position.unrealized_pl || 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
+                          {Number(position.unrealized_pl || 0) >= 0 ? '+' : ''}{formatPrice(Number(position.unrealized_pl) || 0)} 
+                          ({(Number(position.unrealized_plpc || 0) * 100).toFixed(2)}%)
                         </p>
                       </div>
                     </div>
@@ -227,7 +307,11 @@ export default function Portfolio() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {pieData.length > 0 ? (
+              {isLoading ? (
+                <div className="flex items-center justify-center h-48">
+                  <Skeleton className="w-32 h-32 rounded-full" />
+                </div>
+              ) : pieData.length > 0 ? (
                 <>
                   <div className="h-48">
                     <ResponsiveContainer width="100%" height="100%">
@@ -262,7 +346,7 @@ export default function Portfolio() {
                           <span>{item.name}</span>
                         </div>
                         <span className="font-medium">
-                          {((item.value / netWorth) * 100).toFixed(1)}%
+                          {netWorth > 0 ? ((Number(item.value) / netWorth) * 100).toFixed(1) : 0}%
                         </span>
                       </div>
                     ))}
