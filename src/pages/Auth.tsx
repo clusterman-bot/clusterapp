@@ -52,11 +52,20 @@ export default function Auth() {
     }
   }, [user, userRole, authLoading, roleLoading, navigate, justSignedOut]);
 
-  // Show loading while checking auth state or waiting for redirect
-  if (user && !justSignedOut) {
+  // Show loading while checking auth state (only when not coming from signout)
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  // If user is logged in and we have their role, show loading while redirect happens
+  if (user && userRole && !justSignedOut) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Redirecting...</p>
       </div>
     );
   }
