@@ -1,6 +1,7 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useAlpacaOrders } from '@/hooks/useAlpaca';
-import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
+import { useActiveBrokerageAccount } from '@/hooks/useBrokerageAccounts';
+import { useTradingMode } from '@/hooks/useTradingMode';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,10 +10,11 @@ import { formatDistanceToNow } from 'date-fns';
 
 export function RecentTrades() {
   const { user } = useAuth();
-  const { data: brokerageAccounts } = useBrokerageAccounts();
+  const { mode, isPaper } = useTradingMode();
+  const { data: activeAccount, isLoading: accountCheckLoading } = useActiveBrokerageAccount(mode);
   const { data: orders, isLoading } = useAlpacaOrders('all');
 
-  const hasConnectedAccount = brokerageAccounts && brokerageAccounts.length > 0;
+  const hasConnectedAccount = !!activeAccount;
 
   if (!user) {
     return (
@@ -31,25 +33,32 @@ export function RecentTrades() {
     );
   }
 
-  if (!hasConnectedAccount) {
+  if (!hasConnectedAccount && !accountCheckLoading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Clock className="h-5 w-5" /> Recent Trades
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Clock className="h-5 w-5" /> Recent Trades
+            </CardTitle>
+            <Badge variant={isPaper ? 'secondary' : 'default'}>
+              {isPaper ? 'Paper' : 'Live'}
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Link2 className="h-10 w-10 text-muted-foreground mb-3" />
-            <p className="text-muted-foreground">Connect your brokerage to see trades</p>
+            <p className="text-muted-foreground">
+              No {mode} account connected. Connect your brokerage to see trades.
+            </p>
           </div>
         </CardContent>
       </Card>
     );
   }
 
-  if (isLoading) {
+  if (isLoading || accountCheckLoading) {
     return (
       <Card>
         <CardHeader>
@@ -85,9 +94,14 @@ export function RecentTrades() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Clock className="h-5 w-5" /> Recent Trades
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Clock className="h-5 w-5" /> Recent Trades
+          </CardTitle>
+          <Badge variant={isPaper ? 'secondary' : 'default'}>
+            {isPaper ? 'Paper' : 'Live'}
+          </Badge>
+        </div>
       </CardHeader>
       <CardContent>
         {orders && orders.length > 0 ? (
