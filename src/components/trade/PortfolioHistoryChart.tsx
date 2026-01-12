@@ -1,20 +1,23 @@
 import { useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAlpacaPortfolioHistory, useAlpacaAccount } from '@/hooks/useAlpaca';
-import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
+import { useActiveBrokerageAccount } from '@/hooks/useBrokerageAccounts';
+import { useTradingMode } from '@/hooks/useTradingMode';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Link2 } from 'lucide-react';
 import { format, fromUnixTime } from 'date-fns';
 
 export function PortfolioHistoryChart() {
   const { user } = useAuth();
-  const { data: brokerageAccounts } = useBrokerageAccounts();
+  const { mode, isPaper } = useTradingMode();
+  const { data: activeAccount, isLoading: accountCheckLoading } = useActiveBrokerageAccount(mode);
   const { data: alpacaAccount, isLoading: accountLoading } = useAlpacaAccount();
   const { data: history, isLoading: historyLoading } = useAlpacaPortfolioHistory('1M');
 
-  const hasConnectedAccount = brokerageAccounts && brokerageAccounts.length > 0;
+  const hasConnectedAccount = !!activeAccount;
 
   // Transform Alpaca history data for the chart
   const chartData = useMemo(() => {
@@ -48,23 +51,30 @@ export function PortfolioHistoryChart() {
     );
   }
 
-  if (!hasConnectedAccount) {
+  if (!hasConnectedAccount && !accountCheckLoading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Portfolio Performance</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg">Portfolio Performance</CardTitle>
+            <Badge variant={isPaper ? 'secondary' : 'default'}>
+              {isPaper ? 'Paper' : 'Live'}
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Link2 className="h-10 w-10 text-muted-foreground mb-3" />
-            <p className="text-muted-foreground">Connect your brokerage to see portfolio history</p>
+            <p className="text-muted-foreground">
+              No {mode} account connected. Connect your brokerage to see portfolio history.
+            </p>
           </div>
         </CardContent>
       </Card>
     );
   }
 
-  if (accountLoading || historyLoading) {
+  if (accountLoading || historyLoading || accountCheckLoading) {
     return (
       <Card>
         <CardHeader>
@@ -82,12 +92,17 @@ export function PortfolioHistoryChart() {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Portfolio Performance</CardTitle>
-          {chartData.length > 0 && (
-            <div className={`flex items-center gap-1 text-sm ${isPositive ? 'text-profit' : 'text-loss'}`}>
-              {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-              <span>{isPositive ? '+' : ''}{changePercent}%</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <Badge variant={isPaper ? 'secondary' : 'default'}>
+              {isPaper ? 'Paper' : 'Live'}
+            </Badge>
+            {chartData.length > 0 && (
+              <div className={`flex items-center gap-1 text-sm ${isPositive ? 'text-profit' : 'text-loss'}`}>
+                {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                <span>{isPositive ? '+' : ''}{changePercent}%</span>
+              </div>
+            )}
+          </div>
         </div>
         <p className="text-2xl font-bold">
           ${(alpacaAccount?.portfolio_value || endValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
