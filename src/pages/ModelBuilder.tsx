@@ -39,7 +39,7 @@ const defaultHyperparameters: HyperparametersConfigType = {
 };
 
 export default function ModelBuilder() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { data: userRole, isLoading: roleLoading } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -50,7 +50,20 @@ export default function ModelBuilder() {
   const sandboxExecute = useSandboxExecute();
   const validateCode = useValidateSandboxCode();
   
-  const canCreateModels = userRole?.role === 'developer' || userRole?.role === 'admin';
+  // Only developers can create models (not admins)
+  const canCreateModels = userRole?.role === 'developer';
+  
+  // Redirect admins away from model creation
+  useEffect(() => {
+    if (!roleLoading && userRole?.role === 'admin') {
+      toast({ 
+        title: 'Access Denied', 
+        description: 'Administrators cannot create trading models',
+        variant: 'destructive' 
+      });
+      navigate('/admin', { replace: true });
+    }
+  }, [userRole, roleLoading, navigate, toast]);
 
   const [modelType, setModelType] = useState<ModelType | null>(null);
   const [activeTab, setActiveTab] = useState('config');

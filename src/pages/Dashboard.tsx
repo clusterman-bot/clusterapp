@@ -11,20 +11,32 @@ import { Plus, Users, DollarSign, BarChart3 } from 'lucide-react';
 import OnboardingTour from '@/components/OnboardingTour';
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { data: profile } = useProfile();
   const { data: models, isLoading } = useMyModels();
-  const { data: userRole } = useUserRole();
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
   const navigate = useNavigate();
   const [showTour, setShowTour] = useState(false);
   
-  const canCreateModels = userRole?.role === 'developer' || userRole?.role === 'admin';
+  // Only developers can create models (not admins)
+  const canCreateModels = userRole?.role === 'developer';
 
   useEffect(() => {
-    if (!user) {
+    if (!authLoading && !user) {
       navigate('/auth');
+      return;
     }
-  }, [user, navigate]);
+    
+    // Redirect based on role once loaded
+    if (!authLoading && !roleLoading && userRole) {
+      if (userRole.role === 'admin') {
+        navigate('/admin', { replace: true });
+      } else if (userRole.role === 'retail_trader') {
+        navigate('/trader-dashboard', { replace: true });
+      }
+      // Developer stays on /dashboard
+    }
+  }, [user, authLoading, userRole, roleLoading, navigate]);
 
   // Check if we should show onboarding tour
   useEffect(() => {
@@ -35,7 +47,16 @@ export default function Dashboard() {
     }
   }, []);
 
-  if (!user) {
+  // Show loading while checking auth/role
+  if (authLoading || roleLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user || (userRole && userRole.role !== 'developer')) {
     return null;
   }
 

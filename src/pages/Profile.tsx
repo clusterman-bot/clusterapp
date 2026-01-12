@@ -51,8 +51,9 @@ export default function Profile() {
   // If no userId, show current user's profile
   const profileId = userId || user?.id;
   const isOwnProfile = !userId || userId === user?.id;
+  // Use actual role from user_roles table, not profile.user_type
   const isRetailTrader = userRole?.role === 'retail_trader';
-  const canCreateModels = userRole?.role === 'developer' || userRole?.role === 'admin';
+  const canCreateModels = userRole?.role === 'developer';
 
   const { data: ownProfile } = useProfile();
   
@@ -205,7 +206,7 @@ export default function Profile() {
                       <CheckCircle className="h-5 w-5 text-primary" />
                     )}
                     <Badge variant="outline" className="capitalize">
-                      {profile.user_type === 'retail_trader' ? 'Trader' : profile.user_type || 'developer'}
+                      {userRole?.role === 'admin' ? 'Admin' : userRole?.role === 'retail_trader' ? 'Trader' : userRole?.role || 'Developer'}
                     </Badge>
                   </div>
                   <p className="text-muted-foreground mb-2">
