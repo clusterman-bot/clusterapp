@@ -71,7 +71,7 @@ export default function Explore() {
 
       <main className="container py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Explore Models</h1>
+          <h1 className="text-3xl font-bold mb-2">Model Marketplace</h1>
           <p className="text-muted-foreground">
             Discover proven trading strategies from top quants and developers
           </p>

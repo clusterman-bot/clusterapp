@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
-import { useFeed, useLikePost, useUnlikePost, Post as SocialPost } from '@/hooks/useSocial';
+import { useUserPosts, useLikePost, useUnlikePost, Post as SocialPost } from '@/hooks/useSocial';
 import { MainNav } from '@/components/MainNav';
 import { SocialPostCard } from '@/components/SocialPostCard';
 import { CreatePostBox } from '@/components/CreatePostBox';
@@ -13,12 +13,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, Code, LineChart, Sparkles } from 'lucide-react';
+import { Search, MessageSquare, RefreshCw, Sparkles } from 'lucide-react';
 
 export default function Feed() {
   const { user, signOut } = useAuth();
   const { data: userRole } = useUserRole();
-  const { data: feedPosts, isLoading, refetch } = useFeed();
+  const { data: userPosts, isLoading, refetch } = useUserPosts(user?.id);
   const likePost = useLikePost();
   const unlikePost = useUnlikePost();
   const navigate = useNavigate();
@@ -89,14 +89,8 @@ export default function Feed() {
     }
   };
 
-  // Filter posts for different tabs
-  const allPosts = feedPosts || [];
-  const developerPosts = allPosts.filter(
-    (p) => p.post_type === 'model_update' || p.post_type === 'announcement'
-  );
-  const retailPosts = allPosts.filter(
-    (p) => p.post_type === 'update' || p.post_type === 'insight'
-  );
+  // All user posts
+  const allPosts = userPosts || [];
 
   // Filter by search query
   const filterPosts = (posts: SocialPost[]) => {
@@ -179,43 +173,41 @@ export default function Feed() {
             {/* Create Post */}
             <CreatePostBox onPostCreated={() => refetch()} />
 
-            {/* Feed Tabs */}
-            <Tabs defaultValue="for-you" className="mt-4">
-              <TabsList className="w-full grid grid-cols-3 h-12 p-0 bg-transparent border-b rounded-none">
-                <TabsTrigger 
-                  value="for-you" 
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
-                >
-                  For You
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="developers"
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
-                >
-                  <Code className="h-4 w-4 mr-2" />
-                  Developers
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="traders"
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
-                >
-                  <LineChart className="h-4 w-4 mr-2" />
-                  Traders
-                </TabsTrigger>
-              </TabsList>
+            {/* Profile Posts Section */}
+            <div className="mt-4">
+              <Tabs defaultValue="posts" className="mt-4">
+                <TabsList className="w-full grid grid-cols-2 h-12 p-0 bg-transparent border-b rounded-none">
+                  <TabsTrigger 
+                    value="posts" 
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    My Posts
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="reposts"
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Reposts
+                  </TabsTrigger>
+                </TabsList>
 
-              <TabsContent value="for-you" className="mt-4">
-                {renderPosts(allPosts)}
-              </TabsContent>
+                <TabsContent value="posts" className="mt-4">
+                  {renderPosts(allPosts)}
+                </TabsContent>
 
-              <TabsContent value="developers" className="mt-4">
-                {renderPosts(developerPosts)}
-              </TabsContent>
-
-              <TabsContent value="traders" className="mt-4">
-                {renderPosts(retailPosts)}
-              </TabsContent>
-            </Tabs>
+                <TabsContent value="reposts" className="mt-4">
+                  <Card className="text-center py-12">
+                    <CardContent>
+                      <RefreshCw className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                      <p className="text-lg font-medium mb-2">No reposts yet</p>
+                      <p className="text-muted-foreground text-sm">Reposts you make will appear here</p>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+            </div>
           </div>
 
           {/* Right Sidebar */}

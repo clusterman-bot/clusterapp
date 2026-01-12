@@ -19,7 +19,7 @@ import { IndicatorsConfig } from '@/components/ml/IndicatorsConfig';
 import { HyperparametersConfig } from '@/components/ml/HyperparametersConfig';
 import { ModelSelection } from '@/components/ml/ModelSelection';
 import { TrainingProgress } from '@/components/ml/TrainingProgress';
-import { Code, Brain, Calendar, TrendingUp, Rocket, FlaskConical, CheckCircle2, StopCircle } from 'lucide-react';
+import { Code, Brain, Calendar, TrendingUp, Rocket, FlaskConical, CheckCircle2, StopCircle, Upload, Key, Plus, Trash2 } from 'lucide-react';
 
 type ModelType = 'sandbox' | 'ml';
 
@@ -78,6 +78,71 @@ export default function ModelBuilder() {
   const [validationStartDate, setValidationStartDate] = useState('2024-01-01');
   const [validationEndDate, setValidationEndDate] = useState('2024-06-01');
   const { data: validationRuns, isLoading: validationRunsLoading } = useValidationRuns(trainingRunId || undefined);
+
+  // Sandbox code state
+  const [sandboxCode, setSandboxCode] = useState(`import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+
+def generate_signals(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Generate trading signals based on your custom logic.
+    
+    Args:
+        data: DataFrame with OHLCV columns (open, high, low, close, volume)
+    
+    Returns:
+        DataFrame with 'signal' column: 1 (buy), -1 (sell), 0 (hold)
+    """
+    # Calculate simple moving averages
+    data['sma_20'] = data['close'].rolling(window=20).mean()
+    data['sma_50'] = data['close'].rolling(window=50).mean()
+    
+    # Generate signals based on SMA crossover
+    data['signal'] = 0
+    data.loc[data['sma_20'] > data['sma_50'], 'signal'] = 1
+    data.loc[data['sma_20'] < data['sma_50'], 'signal'] = -1
+    
+    return data
+`);
+
+  // Custom API configurations
+  const [customApis, setCustomApis] = useState<Array<{ name: string; endpoint: string; apiKey: string }>>([]);
+  const [newApiName, setNewApiName] = useState('');
+  const [newApiEndpoint, setNewApiEndpoint] = useState('');
+  const [newApiKey, setNewApiKey] = useState('');
+
+  // File uploads
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; size: number; type: string }>>([]);
+
+  const handleAddApi = () => {
+    if (newApiName && newApiEndpoint) {
+      setCustomApis([...customApis, { name: newApiName, endpoint: newApiEndpoint, apiKey: newApiKey }]);
+      setNewApiName('');
+      setNewApiEndpoint('');
+      setNewApiKey('');
+    }
+  };
+
+  const handleRemoveApi = (index: number) => {
+    setCustomApis(customApis.filter((_, i) => i !== index));
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      const newFiles = Array.from(files).map(file => ({
+        name: file.name,
+        size: file.size,
+        type: file.type
+      }));
+      setUploadedFiles([...uploadedFiles, ...newFiles]);
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setUploadedFiles(uploadedFiles.filter((_, i) => i !== index));
+  };
 
   useEffect(() => {
     if (!user) {
@@ -769,21 +834,136 @@ export default function ModelBuilder() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Code className="h-5 w-5 text-primary" />
-                Sandbox Environment
+                Python Code Editor
               </CardTitle>
-              <CardDescription>Your code will run in an isolated Python environment</CardDescription>
+              <CardDescription>Write your custom trading logic. Available libraries: pandas, numpy, sklearn, ta</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="bg-muted rounded-lg p-4 font-mono text-sm">
-                <p className="text-muted-foreground"># Your strategy code will be configured after creation</p>
-                <p className="text-muted-foreground"># Available libraries: pandas, numpy, sklearn, ta</p>
-                <p className="mt-4 text-foreground">def generate_signals(data):</p>
-                <p className="text-foreground ml-4">    # Your logic here</p>
-                <p className="text-foreground ml-4">    return signals</p>
+              <textarea
+                value={sandboxCode}
+                onChange={(e) => setSandboxCode(e.target.value)}
+                className="w-full h-96 bg-muted rounded-lg p-4 font-mono text-sm text-foreground resize-y border focus:outline-none focus:ring-2 focus:ring-primary"
+                spellCheck={false}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Key className="h-5 w-5 text-primary" />
+                Custom API Integrations
+              </CardTitle>
+              <CardDescription>Connect external APIs for data feeds or services</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {customApis.length > 0 && (
+                <div className="space-y-2">
+                  {customApis.map((api, index) => (
+                    <div key={index} className="flex items-center justify-between bg-muted p-3 rounded-lg">
+                      <div>
+                        <p className="font-medium">{api.name}</p>
+                        <p className="text-sm text-muted-foreground">{api.endpoint}</p>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => handleRemoveApi(index)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <div className="space-y-3 pt-2 border-t">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">API Name</Label>
+                    <Input
+                      placeholder="e.g., Alpha Vantage"
+                      value={newApiName}
+                      onChange={(e) => setNewApiName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Endpoint URL</Label>
+                    <Input
+                      placeholder="https://api.example.com"
+                      value={newApiEndpoint}
+                      onChange={(e) => setNewApiEndpoint(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">API Key (optional)</Label>
+                  <Input
+                    type="password"
+                    placeholder="Your API key"
+                    value={newApiKey}
+                    onChange={(e) => setNewApiKey(e.target.value)}
+                  />
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleAddApi}
+                  disabled={!newApiName || !newApiEndpoint}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add API
+                </Button>
               </div>
-              <p className="text-sm text-muted-foreground mt-4">
-                Full code editor available after model creation.
-              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="h-5 w-5 text-primary" />
+                File Uploads
+              </CardTitle>
+              <CardDescription>Upload data files, models, or configuration files</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {uploadedFiles.length > 0 && (
+                <div className="space-y-2">
+                  {uploadedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between bg-muted p-3 rounded-lg">
+                      <div>
+                        <p className="font-medium">{file.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {(file.size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => handleRemoveFile(index)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
+                <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground mb-2">
+                  Drag & drop files here, or click to browse
+                </p>
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="file-upload"
+                  accept=".csv,.json,.pkl,.h5,.py,.txt"
+                />
+                <Button variant="outline" size="sm" asChild>
+                  <label htmlFor="file-upload" className="cursor-pointer">
+                    Choose Files
+                  </label>
+                </Button>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Supported: CSV, JSON, Pickle, HDF5, Python, TXT
+                </p>
+              </div>
             </CardContent>
           </Card>
 

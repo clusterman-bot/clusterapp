@@ -6,7 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
-  TrendingUp, Home, Compass, MessageSquare, 
+  TrendingUp, Home, Store, 
   LayoutDashboard, LogOut, User, LineChart
 } from 'lucide-react';
 import {
@@ -70,16 +70,8 @@ export function MainNav() {
               size="sm"
               onClick={() => navigate('/explore')}
             >
-              <Compass className="mr-2 h-4 w-4" />
-              Explore
-            </Button>
-            <Button 
-              variant={isActive('/feed') ? 'secondary' : 'ghost'} 
-              size="sm"
-              onClick={() => navigate('/feed')}
-            >
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Feed
+              <Store className="mr-2 h-4 w-4" />
+              Marketplace
             </Button>
             <Button 
               variant={location.pathname.startsWith('/trade') ? 'secondary' : 'ghost'} 
