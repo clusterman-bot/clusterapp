@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.alpaca-trading]
 verify_jwt = false
+
+[functions.sandbox-execute]
+verify_jwt = false

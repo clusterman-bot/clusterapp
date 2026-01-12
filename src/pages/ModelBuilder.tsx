@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useCreateModel } from '@/hooks/useModels';
 import { useStartTraining, useStopTraining, useTrainingRun, useTrainingRealtimeUpdates, useStartValidation, useValidationRuns, IndicatorsConfig as IndicatorsConfigType, HyperparametersConfig as HyperparametersConfigType } from '@/hooks/useMLTraining';
+import { useSandboxExecute, useValidateSandboxCode } from '@/hooks/useSandbox';
 import { MainNav } from '@/components/MainNav';
 import { BackButton } from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
@@ -19,7 +20,7 @@ import { IndicatorsConfig } from '@/components/ml/IndicatorsConfig';
 import { HyperparametersConfig } from '@/components/ml/HyperparametersConfig';
 import { ModelSelection } from '@/components/ml/ModelSelection';
 import { TrainingProgress } from '@/components/ml/TrainingProgress';
-import { Code, Brain, Calendar, TrendingUp, Rocket, FlaskConical, CheckCircle2, StopCircle, Upload, Key, Plus, Trash2 } from 'lucide-react';
+import { Code, Brain, Calendar, TrendingUp, Rocket, FlaskConical, CheckCircle2, StopCircle, Upload, Key, Plus, Trash2, Zap, AlertCircle } from 'lucide-react';
 
 type ModelType = 'sandbox' | 'ml';
 
@@ -46,6 +47,8 @@ export default function ModelBuilder() {
   const startTraining = useStartTraining();
   const stopTraining = useStopTraining();
   const startValidation = useStartValidation();
+  const sandboxExecute = useSandboxExecute();
+  const validateCode = useValidateSandboxCode();
   
   const canCreateModels = userRole?.role === 'developer' || userRole?.role === 'admin';
 
@@ -68,6 +71,7 @@ export default function ModelBuilder() {
   const [indicators, setIndicators] = useState<IndicatorsConfigType>(defaultIndicators);
   const [hyperparameters, setHyperparameters] = useState<HyperparametersConfigType>(defaultHyperparameters);
   const [selectedModels, setSelectedModels] = useState({ rf: true, gb: true, lr: true });
+  const [demoMode, setDemoMode] = useState(true); // Demo mode for testing without API limits
   
   // Training state
   const [trainingRunId, setTrainingRunId] = useState<string | null>(null);
@@ -189,11 +193,18 @@ def generate_signals(data: pd.DataFrame) -> pd.DataFrame:
         hyperparameters,
         horizon,
         theta,
+        demo_mode: demoMode,
+        limit: demoMode ? 5 : undefined,
       });
       
       setTrainingRunId(result.training_run_id);
       setActiveTab('training');
-      toast({ title: 'Training Started', description: 'Your model is now being trained.' });
+      toast({ 
+        title: demoMode ? 'Demo Training Started' : 'Training Started', 
+        description: demoMode 
+          ? 'Using simulated data (5 data points) - no API calls needed.' 
+          : 'Your model is now being trained with live data.'
+      });
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     }
@@ -347,6 +358,36 @@ def generate_signals(data: pd.DataFrame) -> pd.DataFrame:
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {/* Demo Mode Toggle */}
+                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${demoMode ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'}`}>
+                          {demoMode ? <Zap className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />}
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">
+                            {demoMode ? 'Demo Mode (Recommended for Testing)' : 'Live Data Mode'}
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            {demoMode 
+                              ? 'Uses 5 simulated data points - no API calls, instant results' 
+                              : 'Uses Polygon API - may hit rate limits on free tier (5/min)'}
+                          </p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={demoMode}
+                        onCheckedChange={setDemoMode}
+                      />
+                    </div>
+                    
+                    {!demoMode && (
+                      <div className="flex items-start gap-2 p-3 bg-amber-50 text-amber-800 rounded-lg text-sm">
+                        <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                        <span>Polygon free tier allows only 5 API calls/minute. Consider using Demo Mode for testing.</span>
+                      </div>
+                    )}
+                    
                     <div className="grid md:grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <Label>Ticker Symbol</Label>
@@ -836,15 +877,39 @@ def generate_signals(data: pd.DataFrame) -> pd.DataFrame:
                 <Code className="h-5 w-5 text-primary" />
                 Python Code Editor
               </CardTitle>
-              <CardDescription>Write your custom trading logic. Available libraries: pandas, numpy, sklearn, ta</CardDescription>
+              <CardDescription>Write your custom trading logic. Code runs in an isolated container with limited packages.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="flex items-start gap-2 p-3 bg-blue-50 text-blue-800 rounded-lg text-sm">
+                <FlaskConical className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <span className="font-medium">Isolated Container Execution</span>
+                  <p className="text-xs mt-1">Your code runs in a secure sandbox with 30s timeout, 256MB memory limit. Allowed: pandas, numpy, sklearn, ta, scipy.</p>
+                </div>
+              </div>
               <textarea
                 value={sandboxCode}
                 onChange={(e) => setSandboxCode(e.target.value)}
                 className="w-full h-96 bg-muted rounded-lg p-4 font-mono text-sm text-foreground resize-y border focus:outline-none focus:ring-2 focus:ring-primary"
                 spellCheck={false}
               />
+              <Button 
+                variant="outline" 
+                onClick={async () => {
+                  try {
+                    const result = await sandboxExecute.mutateAsync({ code: sandboxCode, demo_mode: true });
+                    if (result.success) {
+                      toast({ title: 'Execution Complete', description: `Generated ${result.result?.total_days || 0} signals in ${result.execution_time_ms}ms` });
+                    }
+                  } catch (error: any) {
+                    toast({ title: 'Execution Failed', description: error.message, variant: 'destructive' });
+                  }
+                }}
+                disabled={sandboxExecute.isPending}
+              >
+                <Rocket className="h-4 w-4 mr-2" />
+                {sandboxExecute.isPending ? 'Executing...' : 'Test in Container'}
+              </Button>
             </CardContent>
           </Card>
 

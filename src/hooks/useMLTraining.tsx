@@ -131,11 +131,15 @@ export function useStartTraining() {
       hyperparameters: HyperparametersConfig;
       horizon: number;
       theta: number;
+      demo_mode?: boolean;
+      limit?: number;
     }) => {
       if (!user?.id) throw new Error('Not authenticated');
       
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No session');
+      
+      console.log(`Starting training - Demo mode: ${config.demo_mode}, Limit: ${config.limit}`);
       
       const response = await supabase.functions.invoke('ml-backend/train', {
         body: config,
