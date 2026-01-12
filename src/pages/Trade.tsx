@@ -12,9 +12,10 @@ import {
   Briefcase, Clock, BarChart3
 } from 'lucide-react';
 import { useStocks, useHoldings, useWatchlist, useBalance, Stock } from '@/hooks/useTrading';
-import { useAlpacaAccount, useAlpacaPositions } from '@/hooks/useAlpaca';
+import { useAlpacaAccount, useAlpacaPositions, useAlpacaSearch, AlpacaAsset } from '@/hooks/useAlpaca';
 import { LivePriceUpdates } from '@/components/LivePriceUpdates';
 import { TradingModeToggle, TradingModeIndicator } from '@/components/TradingModeToggle';
+import { Loader2 } from 'lucide-react';
 
 function formatPrice(price: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -64,6 +65,32 @@ function StockRow({ stock, onClick }: { stock: Stock; onClick: () => void }) {
   );
 }
 
+// Component for Alpaca asset search results
+function AlpacaAssetRow({ asset, onClick }: { asset: AlpacaAsset; onClick: () => void }) {
+  return (
+    <div 
+      className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer border-b last:border-b-0 transition-colors"
+      onClick={onClick}
+    >
+      <div className="flex items-center gap-4">
+        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+          <span className="font-bold text-sm text-primary">{asset.symbol.slice(0, 2)}</span>
+        </div>
+        <div>
+          <p className="font-semibold">{asset.symbol}</p>
+          <p className="text-sm text-muted-foreground line-clamp-1">{asset.name}</p>
+        </div>
+      </div>
+      <div className="text-right">
+        <Badge variant="outline" className="text-xs">{asset.exchange}</Badge>
+        {asset.fractionable && (
+          <p className="text-xs text-muted-foreground mt-1">Fractional</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Trade() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -76,6 +103,7 @@ export default function Trade() {
   const { data: balance } = useBalance();
   const { data: alpacaAccount, isLoading: alpacaLoading } = useAlpacaAccount();
   const { data: alpacaPositions } = useAlpacaPositions();
+  const { data: alpacaSearchResults, isLoading: alpacaSearchLoading } = useAlpacaSearch(searchQuery);
 
   // Use Alpaca account data if available, otherwise fall back to local balance
   const portfolioValue = alpacaAccount 
@@ -158,11 +186,14 @@ export default function Trade() {
         <div className="relative mb-6">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search stocks by name or symbol..."
+            placeholder="Search any stock (e.g., AAPL, TSLA, MSFT)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 h-12 text-lg"
           />
+          {alpacaSearchLoading && (
+            <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+          )}
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -185,21 +216,31 @@ export default function Trade() {
             {searchQuery ? (
               <Card>
                 <CardHeader>
-                  <CardTitle>Search Results</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    Search Results
+                    {alpacaSearchResults && (
+                      <Badge variant="secondary">{alpacaSearchResults.length} stocks</Badge>
+                    )}
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
-                  {stocksLoading ? (
-                    <div className="p-8 text-center text-muted-foreground">Searching...</div>
-                  ) : stocks && stocks.length > 0 ? (
-                    stocks.map(stock => (
-                      <StockRow 
-                        key={stock.id} 
-                        stock={stock} 
-                        onClick={() => navigate(`/trade/stocks/${stock.symbol}`)}
+                <CardContent className="p-0 max-h-[500px] overflow-y-auto">
+                  {alpacaSearchLoading ? (
+                    <div className="p-8 text-center text-muted-foreground">
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                      Searching all markets...
+                    </div>
+                  ) : alpacaSearchResults && alpacaSearchResults.length > 0 ? (
+                    alpacaSearchResults.map(asset => (
+                      <AlpacaAssetRow 
+                        key={asset.symbol} 
+                        asset={asset} 
+                        onClick={() => navigate(`/trade/stocks/${asset.symbol}`)}
                       />
                     ))
                   ) : (
-                    <div className="p-8 text-center text-muted-foreground">No stocks found</div>
+                    <div className="p-8 text-center text-muted-foreground">
+                      No stocks found for "{searchQuery}"
+                    </div>
                   )}
                 </CardContent>
               </Card>

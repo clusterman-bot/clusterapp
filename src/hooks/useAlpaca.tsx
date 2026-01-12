@@ -44,6 +44,23 @@ export interface AlpacaOrder {
   created_at: string;
 }
 
+export interface AlpacaAsset {
+  symbol: string;
+  name: string;
+  exchange: string;
+  asset_class: string;
+  tradable: boolean;
+  fractionable: boolean;
+}
+
+export interface AlpacaQuote {
+  symbol: string;
+  bid?: number;
+  ask?: number;
+  price: number;
+  timestamp?: string;
+}
+
 // Fetch Alpaca account info
 export function useAlpacaAccount() {
   const { user } = useAuth();
@@ -86,6 +103,54 @@ export function useAlpacaPositions() {
     },
     enabled: !!user,
     refetchInterval: 30000,
+    retry: false,
+  });
+}
+
+// Search for stocks via Alpaca
+export function useAlpacaSearch(query: string) {
+  const { user } = useAuth();
+  const { isPaper } = useTradingMode();
+  
+  return useQuery({
+    queryKey: ['alpaca-search', query],
+    queryFn: async () => {
+      if (!query || query.length < 1) return [];
+      
+      const { data, error } = await supabase.functions.invoke('alpaca-trading/search-assets', {
+        body: { isPaper, query, limit: 30 },
+      });
+      
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      
+      return data.assets as AlpacaAsset[];
+    },
+    enabled: !!user && query.length >= 1,
+    staleTime: 60000, // Cache for 1 minute
+    retry: false,
+  });
+}
+
+// Get real-time quote for a symbol
+export function useAlpacaQuote(symbol: string | undefined) {
+  const { user } = useAuth();
+  const { isPaper } = useTradingMode();
+  
+  return useQuery({
+    queryKey: ['alpaca-quote', symbol],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('alpaca-trading/get-quote', {
+        body: { isPaper, symbol },
+      });
+      
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      
+      return data.quote as AlpacaQuote;
+    },
+    enabled: !!user && !!symbol,
+    refetchInterval: 10000, // Refresh every 10 seconds
     retry: false,
   });
 }
