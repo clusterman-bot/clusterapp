@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { MainNav } from '@/components/MainNav';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -96,9 +97,17 @@ function AlpacaAssetRow({ asset, onClick }: { asset: AlpacaAsset; onClick: () =>
 
 export default function Trade() {
   const { user } = useAuth();
+  const { data: userRole, isLoading: roleLoading } = useUserRole();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('explore');
+  
+  // Redirect admins away from trade page
+  useEffect(() => {
+    if (!roleLoading && userRole?.role === 'admin') {
+      navigate('/admin', { replace: true });
+    }
+  }, [userRole, roleLoading, navigate]);
   
   const { data: stocks, isLoading: stocksLoading } = useStocks(searchQuery);
   const { data: watchlist } = useWatchlist();

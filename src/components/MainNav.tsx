@@ -73,14 +73,17 @@ export function MainNav() {
               <Store className="mr-2 h-4 w-4" />
               Marketplace
             </Button>
-            <Button 
-              variant={location.pathname.startsWith('/trade') ? 'secondary' : 'ghost'} 
-              size="sm"
-              onClick={() => navigate('/trade')}
-            >
-              <LineChart className="mr-2 h-4 w-4" />
-              Trade
-            </Button>
+            {/* Admins should not have access to Trade */}
+            {userRole?.role !== 'admin' && (
+              <Button 
+                variant={location.pathname.startsWith('/trade') ? 'secondary' : 'ghost'} 
+                size="sm"
+                onClick={() => navigate('/trade')}
+              >
+                <LineChart className="mr-2 h-4 w-4" />
+                Trade
+              </Button>
+            )}
             {user && (
               <Button 
                 variant={location.pathname === dashboardPath ? 'secondary' : 'ghost'} 
