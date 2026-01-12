@@ -122,10 +122,12 @@ export default function Auth() {
     try {
       const { error } = await signIn(email, password);
       if (error) throw error;
-      // useEffect will handle redirect based on role
+      
+      // Navigate immediately after successful login
+      // The dashboard pages will handle role-based routing
+      navigate('/dashboard', { replace: true });
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } finally {
       setLoading(false);
     }
   };
