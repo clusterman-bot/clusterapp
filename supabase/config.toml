@@ -1,1 +1,7 @@
 project_id = "pfszkghqoxybhbaouliw"
+
+[functions.ml-backend]
+verify_jwt = false
+
+[functions.fetch-market-data]
+verify_jwt = false

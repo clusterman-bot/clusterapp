@@ -221,22 +221,63 @@ export type Database = {
           },
         ]
       }
+      market_data_cache: {
+        Row: {
+          created_at: string | null
+          data: Json
+          end_date: string
+          expires_at: string | null
+          id: string
+          start_date: string
+          ticker: string
+          timespan: string
+        }
+        Insert: {
+          created_at?: string | null
+          data: Json
+          end_date: string
+          expires_at?: string | null
+          id?: string
+          start_date: string
+          ticker: string
+          timespan: string
+        }
+        Update: {
+          created_at?: string | null
+          data?: Json
+          end_date?: string
+          expires_at?: string | null
+          id?: string
+          start_date?: string
+          ticker?: string
+          timespan?: string
+        }
+        Relationships: []
+      }
       models: {
         Row: {
           configuration: Json | null
           created_at: string | null
           description: string | null
+          feature_columns: Json | null
+          horizon: number | null
+          hyperparameters: Json | null
           id: string
+          indicators_config: Json | null
           is_public: boolean | null
           max_drawdown: number | null
+          ml_model_uuid: string | null
           model_type: string | null
           name: string
           performance_fee_percent: number | null
           sharpe_ratio: number | null
           status: string | null
           strategy_overview: string | null
+          theta: number | null
+          ticker: string | null
           total_return: number | null
           total_subscribers: number | null
+          training_metrics: Json | null
           updated_at: string | null
           user_id: string
           win_rate: number | null
@@ -245,17 +286,25 @@ export type Database = {
           configuration?: Json | null
           created_at?: string | null
           description?: string | null
+          feature_columns?: Json | null
+          horizon?: number | null
+          hyperparameters?: Json | null
           id?: string
+          indicators_config?: Json | null
           is_public?: boolean | null
           max_drawdown?: number | null
+          ml_model_uuid?: string | null
           model_type?: string | null
           name: string
           performance_fee_percent?: number | null
           sharpe_ratio?: number | null
           status?: string | null
           strategy_overview?: string | null
+          theta?: number | null
+          ticker?: string | null
           total_return?: number | null
           total_subscribers?: number | null
+          training_metrics?: Json | null
           updated_at?: string | null
           user_id: string
           win_rate?: number | null
@@ -264,17 +313,25 @@ export type Database = {
           configuration?: Json | null
           created_at?: string | null
           description?: string | null
+          feature_columns?: Json | null
+          horizon?: number | null
+          hyperparameters?: Json | null
           id?: string
+          indicators_config?: Json | null
           is_public?: boolean | null
           max_drawdown?: number | null
+          ml_model_uuid?: string | null
           model_type?: string | null
           name?: string
           performance_fee_percent?: number | null
           sharpe_ratio?: number | null
           status?: string | null
           strategy_overview?: string | null
+          theta?: number | null
+          ticker?: string | null
           total_return?: number | null
           total_subscribers?: number | null
+          training_metrics?: Json | null
           updated_at?: string | null
           user_id?: string
           win_rate?: number | null
@@ -651,6 +708,68 @@ export type Database = {
           },
         ]
       }
+      training_runs: {
+        Row: {
+          best_model_metrics: Json | null
+          best_model_name: string | null
+          completed_at: string | null
+          created_at: string | null
+          end_date: string
+          error_message: string | null
+          hyperparameters: Json | null
+          id: string
+          indicators_enabled: Json | null
+          model_id: string | null
+          results: Json | null
+          start_date: string
+          status: string | null
+          ticker: string
+          user_id: string
+        }
+        Insert: {
+          best_model_metrics?: Json | null
+          best_model_name?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          end_date: string
+          error_message?: string | null
+          hyperparameters?: Json | null
+          id?: string
+          indicators_enabled?: Json | null
+          model_id?: string | null
+          results?: Json | null
+          start_date: string
+          status?: string | null
+          ticker: string
+          user_id: string
+        }
+        Update: {
+          best_model_metrics?: Json | null
+          best_model_name?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          end_date?: string
+          error_message?: string | null
+          hyperparameters?: Json | null
+          id?: string
+          indicators_enabled?: Json | null
+          model_id?: string | null
+          results?: Json | null
+          start_date?: string
+          status?: string | null
+          ticker?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_runs_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_balances: {
         Row: {
           cash_balance: number
@@ -703,6 +822,66 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      validation_runs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          end_date: string
+          error_message: string | null
+          id: string
+          metrics: Json | null
+          model_id: string | null
+          signal_distribution: Json | null
+          start_date: string
+          status: string | null
+          training_run_id: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          end_date: string
+          error_message?: string | null
+          id?: string
+          metrics?: Json | null
+          model_id?: string | null
+          signal_distribution?: Json | null
+          start_date: string
+          status?: string | null
+          training_run_id?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          end_date?: string
+          error_message?: string | null
+          id?: string
+          metrics?: Json | null
+          model_id?: string | null
+          signal_distribution?: Json | null
+          start_date?: string
+          status?: string | null
+          training_run_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "validation_runs_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "validation_runs_training_run_id_fkey"
+            columns: ["training_run_id"]
+            isOneToOne: false
+            referencedRelation: "training_runs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       watchlist: {
         Row: {
