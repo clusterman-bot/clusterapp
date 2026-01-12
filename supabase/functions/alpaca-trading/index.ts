@@ -125,6 +125,133 @@ serve(async (req) => {
         );
       }
 
+      case 'search-assets': {
+        // Search for tradeable assets
+        const query = body.query?.toUpperCase() || '';
+        const limit = body.limit || 20;
+        
+        console.log(`[Alpaca] Searching assets: "${query}"`);
+        
+        // Fetch all active, tradeable US equities
+        const response = await fetch(
+          `https://paper-api.alpaca.markets/v2/assets?status=active&asset_class=us_equity`,
+          { headers: alpacaHeaders }
+        );
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to fetch assets');
+        }
+        
+        const allAssets = await response.json();
+        
+        // Filter by search query (symbol or name)
+        let filtered = allAssets.filter((asset: any) => 
+          asset.tradable && 
+          (asset.symbol.includes(query) || asset.name?.toUpperCase().includes(query))
+        );
+        
+        // Sort: exact symbol matches first, then by symbol length
+        filtered.sort((a: any, b: any) => {
+          if (a.symbol === query) return -1;
+          if (b.symbol === query) return 1;
+          if (a.symbol.startsWith(query) && !b.symbol.startsWith(query)) return -1;
+          if (b.symbol.startsWith(query) && !a.symbol.startsWith(query)) return 1;
+          return a.symbol.length - b.symbol.length;
+        });
+        
+        // Limit results
+        const results = filtered.slice(0, limit);
+        
+        console.log(`[Alpaca] Found ${results.length} assets for query "${query}"`);
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            assets: results.map((a: any) => ({
+              symbol: a.symbol,
+              name: a.name,
+              exchange: a.exchange,
+              asset_class: a.class,
+              tradable: a.tradable,
+              fractionable: a.fractionable,
+            }))
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get-quote': {
+        // Get real-time quote for a symbol
+        const symbol = body.symbol?.toUpperCase();
+        
+        if (!symbol) {
+          throw new Error('Symbol is required');
+        }
+        
+        console.log(`[Alpaca] Getting quote for: ${symbol}`);
+        
+        // Use the data API for quotes
+        const response = await fetch(
+          `https://data.alpaca.markets/v2/stocks/${symbol}/quotes/latest`,
+          { 
+            headers: {
+              'APCA-API-KEY-ID': alpacaApiKey,
+              'APCA-API-SECRET-KEY': alpacaApiSecret,
+            }
+          }
+        );
+        
+        if (!response.ok) {
+          // Try to get last trade instead
+          const tradeResponse = await fetch(
+            `https://data.alpaca.markets/v2/stocks/${symbol}/trades/latest`,
+            { 
+              headers: {
+                'APCA-API-KEY-ID': alpacaApiKey,
+                'APCA-API-SECRET-KEY': alpacaApiSecret,
+              }
+            }
+          );
+          
+          if (!tradeResponse.ok) {
+            throw new Error(`Failed to get quote for ${symbol}`);
+          }
+          
+          const tradeData = await tradeResponse.json();
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              quote: {
+                symbol,
+                price: tradeData.trade?.p || 0,
+                timestamp: tradeData.trade?.t,
+              }
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        const quoteData = await response.json();
+        const midPrice = quoteData.quote 
+          ? (quoteData.quote.ap + quoteData.quote.bp) / 2 
+          : 0;
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            quote: {
+              symbol,
+              bid: quoteData.quote?.bp,
+              ask: quoteData.quote?.ap,
+              price: midPrice,
+              timestamp: quoteData.quote?.t,
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       case 'orders': {
         if (req.method === 'GET') {
           // Get orders
