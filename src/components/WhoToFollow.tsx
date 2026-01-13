@@ -3,16 +3,62 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useFollow, useUnfollow, useIsFollowing } from '@/hooks/useSocial';
+import { useState } from 'react';
+
+function FollowButton({ userId }: { userId: string }) {
+  const { user } = useAuth();
+  const { data: isFollowing, isLoading } = useIsFollowing(userId);
+  const follow = useFollow();
+  const unfollow = useUnfollow();
+  const queryClient = useQueryClient();
+  const [isOptimistic, setIsOptimistic] = useState<boolean | null>(null);
+
+  const handleFollow = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) return;
+    
+    const currentlyFollowing = isOptimistic !== null ? isOptimistic : isFollowing;
+    setIsOptimistic(!currentlyFollowing);
+    
+    try {
+      if (currentlyFollowing) {
+        await unfollow.mutateAsync(userId);
+      } else {
+        await follow.mutateAsync(userId);
+      }
+      queryClient.invalidateQueries({ queryKey: ['following', user.id, userId] });
+      queryClient.invalidateQueries({ queryKey: ['suggested-users'] });
+    } catch (error) {
+      setIsOptimistic(null);
+      console.error('Follow error:', error);
+    }
+  };
+
+  const displayFollowing = isOptimistic !== null ? isOptimistic : isFollowing;
+
+  return (
+    <Button 
+      size="sm" 
+      variant={displayFollowing ? "secondary" : "outline"} 
+      className="rounded-full text-xs h-8"
+      onClick={handleFollow}
+      disabled={isLoading || follow.isPending || unfollow.isPending}
+    >
+      {displayFollowing ? 'Following' : 'Follow'}
+    </Button>
+  );
+}
 
 export function WhoToFollow() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
   const { data: suggestedUsers = [] } = useQuery({
-    queryKey: ['suggested-users'],
+    queryKey: ['suggested-users', user?.id],
     queryFn: async () => {
       // Use public_profiles view to respect privacy settings
       const { data, error } = await supabase
@@ -25,6 +71,7 @@ export function WhoToFollow() {
       if (error) throw error;
       return data;
     },
+    enabled: !!user,
   });
 
   if (suggestedUsers.length === 0) return null;
@@ -60,9 +107,7 @@ export function WhoToFollow() {
               </div>
               <p className="text-xs text-muted-foreground truncate">@{profile.username}</p>
             </div>
-            <Button size="sm" variant="outline" className="rounded-full text-xs h-8">
-              Follow
-            </Button>
+            {profile.id && <FollowButton userId={profile.id} />}
           </div>
         ))}
         <Button 

@@ -344,8 +344,10 @@ export function useFollow() {
       
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, followingId) => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: ['following', user?.id, followingId] });
+      queryClient.invalidateQueries({ queryKey: ['suggested-users'] });
     },
   });
 }
@@ -366,8 +368,10 @@ export function useUnfollow() {
       
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, followingId) => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: ['following', user?.id, followingId] });
+      queryClient.invalidateQueries({ queryKey: ['suggested-users'] });
     },
   });
 }
