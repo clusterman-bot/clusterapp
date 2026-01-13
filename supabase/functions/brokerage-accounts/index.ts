@@ -53,7 +53,7 @@ async function encryptKey(plaintext: string, secret: string): Promise<string> {
   return btoa(String.fromCharCode(...combined));
 }
 
-async function decryptKey(encrypted: string, secret: string): Promise<string> {
+async function decryptKeyAES(encrypted: string, secret: string): Promise<string> {
   const combined = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
   
   const saltArray = combined.slice(0, 16);
@@ -68,6 +68,37 @@ async function decryptKey(encrypted: string, secret: string): Promise<string> {
   );
   
   return new TextDecoder().decode(decrypted);
+}
+
+// Legacy XOR decryption for backward compatibility
+function decryptKeyXOR(encrypted: string, secret: string): string {
+  const encryptedBytes = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
+  const encoder = new TextEncoder();
+  const secretBytes = encoder.encode(secret.padEnd(encryptedBytes.length, secret));
+  
+  const decrypted = new Uint8Array(encryptedBytes.length);
+  for (let i = 0; i < encryptedBytes.length; i++) {
+    decrypted[i] = encryptedBytes[i] ^ secretBytes[i % secretBytes.length];
+  }
+  
+  return new TextDecoder().decode(decrypted);
+}
+
+// Try AES-256-GCM first, fallback to XOR for legacy credentials
+async function decryptKey(encrypted: string, secret: string): Promise<string> {
+  try {
+    // AES-GCM encrypted data has minimum length: 16 (salt) + 12 (iv) + 16 (tag) = 44 bytes
+    const combined = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
+    if (combined.length >= 44) {
+      return await decryptKeyAES(encrypted, secret);
+    }
+    // Too short for AES-GCM, must be XOR
+    return decryptKeyXOR(encrypted, secret);
+  } catch (error) {
+    // AES-GCM failed (likely tag length error), try XOR fallback
+    console.log('[Brokerage] AES-GCM decryption failed, trying XOR fallback');
+    return decryptKeyXOR(encrypted, secret);
+  }
 }
 
 // Helper for error sanitization
