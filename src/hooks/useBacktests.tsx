@@ -41,20 +41,35 @@ export interface Trade {
   created_at: string;
 }
 
-export function useBacktests(modelId: string | undefined) {
+export function useBacktests(modelId: string | undefined, isOwner: boolean = false) {
   return useQuery({
-    queryKey: ['backtests', modelId],
+    queryKey: ['backtests', modelId, isOwner],
     queryFn: async () => {
       if (!modelId) return [];
       
-      const { data, error } = await supabase
-        .from('backtests')
-        .select('*')
-        .eq('model_id', modelId)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      return data as Backtest[];
+      // Use public_backtests view for non-owners to prevent user_id exposure
+      // Owners can access the full backtests table including user_id
+      if (isOwner) {
+        const { data, error } = await supabase
+          .from('backtests')
+          .select('*')
+          .eq('model_id', modelId)
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        return data as Backtest[];
+      } else {
+        // Use public view that excludes user_id
+        const { data, error } = await supabase
+          .from('public_backtests')
+          .select('*')
+          .eq('model_id', modelId)
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        // Cast to Backtest but note user_id will be undefined for non-owners
+        return (data || []).map(b => ({ ...b, user_id: '' })) as Backtest[];
+      }
     },
     enabled: !!modelId,
   });

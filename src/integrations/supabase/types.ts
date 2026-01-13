@@ -1090,6 +1090,13 @@ export type Database = {
             referencedRelation: "backtests"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "trades_backtest_id_fkey"
+            columns: ["backtest_id"]
+            isOneToOne: false
+            referencedRelation: "public_backtests"
+            referencedColumns: ["id"]
+          },
         ]
       }
       trading_activity_logs: {
@@ -1612,6 +1619,80 @@ export type Database = {
             columns: ["model_owner_id"]
             isOneToOne: false
             referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      public_backtests: {
+        Row: {
+          benchmark: string | null
+          cagr: number | null
+          completed_at: string | null
+          created_at: string | null
+          end_date: string | null
+          equity_curve: Json | null
+          id: string | null
+          initial_capital: number | null
+          max_drawdown: number | null
+          model_id: string | null
+          name: string | null
+          profit_factor: number | null
+          sharpe_ratio: number | null
+          sortino_ratio: number | null
+          start_date: string | null
+          status: string | null
+          total_return: number | null
+          total_trades: number | null
+          win_rate: number | null
+        }
+        Insert: {
+          benchmark?: string | null
+          cagr?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          end_date?: string | null
+          equity_curve?: Json | null
+          id?: string | null
+          initial_capital?: number | null
+          max_drawdown?: number | null
+          model_id?: string | null
+          name?: string | null
+          profit_factor?: number | null
+          sharpe_ratio?: number | null
+          sortino_ratio?: number | null
+          start_date?: string | null
+          status?: string | null
+          total_return?: number | null
+          total_trades?: number | null
+          win_rate?: number | null
+        }
+        Update: {
+          benchmark?: string | null
+          cagr?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          end_date?: string | null
+          equity_curve?: Json | null
+          id?: string | null
+          initial_capital?: number | null
+          max_drawdown?: number | null
+          model_id?: string | null
+          name?: string | null
+          profit_factor?: number | null
+          sharpe_ratio?: number | null
+          sortino_ratio?: number | null
+          start_date?: string | null
+          status?: string | null
+          total_return?: number | null
+          total_trades?: number | null
+          win_rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backtests_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "models"
             referencedColumns: ["id"]
           },
         ]
