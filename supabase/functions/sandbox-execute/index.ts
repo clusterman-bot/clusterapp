@@ -212,25 +212,66 @@ async function simulateSandboxExecution(
   };
 }
 
-// SECURITY: Server-side validation for dangerous code patterns
-// This runs on every execution request, not just validation endpoints
+// SECURITY: Comprehensive server-side validation for dangerous code patterns
+// This runs on every execution request with anti-obfuscation measures
 function validatePythonCodeServer(code: string): { valid: boolean; issues: string[] } {
   const issues: string[] = [];
   
-  // Dangerous module imports
+  // Step 1: Detect and reject obfuscation attempts
+  const obfuscationPatterns = [
+    // Encoded strings that could decode to dangerous code
+    { pattern: /\\x[0-9a-fA-F]{2}/g, name: 'hex escape sequences' },
+    { pattern: /\\u[0-9a-fA-F]{4}/g, name: 'unicode escape sequences' },
+    { pattern: /\\[0-7]{1,3}/g, name: 'octal escape sequences' },
+    // Base64-like patterns (long alphanumeric strings)
+    { pattern: /['"][A-Za-z0-9+/=]{50,}['"]/g, name: 'potential base64 encoded strings' },
+    // String concatenation obfuscation (e.g., "o" + "s" -> "os")
+    { pattern: /['"]\s*\+\s*['"]/g, name: 'string concatenation (potential obfuscation)' },
+    // chr() based obfuscation
+    { pattern: /chr\s*\(\s*\d+\s*\)/g, name: 'chr() calls (potential obfuscation)' },
+    // ord() with join for string building
+    { pattern: /['"]\.join\s*\(\s*\[.*chr/g, name: 'join with chr() pattern' },
+    // getattr with string building
+    { pattern: /getattr\s*\([^,]+,\s*[^)]*\+/g, name: 'getattr with string concatenation' },
+    // Format string exploitation
+    { pattern: /\{[^}]*\.__\w+__[^}]*\}/g, name: 'format string with dunder access' },
+  ];
+  
+  for (const { pattern, name } of obfuscationPatterns) {
+    if (pattern.test(code)) {
+      issues.push(`Suspicious pattern detected: ${name} - not allowed for security`);
+    }
+  }
+  
+  // Step 2: Normalize code to catch simple obfuscation
+  // Remove comments and normalize whitespace for pattern matching
+  const normalizedCode = code
+    .replace(/#.*$/gm, '') // Remove single-line comments
+    .replace(/'''[\s\S]*?'''/g, '') // Remove multi-line strings (could hide code)
+    .replace(/"""[\s\S]*?"""/g, '')
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .toLowerCase();
+  
+  // Step 3: Dangerous module imports with obfuscation-resistant patterns
   const dangerousModules = [
     'os', 'subprocess', 'sys', 'shutil', 'socket', 'requests', 
     'urllib', 'http', 'ftplib', 'smtplib', 'telnetlib', 'pickle',
     'marshal', 'shelve', 'ctypes', 'multiprocessing', 'threading',
     '__builtins__', 'builtins', 'importlib', 'code', 'codeop',
-    'compile', 'ast', 'tokenize', 'pathlib', 'glob', 'tempfile'
+    'compile', 'ast', 'tokenize', 'pathlib', 'glob', 'tempfile',
+    'pty', 'tty', 'fcntl', 'resource', 'syslog', 'posix', 'nt',
+    'signal', 'mmap', 'struct', 'io', 'zipfile', 'tarfile', 'bz2',
+    'gzip', 'lzma', 'zipimport', 'pkgutil', 'modulefinder', 'runpy'
   ];
   
   for (const mod of dangerousModules) {
+    // Check original code with multiple import patterns
     const importPatterns = [
-      new RegExp(`import\\s+${mod}\\b`),
-      new RegExp(`from\\s+${mod}\\b`),
-      new RegExp(`__import__\\s*\\(\\s*['"]${mod}['"]`),
+      new RegExp(`\\bimport\\s+${mod}\\b`, 'i'),
+      new RegExp(`\\bfrom\\s+${mod}\\b`, 'i'),
+      new RegExp(`\\bfrom\\s+${mod}\\.`, 'i'),
+      new RegExp(`__import__\\s*\\(\\s*['"]${mod}['"]`, 'i'),
+      new RegExp(`importlib\\.import_module\\s*\\(\\s*['"]${mod}['"]`, 'i'),
     ];
     for (const pattern of importPatterns) {
       if (pattern.test(code)) {
@@ -238,24 +279,37 @@ function validatePythonCodeServer(code: string): { valid: boolean; issues: strin
         break;
       }
     }
+    // Also check normalized code
+    if (normalizedCode.includes(`import ${mod}`) || normalizedCode.includes(`from ${mod}`)) {
+      if (!issues.some(i => i.includes(`Module '${mod}'`))) {
+        issues.push(`Module '${mod}' is not allowed in sandbox`);
+      }
+    }
   }
   
-  // Dangerous function calls
+  // Step 4: Dangerous function calls with comprehensive patterns
   const dangerousFunctions = [
-    { pattern: /\bexec\s*\(/, name: 'exec()' },
-    { pattern: /\beval\s*\(/, name: 'eval()' },
-    { pattern: /\bcompile\s*\(/, name: 'compile()' },
-    { pattern: /\bopen\s*\(/, name: 'open()' },
-    { pattern: /\bgetattr\s*\(/, name: 'getattr()' },
-    { pattern: /\bsetattr\s*\(/, name: 'setattr()' },
-    { pattern: /\bdelattr\s*\(/, name: 'delattr()' },
-    { pattern: /\b__import__\s*\(/, name: '__import__()' },
-    { pattern: /\bglobals\s*\(/, name: 'globals()' },
-    { pattern: /\blocals\s*\(/, name: 'locals()' },
-    { pattern: /\bvars\s*\(/, name: 'vars()' },
-    { pattern: /\bdir\s*\(/, name: 'dir()' },
-    { pattern: /\binput\s*\(/, name: 'input()' },
-    { pattern: /\bbreakpoint\s*\(/, name: 'breakpoint()' },
+    { pattern: /\bexec\s*\(/i, name: 'exec()' },
+    { pattern: /\beval\s*\(/i, name: 'eval()' },
+    { pattern: /\bcompile\s*\(/i, name: 'compile()' },
+    { pattern: /\bopen\s*\(/i, name: 'open()' },
+    { pattern: /\bgetattr\s*\(/i, name: 'getattr()' },
+    { pattern: /\bsetattr\s*\(/i, name: 'setattr()' },
+    { pattern: /\bdelattr\s*\(/i, name: 'delattr()' },
+    { pattern: /\b__import__\s*\(/i, name: '__import__()' },
+    { pattern: /\bglobals\s*\(/i, name: 'globals()' },
+    { pattern: /\blocals\s*\(/i, name: 'locals()' },
+    { pattern: /\bvars\s*\(/i, name: 'vars()' },
+    { pattern: /\bdir\s*\(/i, name: 'dir()' },
+    { pattern: /\binput\s*\(/i, name: 'input()' },
+    { pattern: /\bbreakpoint\s*\(/i, name: 'breakpoint()' },
+    { pattern: /\btype\s*\(\s*['"]\w+['"]\s*,/i, name: 'type() with 3 args (class creation)' },
+    { pattern: /\b__new__\s*\(/i, name: '__new__()' },
+    { pattern: /\b__init_subclass__\s*\(/i, name: '__init_subclass__()' },
+    { pattern: /\b__set_name__\s*\(/i, name: '__set_name__()' },
+    { pattern: /\bmemoryview\s*\(/i, name: 'memoryview()' },
+    { pattern: /\bbytearray\s*\(/i, name: 'bytearray()' },
+    { pattern: /\bfrozenset\s*\(\s*\{/i, name: 'frozenset with set literal' },
   ];
   
   for (const { pattern, name } of dangerousFunctions) {
@@ -264,15 +318,81 @@ function validatePythonCodeServer(code: string): { valid: boolean; issues: strin
     }
   }
   
-  // Dangerous dunder access
+  // Step 5: Dangerous dunder access (attribute-based exploitation)
   const dangerousDunders = [
     '__class__', '__bases__', '__subclasses__', '__mro__', '__code__',
-    '__globals__', '__builtins__', '__dict__', '__module__', '__func__'
+    '__globals__', '__builtins__', '__dict__', '__module__', '__func__',
+    '__self__', '__closure__', '__annotations__', '__kwdefaults__',
+    '__reduce__', '__reduce_ex__', '__getstate__', '__setstate__',
+    '__init__.__globals__', '__class__.__bases__', '__class__.__mro__'
   ];
   
   for (const dunder of dangerousDunders) {
-    if (code.includes(dunder)) {
-      issues.push(`Access to '${dunder}' is not allowed in sandbox`);
+    // Check with various access patterns
+    const accessPatterns = [
+      new RegExp(`\\.${dunder.replace(/__/g, '__')}\\b`),
+      new RegExp(`\\['${dunder}'\\]`),
+      new RegExp(`\\["${dunder}"\\]`),
+      new RegExp(`getattr\\s*\\([^,]+,\\s*['"]${dunder}['"]`),
+    ];
+    for (const pattern of accessPatterns) {
+      if (pattern.test(code)) {
+        issues.push(`Access to '${dunder}' is not allowed in sandbox`);
+        break;
+      }
+    }
+  }
+  
+  // Step 6: Additional exploit patterns
+  const exploitPatterns = [
+    { pattern: /\(\s*\)\s*\[\s*\d+\s*\]/, name: 'tuple indexing (potential exploit)' },
+    { pattern: /\[\s*\]\s*\.\s*__class__/, name: 'list class access' },
+    { pattern: /\{\s*\}\s*\.\s*__class__/, name: 'dict class access' },
+    { pattern: /['"]\s*\.\s*__class__/, name: 'string class access' },
+    { pattern: /lambda\s*:\s*0\s*\.\s*__/, name: 'lambda function exploitation' },
+    { pattern: /\bsuper\s*\(\s*\)/, name: 'super() call' },
+    { pattern: /\bclassmethod\s*\(/, name: 'classmethod()' },
+    { pattern: /\bstaticmethod\s*\(/, name: 'staticmethod()' },
+    { pattern: /\bproperty\s*\(/, name: 'property()' },
+    { pattern: /\b__enter__/, name: '__enter__ (context manager exploit)' },
+    { pattern: /\b__exit__/, name: '__exit__ (context manager exploit)' },
+  ];
+  
+  for (const { pattern, name } of exploitPatterns) {
+    if (pattern.test(code)) {
+      issues.push(`Pattern '${name}' is not allowed in sandbox`);
+    }
+  }
+  
+  // Step 7: Code size limits to prevent DoS
+  if (code.length > 50000) {
+    issues.push('Code exceeds maximum allowed size (50KB)');
+  }
+  
+  // Count nested structures to prevent stack overflow attacks
+  const maxNesting = 20;
+  let currentNesting = 0;
+  let maxFound = 0;
+  for (const char of code) {
+    if (char === '(' || char === '[' || char === '{') {
+      currentNesting++;
+      maxFound = Math.max(maxFound, currentNesting);
+    } else if (char === ')' || char === ']' || char === '}') {
+      currentNesting--;
+    }
+  }
+  if (maxFound > maxNesting) {
+    issues.push(`Code nesting too deep (${maxFound} levels, max ${maxNesting})`);
+  }
+  
+  // Step 8: Whitelist-based import validation
+  const allowedImports = ['pandas', 'numpy', 'sklearn', 'ta', 'scipy', 'statsmodels', 'math', 'datetime', 'collections', 'functools', 'itertools', 'operator', 're'];
+  const importMatches = code.matchAll(/(?:import|from)\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
+  for (const match of importMatches) {
+    const importedModule = match[1].toLowerCase();
+    if (!allowedImports.includes(importedModule) && !dangerousModules.includes(importedModule)) {
+      // Not in whitelist and not already flagged as dangerous
+      issues.push(`Module '${match[1]}' is not in the allowed imports list`);
     }
   }
   
