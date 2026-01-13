@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Search, TrendingUp, TrendingDown, Star, 
-  Briefcase, Clock, BarChart3, Settings, Link2
+  Briefcase, Clock, BarChart3, Settings, Link2, AlertTriangle
 } from 'lucide-react';
 import { useStocks, useWatchlist, Stock } from '@/hooks/useTrading';
 import { useAlpacaAccount, useAlpacaPositions, useAlpacaSearch, AlpacaAsset } from '@/hooks/useAlpaca';
@@ -117,12 +117,15 @@ export default function Trade() {
 
   // Check if user has connected a brokerage account
   const hasConnectedAccount = brokerageAccounts && brokerageAccounts.length > 0;
+  
+  // Check if credentials need to be reconnected
+  const needsReconnect = alpacaAccount && 'needsReconnect' in alpacaAccount && alpacaAccount.needsReconnect;
 
-  // Only show portfolio data if user has connected their own account
-  const portfolioValue = hasConnectedAccount && alpacaAccount ? alpacaAccount.portfolio_value : 0;
-  const cashAvailable = hasConnectedAccount && alpacaAccount ? alpacaAccount.cash : 0;
-  const investedValue = hasConnectedAccount && alpacaAccount ? alpacaAccount.equity - alpacaAccount.cash : 0;
-  const totalValue = hasConnectedAccount && alpacaAccount ? alpacaAccount.portfolio_value : 0;
+  // Only show portfolio data if user has connected their own account and credentials are valid
+  const portfolioValue = hasConnectedAccount && alpacaAccount && !needsReconnect ? alpacaAccount.portfolio_value : 0;
+  const cashAvailable = hasConnectedAccount && alpacaAccount && !needsReconnect ? alpacaAccount.cash : 0;
+  const investedValue = hasConnectedAccount && alpacaAccount && !needsReconnect ? alpacaAccount.equity - alpacaAccount.cash : 0;
+  const totalValue = hasConnectedAccount && alpacaAccount && !needsReconnect ? alpacaAccount.portfolio_value : 0;
 
   // Group stocks by sector
   const topGainers = stocks?.filter(s => s.previous_close && s.current_price > s.previous_close)
@@ -151,8 +154,30 @@ export default function Trade() {
           </div>
         )}
 
+        {/* Reconnect Warning */}
+        {user && hasConnectedAccount && needsReconnect && (
+          <Card className="mb-6 border-2 border-destructive/50 bg-destructive/5">
+            <CardContent className="py-6">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                    <AlertTriangle className="h-6 w-6 text-destructive" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">Brokerage Reconnection Required</h3>
+                    <p className="text-muted-foreground">Your brokerage credentials need to be updated. Please reconnect your Alpaca account to continue trading.</p>
+                  </div>
+                </div>
+                <Button onClick={() => navigate('/settings/brokerage')} variant="destructive" size="lg">
+                  <Settings className="mr-2 h-4 w-4" /> Reconnect Account
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Portfolio Summary or Connect Prompt */}
-        {user && (
+        {user && !needsReconnect && (
           hasConnectedAccount ? (
             <Card className="mb-6 bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
               <CardContent className="pt-6">
@@ -170,7 +195,7 @@ export default function Trade() {
                       <p className="text-sm text-muted-foreground">Invested</p>
                       <p className="text-xl font-semibold">{formatPrice(investedValue)}</p>
                     </div>
-                    {alpacaAccount && (
+                    {alpacaAccount && !('needsReconnect' in alpacaAccount) && (
                       <div>
                         <p className="text-sm text-muted-foreground">Buying Power</p>
                         <p className="text-xl font-semibold">{formatPrice(alpacaAccount.buying_power)}</p>
