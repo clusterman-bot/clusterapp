@@ -355,7 +355,8 @@ serve(async (req) => {
     });
   } catch (error: any) {
     console.error('[ML-Backend] ❌ Error:', error);
-    return new Response(JSON.stringify({ error: error.message || 'Unknown error' }), {
+    // SECURITY: Sanitize error messages to prevent information leakage
+    return new Response(JSON.stringify({ error: 'An error occurred while processing your request' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
