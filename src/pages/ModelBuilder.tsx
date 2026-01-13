@@ -20,6 +20,7 @@ import { IndicatorsConfig } from '@/components/ml/IndicatorsConfig';
 import { HyperparametersConfig } from '@/components/ml/HyperparametersConfig';
 import { ModelSelection } from '@/components/ml/ModelSelection';
 import { TrainingProgress } from '@/components/ml/TrainingProgress';
+import { CodeTerminal } from '@/components/CodeTerminal';
 import { Code, Brain, Calendar, TrendingUp, Rocket, FlaskConical, CheckCircle2, StopCircle, Upload, Key, Plus, Trash2, Zap, AlertCircle } from 'lucide-react';
 
 type ModelType = 'sandbox' | 'ml';
@@ -900,12 +901,27 @@ def generate_signals(data: pd.DataFrame) -> pd.DataFrame:
                   <p className="text-xs mt-1">Your code runs in a secure sandbox with 30s timeout, 256MB memory limit. Allowed: pandas, numpy, sklearn, ta, scipy.</p>
                 </div>
               </div>
-              <textarea
-                value={sandboxCode}
-                onChange={(e) => setSandboxCode(e.target.value)}
-                className="w-full h-96 bg-muted rounded-lg p-4 font-mono text-sm text-foreground resize-y border focus:outline-none focus:ring-2 focus:ring-primary"
-                spellCheck={false}
-              />
+              {/* Code Terminal Display */}
+              <div className="mb-4">
+                <CodeTerminal 
+                  code={sandboxCode} 
+                  language="python" 
+                  maxHeight="300px"
+                />
+              </div>
+              
+              {/* Editable Code Area */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Edit Code:</label>
+                <textarea
+                  value={sandboxCode}
+                  onChange={(e) => setSandboxCode(e.target.value)}
+                  className="w-full h-64 bg-zinc-950 text-zinc-100 rounded-lg p-4 font-mono text-sm resize-y border border-zinc-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                  spellCheck={false}
+                  placeholder="Write your Python trading logic here..."
+                />
+              </div>
+              
               <Button 
                 variant="outline" 
                 onClick={async () => {

@@ -6,14 +6,19 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
   Heart, MessageCircle, Share2, Bookmark, MoreHorizontal,
-  Code, LineChart, TrendingUp, Repeat2
+  Code, LineChart, TrendingUp, Repeat2, Pencil, Trash2, Shield
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Post as SocialPost } from '@/hooks/useSocial';
+import { useAuth } from '@/hooks/useAuth';
+import { useIsAdmin } from '@/hooks/useUserRole';
+import { PostEditDialog } from '@/components/PostEditDialog';
+import { DeletePostDialog } from '@/components/DeletePostDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
@@ -37,8 +42,14 @@ export function SocialPostCard({
   showEngagement = true 
 }: SocialPostCardProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
+  const isOwnPost = user?.id === post.user_id;
+  const canModify = isOwnPost || isAdmin;
   const isDeveloper = post.post_type === 'model_update' || post.post_type === 'announcement';
   
   const handleShare = () => {
@@ -106,8 +117,38 @@ export function SocialPostCard({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-popover">
-                  <DropdownMenuItem>Follow @{post.profiles?.username}</DropdownMenuItem>
-                  <DropdownMenuItem>Mute @{post.profiles?.username}</DropdownMenuItem>
+                  {!isOwnPost && (
+                    <>
+                      <DropdownMenuItem>Follow @{post.profiles?.username}</DropdownMenuItem>
+                      <DropdownMenuItem>Mute @{post.profiles?.username}</DropdownMenuItem>
+                    </>
+                  )}
+                  {canModify && (
+                    <>
+                      {!isOwnPost && <DropdownMenuSeparator />}
+                      <DropdownMenuItem onClick={() => setShowEditDialog(true)}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit post
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => setShowDeleteDialog(true)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete post
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {isAdmin && !isOwnPost && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-amber-600">
+                        <Shield className="h-4 w-4 mr-2" />
+                        Admin action
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem>Report post</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -212,6 +253,22 @@ export function SocialPostCard({
           </div>
         </div>
       </CardHeader>
+
+      {/* Edit Dialog */}
+      <PostEditDialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        postId={post.id}
+        initialContent={post.content}
+      />
+
+      {/* Delete Dialog */}
+      <DeletePostDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        postId={post.id}
+        isAdminAction={isAdmin && !isOwnPost}
+      />
     </Card>
   );
 }
