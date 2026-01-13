@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   TrendingUp, Home, Store, 
-  LayoutDashboard, LogOut, User, LineChart, Shield, Code
+  LayoutDashboard, LogOut, User, LineChart, Shield, Code,
+  HelpCircle, FileText, ScrollText, MessageSquare
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -95,6 +96,39 @@ export function MainNav() {
                 Dashboard
               </Button>
             )}
+            
+            {/* Legal/FAQ Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant={['/faq', '/privacy', '/terms', '/sms-consent'].includes(location.pathname) ? 'secondary' : 'ghost'} 
+                  size="sm"
+                >
+                  <HelpCircle className="mr-2 h-4 w-4" />
+                  Help
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-popover" align="start">
+                <DropdownMenuItem onClick={() => navigate('/faq')}>
+                  <HelpCircle className="mr-2 h-4 w-4" />
+                  FAQ
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/privacy')}>
+                  <Shield className="mr-2 h-4 w-4" />
+                  Privacy Policy
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/terms')}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Terms of Service
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/sms-consent')}>
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  SMS Preferences
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </nav>
         </div>
 

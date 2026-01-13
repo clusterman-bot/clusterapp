@@ -24,6 +24,10 @@ import StockDetail from "./pages/StockDetail";
 import Portfolio from "./pages/Portfolio";
 import Orders from "./pages/Orders";
 import BrokerageSettings from "./pages/BrokerageSettings";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import FAQ from "./pages/FAQ";
+import SMSConsent from "./pages/SMSConsent";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -57,6 +61,10 @@ const App = () => (
               <Route path="/settings/brokerage" element={<BrokerageSettings />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/profile/:userId" element={<Profile />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/faq" element={<FAQ />} />
+              <Route path="/sms-consent" element={<SMSConsent />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
