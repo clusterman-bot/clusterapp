@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useUserRole';
 import { PostEditDialog } from '@/components/PostEditDialog';
 import { DeletePostDialog } from '@/components/DeletePostDialog';
+import { CommentDialog } from '@/components/CommentDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,6 +50,7 @@ export function SocialPostCard({
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showCommentDialog, setShowCommentDialog] = useState(false);
 
   // Get the profile ID from post data
   const profileId = post.profiles?.id || post.user_id;
@@ -220,7 +222,7 @@ export function SocialPostCard({
                   variant="ghost" 
                   size="sm" 
                   className="text-muted-foreground hover:text-primary hover:bg-primary/10 gap-2 px-2"
-                  onClick={() => onComment?.(post.id)}
+                  onClick={() => setShowCommentDialog(true)}
                 >
                   <MessageCircle className="h-[18px] w-[18px]" />
                   <span className="text-sm">{post.comments_count || ''}</span>
@@ -294,6 +296,15 @@ export function SocialPostCard({
         onOpenChange={setShowDeleteDialog}
         postId={post.id}
         isAdminAction={isAdmin && !isOwnPost}
+      />
+
+      {/* Comment Dialog */}
+      <CommentDialog
+        open={showCommentDialog}
+        onOpenChange={setShowCommentDialog}
+        postId={post.id}
+        postContent={post.content}
+        postAuthor={post.profiles?.display_name || post.profiles?.username || 'Unknown'}
       />
     </Card>
   );

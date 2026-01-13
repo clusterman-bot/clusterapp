@@ -222,6 +222,9 @@ export function useLikePost() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['public-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+      queryClient.invalidateQueries({ queryKey: ['post-likes'] });
     },
   });
 }
@@ -244,6 +247,9 @@ export function useUnlikePost() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['public-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+      queryClient.invalidateQueries({ queryKey: ['post-likes'] });
     },
   });
 }
@@ -346,8 +352,11 @@ export function useFollow() {
     },
     onSuccess: (_, followingId) => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
-      queryClient.invalidateQueries({ queryKey: ['following', user?.id, followingId] });
+      queryClient.invalidateQueries({ queryKey: ['following'] });
       queryClient.invalidateQueries({ queryKey: ['suggested-users'] });
+      // Force refetch profile data for both users
+      queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['profile', followingId] });
     },
   });
 }
@@ -370,8 +379,11 @@ export function useUnfollow() {
     },
     onSuccess: (_, followingId) => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
-      queryClient.invalidateQueries({ queryKey: ['following', user?.id, followingId] });
+      queryClient.invalidateQueries({ queryKey: ['following'] });
       queryClient.invalidateQueries({ queryKey: ['suggested-users'] });
+      // Force refetch profile data for both users
+      queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['profile', followingId] });
     },
   });
 }
