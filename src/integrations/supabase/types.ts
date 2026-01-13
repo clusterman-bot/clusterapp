@@ -100,6 +100,13 @@ export type Database = {
             foreignKeyName: "backtests_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
+          },
+          {
+            foreignKeyName: "backtests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -139,11 +146,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "comments_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
           },
           {
             foreignKeyName: "comments_user_id_fkey"
@@ -213,6 +234,13 @@ export type Database = {
             foreignKeyName: "deployed_models_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
+          },
+          {
+            foreignKeyName: "deployed_models_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -249,6 +277,13 @@ export type Database = {
             foreignKeyName: "follows_follower_id_fkey"
             columns: ["follower_id"]
             isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
+          },
+          {
+            foreignKeyName: "follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -258,6 +293,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follows_following_id_fkey"
+            columns: ["following_id"]
+            isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
           },
           {
             foreignKeyName: "follows_following_id_fkey"
@@ -310,6 +352,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "holdings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
           },
           {
             foreignKeyName: "holdings_user_id_fkey"
@@ -497,6 +546,13 @@ export type Database = {
             foreignKeyName: "models_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
+          },
+          {
+            foreignKeyName: "models_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -576,6 +632,13 @@ export type Database = {
             foreignKeyName: "orders_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
+          },
+          {
+            foreignKeyName: "orders_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -609,11 +672,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "post_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "post_likes_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
           },
           {
             foreignKeyName: "post_likes_user_id_fkey"
@@ -672,6 +749,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
           },
           {
             foreignKeyName: "posts_user_id_fkey"
@@ -868,6 +952,13 @@ export type Database = {
             foreignKeyName: "subscriber_trades_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
+          },
+          {
+            foreignKeyName: "subscriber_trades_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -921,6 +1012,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
           },
           {
             foreignKeyName: "subscriptions_subscriber_id_fkey"
@@ -1062,6 +1160,13 @@ export type Database = {
             foreignKeyName: "trading_activity_logs_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
+          },
+          {
+            foreignKeyName: "trading_activity_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -1163,6 +1268,13 @@ export type Database = {
             foreignKeyName: "user_balances_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
+          },
+          {
+            foreignKeyName: "user_balances_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -1170,6 +1282,7 @@ export type Database = {
       }
       user_brokerage_accounts: {
         Row: {
+          access_count: number | null
           account_id: string | null
           account_status: string | null
           account_type: string
@@ -1180,12 +1293,14 @@ export type Database = {
           daily_trade_limit: number | null
           id: string
           is_active: boolean | null
+          last_accessed_at: string | null
           last_verified_at: string | null
           per_trade_limit: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          access_count?: number | null
           account_id?: string | null
           account_status?: string | null
           account_type: string
@@ -1196,12 +1311,14 @@ export type Database = {
           daily_trade_limit?: number | null
           id?: string
           is_active?: boolean | null
+          last_accessed_at?: string | null
           last_verified_at?: string | null
           per_trade_limit?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          access_count?: number | null
           account_id?: string | null
           account_status?: string | null
           account_type?: string
@@ -1212,6 +1329,7 @@ export type Database = {
           daily_trade_limit?: number | null
           id?: string
           is_active?: boolean | null
+          last_accessed_at?: string | null
           last_verified_at?: string | null
           per_trade_limit?: number | null
           updated_at?: string
@@ -1224,6 +1342,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_brokerage_accounts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
           },
           {
             foreignKeyName: "user_brokerage_accounts_user_id_fkey"
@@ -1353,6 +1478,13 @@ export type Database = {
             foreignKeyName: "watchlist_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
+          },
+          {
+            foreignKeyName: "watchlist_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
@@ -1396,7 +1528,40 @@ export type Database = {
             foreignKeyName: "models_user_id_fkey"
             columns: ["model_owner_id"]
             isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
+          },
+          {
+            foreignKeyName: "models_user_id_fkey"
+            columns: ["model_owner_id"]
+            isOneToOne: false
             referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      public_posts: {
+        Row: {
+          author_profile_id: string | null
+          avatar_url: string | null
+          comments_count: number | null
+          content: string | null
+          created_at: string | null
+          display_name: string | null
+          id: string | null
+          is_verified: boolean | null
+          likes_count: number | null
+          model_id: string | null
+          post_type: string | null
+          updated_at: string | null
+          username: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posts_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "models"
             referencedColumns: ["id"]
           },
         ]
@@ -1466,6 +1631,43 @@ export type Database = {
       }
     }
     Functions: {
+      get_backtest_trade_summary: {
+        Args: { p_model_id?: string }
+        Returns: {
+          avg_pnl_per_trade: number
+          backtest_id: string
+          buy_count: number
+          first_trade_date: string
+          is_public: boolean
+          last_trade_date: string
+          losing_trades: number
+          model_id: string
+          model_owner_id: string
+          sell_count: number
+          total_pnl: number
+          total_trades: number
+          win_rate_pct: number
+          winning_trades: number
+        }[]
+      }
+      get_public_posts: {
+        Args: { limit_count?: number }
+        Returns: {
+          author_profile_id: string
+          avatar_url: string
+          comments_count: number
+          content: string
+          created_at: string
+          display_name: string
+          id: string
+          is_verified: boolean
+          likes_count: number
+          model_id: string
+          post_type: string
+          updated_at: string
+          username: string
+        }[]
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]

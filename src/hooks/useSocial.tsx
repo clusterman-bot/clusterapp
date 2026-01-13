@@ -73,27 +73,46 @@ export function usePublicFeed() {
   return useQuery({
     queryKey: ['public-feed'],
     queryFn: async () => {
+      // Use the secure function that doesn't expose raw user_id
       const { data, error } = await supabase
-        .from('posts')
-        .select(`
-          *,
-          profiles:user_id (
-            id,
-            username,
-            display_name,
-            avatar_url,
-            is_verified
-          ),
-          models:model_id (
-            id,
-            name
-          )
-        `)
-        .order('created_at', { ascending: false })
-        .limit(20);
+        .rpc('get_public_posts', { limit_count: 20 });
       
       if (error) throw error;
-      return data as Post[];
+      
+      // Transform to match Post interface expected by components
+      return (data || []).map((post: {
+        id: string;
+        content: string;
+        post_type: string;
+        model_id: string | null;
+        likes_count: number;
+        comments_count: number;
+        created_at: string;
+        updated_at: string;
+        author_profile_id: string;
+        username: string | null;
+        display_name: string | null;
+        avatar_url: string | null;
+        is_verified: boolean;
+      }) => ({
+        id: post.id,
+        user_id: post.author_profile_id, // Map to user_id for component compatibility
+        content: post.content,
+        post_type: post.post_type as 'update' | 'insight' | 'model_update' | 'announcement',
+        model_id: post.model_id,
+        likes_count: post.likes_count,
+        comments_count: post.comments_count,
+        created_at: post.created_at,
+        updated_at: post.updated_at,
+        profiles: {
+          id: post.author_profile_id,
+          username: post.username,
+          display_name: post.display_name,
+          avatar_url: post.avatar_url,
+          is_verified: post.is_verified,
+        },
+        models: null, // Model info not included in public function
+      })) as Post[];
     },
   });
 }
