@@ -253,6 +253,57 @@ export function useCreateComment() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['comments', variables.postId] });
       queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+    },
+  });
+}
+
+export function useUpdatePost() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  
+  return useMutation({
+    mutationFn: async ({ postId, content }: { postId: string; content: string }) => {
+      if (!user?.id) throw new Error('Not authenticated');
+      
+      const { data, error } = await supabase
+        .from('posts')
+        .update({ content, updated_at: new Date().toISOString() })
+        .eq('id', postId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+      queryClient.invalidateQueries({ queryKey: ['public-feed'] });
+    },
+  });
+}
+
+export function useDeletePost() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  
+  return useMutation({
+    mutationFn: async (postId: string) => {
+      if (!user?.id) throw new Error('Not authenticated');
+      
+      const { error } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', postId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+      queryClient.invalidateQueries({ queryKey: ['public-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }
