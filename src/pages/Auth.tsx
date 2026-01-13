@@ -45,16 +45,21 @@ export default function Auth() {
       return;
     }
     
-    // Wait for role to finish loading, but don't wait forever
+    // Wait for role to finish loading
     if (roleLoading) return;
     
-    // Route based on role (default to dashboard if no role found)
-    if (userRole?.role === 'admin') {
+    // If user has no role (new Google sign-up), redirect to onboarding
+    if (!userRole) {
+      navigate('/onboarding', { replace: true });
+      return;
+    }
+    
+    // Route based on role
+    if (userRole.role === 'admin') {
       navigate('/admin', { replace: true });
-    } else if (userRole?.role === 'retail_trader') {
+    } else if (userRole.role === 'retail_trader') {
       navigate('/trader-dashboard', { replace: true });
     } else {
-      // Default to dashboard for developers or users without a role yet
       navigate('/dashboard', { replace: true });
     }
   }, [user, userRole, authLoading, roleLoading, navigate, justSignedOut]);
@@ -70,6 +75,8 @@ export default function Auth() {
 
   // If user is logged in with confirmed email (and not just signed out), show loading while redirect happens
   if (user && user.email_confirmed_at && !justSignedOut && !roleLoading) {
+    // If user has no role, they'll be redirected to onboarding
+    // If user has a role, they'll be redirected to their dashboard
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Redirecting...</p>
