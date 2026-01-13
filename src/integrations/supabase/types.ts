@@ -982,6 +982,13 @@ export type Database = {
             foreignKeyName: "trades_backtest_id_fkey"
             columns: ["backtest_id"]
             isOneToOne: false
+            referencedRelation: "backtest_trade_summary"
+            referencedColumns: ["backtest_id"]
+          },
+          {
+            foreignKeyName: "trades_backtest_id_fkey"
+            columns: ["backtest_id"]
+            isOneToOne: false
             referencedRelation: "backtests"
             referencedColumns: ["id"]
           },
@@ -1353,6 +1360,47 @@ export type Database = {
       }
     }
     Views: {
+      backtest_trade_summary: {
+        Row: {
+          avg_pnl_per_trade: number | null
+          backtest_id: string | null
+          buy_count: number | null
+          first_trade_date: string | null
+          is_public: boolean | null
+          last_trade_date: string | null
+          losing_trades: number | null
+          model_id: string | null
+          model_owner_id: string | null
+          sell_count: number | null
+          total_pnl: number | null
+          total_trades: number | null
+          win_rate_pct: number | null
+          winning_trades: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backtests_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "models_user_id_fkey"
+            columns: ["model_owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "models_user_id_fkey"
+            columns: ["model_owner_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       public_profiles: {
         Row: {
           avatar_url: string | null

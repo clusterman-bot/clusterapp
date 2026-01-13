@@ -6,31 +6,83 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Simple XOR-based encryption for API keys (in production, use proper encryption)
-function encryptKey(key: string, secret: string): string {
+// SECURITY: AES-256-GCM encryption for API keys
+// Uses Web Crypto API for proper authenticated encryption
+async function deriveKey(secret: string, salt: ArrayBuffer): Promise<CryptoKey> {
   const encoder = new TextEncoder();
-  const keyBytes = encoder.encode(key);
-  const secretBytes = encoder.encode(secret.padEnd(key.length, secret));
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    'PBKDF2',
+    false,
+    ['deriveKey']
+  );
   
-  const encrypted = new Uint8Array(keyBytes.length);
-  for (let i = 0; i < keyBytes.length; i++) {
-    encrypted[i] = keyBytes[i] ^ secretBytes[i % secretBytes.length];
-  }
-  
-  return btoa(String.fromCharCode(...encrypted));
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: 100000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
 }
 
-function decryptKey(encrypted: string, secret: string): string {
-  const encryptedBytes = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
+async function encryptKey(plaintext: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
-  const secretBytes = encoder.encode(secret.padEnd(encryptedBytes.length, secret));
+  const saltArray = crypto.getRandomValues(new Uint8Array(16));
+  const ivArray = crypto.getRandomValues(new Uint8Array(12));
   
-  const decrypted = new Uint8Array(encryptedBytes.length);
-  for (let i = 0; i < encryptedBytes.length; i++) {
-    decrypted[i] = encryptedBytes[i] ^ secretBytes[i % secretBytes.length];
-  }
+  const key = await deriveKey(secret, saltArray.buffer as ArrayBuffer);
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: ivArray },
+    key,
+    encoder.encode(plaintext)
+  );
+  
+  // Combine salt + iv + ciphertext
+  const combined = new Uint8Array(saltArray.length + ivArray.length + encrypted.byteLength);
+  combined.set(saltArray, 0);
+  combined.set(ivArray, saltArray.length);
+  combined.set(new Uint8Array(encrypted), saltArray.length + ivArray.length);
+  
+  return btoa(String.fromCharCode(...combined));
+}
+
+async function decryptKey(encrypted: string, secret: string): Promise<string> {
+  const combined = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
+  
+  const saltArray = combined.slice(0, 16);
+  const ivArray = combined.slice(16, 28);
+  const ciphertext = combined.slice(28);
+  
+  const key = await deriveKey(secret, saltArray.buffer as ArrayBuffer);
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: ivArray },
+    key,
+    ciphertext
+  );
   
   return new TextDecoder().decode(decrypted);
+}
+
+// Helper for error sanitization
+function sanitizeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'Unknown error';
+  // Only return safe, generic messages for known error types
+  const safeMessages: Record<string, string> = {
+    'Missing required parameters': 'Missing required parameters',
+    'Account ID required': 'Account ID required',
+    'Account not found': 'Account not found',
+    'Account not found or inactive': 'Account not found or inactive',
+    'Account credentials are no longer valid': 'Account credentials are no longer valid',
+    'Invalid API credentials. Please check your API key and secret.': 'Invalid API credentials. Please check your API key and secret.',
+  };
+  return safeMessages[message] || 'An error occurred while processing your request';
 }
 
 serve(async (req) => {
@@ -109,9 +161,9 @@ serve(async (req) => {
         const accountData = await verifyResponse.json();
         console.log('[Brokerage] Account verified:', accountData.account_number);
 
-        // Encrypt the API keys before storing
-        const encryptedApiKey = encryptKey(apiKey, encryptionSecret);
-        const encryptedApiSecret = encryptKey(apiSecret, encryptionSecret);
+        // Encrypt the API keys before storing (using AES-256-GCM)
+        const encryptedApiKey = await encryptKey(apiKey, encryptionSecret);
+        const encryptedApiSecret = await encryptKey(apiSecret, encryptionSecret);
 
         // Check if account already exists
         const { data: existing } = await supabase
@@ -276,9 +328,9 @@ serve(async (req) => {
           throw new Error('Account not found');
         }
 
-        // Decrypt credentials
-        const apiKey = decryptKey(account.api_key_encrypted, encryptionSecret);
-        const apiSecret = decryptKey(account.api_secret_encrypted, encryptionSecret);
+        // Decrypt credentials (AES-256-GCM)
+        const apiKey = await decryptKey(account.api_key_encrypted, encryptionSecret);
+        const apiSecret = await decryptKey(account.api_secret_encrypted, encryptionSecret);
 
         // Verify with Alpaca
         const alpacaBaseUrl = account.account_type === 'paper' 
@@ -351,9 +403,9 @@ serve(async (req) => {
           throw new Error('Account not found or inactive');
         }
 
-        // Decrypt credentials
-        const apiKey = decryptKey(account.api_key_encrypted, encryptionSecret);
-        const apiSecret = decryptKey(account.api_secret_encrypted, encryptionSecret);
+        // Decrypt credentials (AES-256-GCM)
+        const apiKey = await decryptKey(account.api_key_encrypted, encryptionSecret);
+        const apiSecret = await decryptKey(account.api_secret_encrypted, encryptionSecret);
 
         return new Response(
           JSON.stringify({ 
@@ -378,10 +430,10 @@ serve(async (req) => {
     }
 
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[Brokerage] Error:', errorMessage);
+    console.error('[Brokerage] Error:', error instanceof Error ? error.message : 'Unknown error');
+    // SECURITY: Sanitize error messages to prevent information leakage
     return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
+      JSON.stringify({ success: false, error: sanitizeError(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

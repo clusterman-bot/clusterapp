@@ -10,18 +10,56 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ML_BACKEND_URL = Deno.env.get('ML_BACKEND_URL');
 
-// Simple XOR-based decryption (must match brokerage-accounts function)
-function decryptKey(encrypted: string, secret: string): string {
-  const encryptedBytes = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
+// SECURITY: AES-256-GCM decryption (must match brokerage-accounts function)
+async function deriveKey(secret: string, salt: ArrayBuffer): Promise<CryptoKey> {
   const encoder = new TextEncoder();
-  const secretBytes = encoder.encode(secret.padEnd(encryptedBytes.length, secret));
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    'PBKDF2',
+    false,
+    ['deriveKey']
+  );
   
-  const decrypted = new Uint8Array(encryptedBytes.length);
-  for (let i = 0; i < encryptedBytes.length; i++) {
-    decrypted[i] = encryptedBytes[i] ^ secretBytes[i % secretBytes.length];
-  }
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: 100000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function decryptKey(encrypted: string, secret: string): Promise<string> {
+  const combined = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
+  
+  const saltArray = combined.slice(0, 16);
+  const ivArray = combined.slice(16, 28);
+  const ciphertext = combined.slice(28);
+  
+  const key = await deriveKey(secret, saltArray.buffer as ArrayBuffer);
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: ivArray },
+    key,
+    ciphertext
+  );
   
   return new TextDecoder().decode(decrypted);
+}
+
+// Helper for error sanitization
+function sanitizeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'Unknown error';
+  const safeMessages: Record<string, string> = {
+    'Model not found or you do not own it': 'Model not found or you do not own it',
+    'Model not deployed or not running': 'Model not deployed or not running',
+  };
+  return safeMessages[message] || 'An error occurred while processing your request';
 }
 
 serve(async (req) => {
@@ -251,9 +289,9 @@ serve(async (req) => {
         });
     }
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[TradingBot] Error:', errorMessage);
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    console.error('[TradingBot] Error:', error instanceof Error ? error.message : 'Unknown error');
+    // SECURITY: Sanitize error messages to prevent information leakage
+    return new Response(JSON.stringify({ error: sanitizeError(error) }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
@@ -345,9 +383,9 @@ async function executeTradeForOwnerAndSubscribers(
         continue;
       }
 
-      // Decrypt credentials
-      const alpacaApiKey = decryptKey(brokerageAccount.api_key_encrypted, encryptionSecret);
-      const alpacaApiSecret = decryptKey(brokerageAccount.api_secret_encrypted, encryptionSecret);
+      // Decrypt credentials (AES-256-GCM)
+      const alpacaApiKey = await decryptKey(brokerageAccount.api_key_encrypted, encryptionSecret);
+      const alpacaApiSecret = await decryptKey(brokerageAccount.api_secret_encrypted, encryptionSecret);
 
       // Place order via Alpaca
       const alpacaUrl = 'https://paper-api.alpaca.markets/v2/orders';

@@ -71,6 +71,19 @@ serve(async (req) => {
           });
         }
 
+        // SECURITY: Server-side validation of dangerous code patterns
+        const serverValidation = validatePythonCodeServer(code);
+        if (!serverValidation.valid) {
+          console.log(`[Sandbox] Code rejected for user ${user.id}: ${serverValidation.issues.join(', ')}`);
+          return new Response(JSON.stringify({ 
+            error: 'Code contains disallowed operations',
+            issues: serverValidation.issues 
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
         console.log(`Sandbox execution request - Model: ${model_id}, Demo: ${demo_mode}`);
 
         // Create execution record
@@ -125,7 +138,8 @@ serve(async (req) => {
     });
   } catch (error: any) {
     console.error('Error in sandbox-execute function:', error);
-    return new Response(JSON.stringify({ error: error.message || 'Unknown error' }), {
+    // SECURITY: Sanitize error messages to prevent information leakage
+    return new Response(JSON.stringify({ error: 'An error occurred while processing your request' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -198,7 +212,74 @@ async function simulateSandboxExecution(
   };
 }
 
-// Validate Python code structure
+// SECURITY: Server-side validation for dangerous code patterns
+// This runs on every execution request, not just validation endpoints
+function validatePythonCodeServer(code: string): { valid: boolean; issues: string[] } {
+  const issues: string[] = [];
+  
+  // Dangerous module imports
+  const dangerousModules = [
+    'os', 'subprocess', 'sys', 'shutil', 'socket', 'requests', 
+    'urllib', 'http', 'ftplib', 'smtplib', 'telnetlib', 'pickle',
+    'marshal', 'shelve', 'ctypes', 'multiprocessing', 'threading',
+    '__builtins__', 'builtins', 'importlib', 'code', 'codeop',
+    'compile', 'ast', 'tokenize', 'pathlib', 'glob', 'tempfile'
+  ];
+  
+  for (const mod of dangerousModules) {
+    const importPatterns = [
+      new RegExp(`import\\s+${mod}\\b`),
+      new RegExp(`from\\s+${mod}\\b`),
+      new RegExp(`__import__\\s*\\(\\s*['"]${mod}['"]`),
+    ];
+    for (const pattern of importPatterns) {
+      if (pattern.test(code)) {
+        issues.push(`Module '${mod}' is not allowed in sandbox`);
+        break;
+      }
+    }
+  }
+  
+  // Dangerous function calls
+  const dangerousFunctions = [
+    { pattern: /\bexec\s*\(/, name: 'exec()' },
+    { pattern: /\beval\s*\(/, name: 'eval()' },
+    { pattern: /\bcompile\s*\(/, name: 'compile()' },
+    { pattern: /\bopen\s*\(/, name: 'open()' },
+    { pattern: /\bgetattr\s*\(/, name: 'getattr()' },
+    { pattern: /\bsetattr\s*\(/, name: 'setattr()' },
+    { pattern: /\bdelattr\s*\(/, name: 'delattr()' },
+    { pattern: /\b__import__\s*\(/, name: '__import__()' },
+    { pattern: /\bglobals\s*\(/, name: 'globals()' },
+    { pattern: /\blocals\s*\(/, name: 'locals()' },
+    { pattern: /\bvars\s*\(/, name: 'vars()' },
+    { pattern: /\bdir\s*\(/, name: 'dir()' },
+    { pattern: /\binput\s*\(/, name: 'input()' },
+    { pattern: /\bbreakpoint\s*\(/, name: 'breakpoint()' },
+  ];
+  
+  for (const { pattern, name } of dangerousFunctions) {
+    if (pattern.test(code)) {
+      issues.push(`Function ${name} is not allowed in sandbox`);
+    }
+  }
+  
+  // Dangerous dunder access
+  const dangerousDunders = [
+    '__class__', '__bases__', '__subclasses__', '__mro__', '__code__',
+    '__globals__', '__builtins__', '__dict__', '__module__', '__func__'
+  ];
+  
+  for (const dunder of dangerousDunders) {
+    if (code.includes(dunder)) {
+      issues.push(`Access to '${dunder}' is not allowed in sandbox`);
+    }
+  }
+  
+  return { valid: issues.length === 0, issues };
+}
+
+// Validate Python code structure (for client validation endpoint)
 function validatePythonCode(code: string) {
   const issues: string[] = [];
   const warnings: string[] = [];
@@ -218,21 +299,9 @@ function validatePythonCode(code: string) {
     warnings.push("Code should set a 'signal' column in the returned DataFrame");
   }
 
-  // Check for potentially dangerous operations
-  const dangerousPatterns = [
-    { pattern: /import\s+os/, message: 'os module is not allowed in sandbox' },
-    { pattern: /import\s+subprocess/, message: 'subprocess module is not allowed in sandbox' },
-    { pattern: /import\s+sys/, message: 'sys module access is restricted' },
-    { pattern: /open\s*\(/, message: 'File operations are not allowed' },
-    { pattern: /exec\s*\(/, message: 'exec() is not allowed' },
-    { pattern: /eval\s*\(/, message: 'eval() is not allowed' },
-  ];
-
-  for (const { pattern, message } of dangerousPatterns) {
-    if (pattern.test(code)) {
-      issues.push(message);
-    }
-  }
+  // Run server-side security validation too
+  const serverValidation = validatePythonCodeServer(code);
+  issues.push(...serverValidation.issues);
 
   return {
     valid: issues.length === 0,
