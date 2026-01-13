@@ -39,7 +39,16 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const encryptionSecret = Deno.env.get('ENCRYPTION_SECRET') || 'default-secret-change-in-production';
+    const encryptionSecret = Deno.env.get('ENCRYPTION_SECRET');
+    
+    // SECURITY: Fail if encryption secret is not configured
+    if (!encryptionSecret) {
+      console.error('[Alpaca] CRITICAL: ENCRYPTION_SECRET not configured');
+      return new Response(
+        JSON.stringify({ error: 'Server configuration error' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Get auth token
     const authHeader = req.headers.get('authorization');

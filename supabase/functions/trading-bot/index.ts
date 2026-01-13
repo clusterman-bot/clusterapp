@@ -282,7 +282,13 @@ async function executeTradeForOwnerAndSubscribers(
   deployment: any,
   signal: any
 ) {
-  const encryptionSecret = Deno.env.get('ENCRYPTION_SECRET') || 'default-secret-change-in-production';
+  const encryptionSecret = Deno.env.get('ENCRYPTION_SECRET');
+  
+  // SECURITY: Fail if encryption secret is not configured
+  if (!encryptionSecret) {
+    console.error('[TradingBot] CRITICAL: ENCRYPTION_SECRET not configured');
+    return;
+  }
   const side = signal.signal_type === 'BUY' ? 'buy' : 'sell';
   
   console.log(`[TradingBot] Executing ${side} trade for signal ${signal.id}`);
