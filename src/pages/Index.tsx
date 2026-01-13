@@ -5,13 +5,14 @@ import { usePublicFeed, useLikesForPosts, useLikePost, useUnlikePost, Post as So
 import { MainNav } from '@/components/MainNav';
 import { UserProfileSidebar } from '@/components/UserProfileSidebar';
 import { OnlineUsers } from '@/components/OnlineUsers';
+import { SocialPostCard } from '@/components/SocialPostCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
-  TrendingUp, Heart, MessageCircle, Code, LineChart, 
+  TrendingUp, Code, LineChart, 
   Compass, BarChart3, Users, ArrowUpRight, Zap, Plus
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -80,79 +81,13 @@ export default function Index() {
     }
   };
 
-  const PostCard = ({ post }: { post: SocialPost }) => (
-    <Card className="mb-4 hover:border-primary/50 transition-colors">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div 
-            className="flex items-center gap-3 cursor-pointer"
-            onClick={() => navigate(`/profile/${post.profiles?.id}`)}
-          >
-            <Avatar>
-              <AvatarImage src={post.profiles?.avatar_url || undefined} />
-              <AvatarFallback>
-                {post.profiles?.display_name?.[0] || post.profiles?.username?.[0] || '?'}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-medium hover:underline">
-                  {post.profiles?.display_name || post.profiles?.username}
-                </span>
-                {post.profiles?.is_verified && (
-                  <Badge variant="secondary" className="text-xs">Verified</Badge>
-                )}
-                {post.post_type === 'model_update' && (
-                  <Badge variant="outline" className="text-xs">
-                    <Code className="h-3 w-3 mr-1" />
-                    Developer
-                  </Badge>
-                )}
-              </div>
-              <span className="text-sm text-muted-foreground">
-                @{post.profiles?.username} • {post.created_at && formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
-              </span>
-            </div>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="whitespace-pre-wrap mb-4">{post.content}</p>
-
-        {post.models && (
-          <Card 
-            className="mb-4 cursor-pointer hover:bg-muted/50 transition-colors"
-            onClick={() => navigate(`/models/${post.models?.id}`)}
-          >
-            <CardContent className="py-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                  <span className="font-medium">{post.models.name}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        <div className="flex items-center gap-6 text-muted-foreground">
-          <button 
-            className={`flex items-center gap-2 hover:text-primary transition-colors ${likedPostIds.has(post.id) ? 'text-red-500' : ''}`}
-            onClick={() => handleLike(post.id)}
-          >
-            <Heart className={`h-4 w-4 ${likedPostIds.has(post.id) ? 'fill-current' : ''}`} />
-            <span className="text-sm">{post.likes_count || 0}</span>
-          </button>
-          <button 
-            className="flex items-center gap-2 hover:text-primary transition-colors"
-            onClick={() => user ? null : navigate('/auth')}
-          >
-            <MessageCircle className="h-4 w-4" />
-            <span className="text-sm">{post.comments_count || 0}</span>
-          </button>
-        </div>
-      </CardContent>
-    </Card>
+  const renderPost = (post: SocialPost) => (
+    <SocialPostCard
+      key={post.id}
+      post={post}
+      isLiked={likedPostIds.has(post.id)}
+      onLike={handleLike}
+    />
   );
 
   const ModelCard = ({ model }: { model: any }) => (
@@ -239,7 +174,7 @@ export default function Index() {
                       ))}
                     </div>
                   ) : allPosts.length > 0 ? (
-                    allPosts.map((post) => <PostCard key={post.id} post={post} />)
+                    allPosts.map((post) => renderPost(post))
                   ) : (
                     <Card className="text-center py-12">
                       <CardContent>
@@ -252,7 +187,7 @@ export default function Index() {
 
                 <TabsContent value="developers">
                   {developerPosts.length > 0 ? (
-                    developerPosts.map((post) => <PostCard key={post.id} post={post} />)
+                    developerPosts.map((post) => renderPost(post))
                   ) : (
                     <Card className="text-center py-12">
                       <CardContent>
@@ -264,7 +199,7 @@ export default function Index() {
 
                 <TabsContent value="traders">
                   {retailPosts.length > 0 ? (
-                    retailPosts.map((post) => <PostCard key={post.id} post={post} />)
+                    retailPosts.map((post) => renderPost(post))
                   ) : (
                     <Card className="text-center py-12">
                       <CardContent>
@@ -441,7 +376,7 @@ export default function Index() {
                     ))}
                   </div>
                 ) : allPosts.length > 0 ? (
-                  allPosts.map((post) => <PostCard key={post.id} post={post} />)
+                  allPosts.map((post) => renderPost(post))
                 ) : (
                   <Card className="text-center py-12">
                     <CardContent>
@@ -454,7 +389,7 @@ export default function Index() {
 
               <TabsContent value="developers">
                 {developerPosts.length > 0 ? (
-                  developerPosts.map((post) => <PostCard key={post.id} post={post} />)
+                  developerPosts.map((post) => renderPost(post))
                 ) : (
                   <Card className="text-center py-12">
                     <CardContent>
@@ -466,7 +401,7 @@ export default function Index() {
 
               <TabsContent value="traders">
                 {retailPosts.length > 0 ? (
-                  retailPosts.map((post) => <PostCard key={post.id} post={post} />)
+                  retailPosts.map((post) => renderPost(post))
                 ) : (
                   <Card className="text-center py-12">
                     <CardContent>
