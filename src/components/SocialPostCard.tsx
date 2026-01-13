@@ -9,7 +9,7 @@ import {
   Code, LineChart, TrendingUp, Repeat2, Pencil, Trash2, Shield
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { Post as SocialPost } from '@/hooks/useSocial';
+import { Post as SocialPost, useFollow, useUnfollow, useIsFollowing } from '@/hooks/useSocial';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useUserRole';
 import { PostEditDialog } from '@/components/PostEditDialog';
@@ -21,6 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface SocialPostCardProps {
   post: SocialPost;
@@ -44,13 +45,36 @@ export function SocialPostCard({
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isAdmin } = useIsAdmin();
+  const queryClient = useQueryClient();
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
+  // Get the profile ID from post data
+  const profileId = post.profiles?.id || post.user_id;
+  
   const isOwnPost = user?.id === post.user_id;
   const canModify = isOwnPost || isAdmin;
   const isDeveloper = post.post_type === 'model_update' || post.post_type === 'announcement';
+  
+  // Follow state for dropdown menu
+  const { data: isFollowing } = useIsFollowing(profileId);
+  const follow = useFollow();
+  const unfollow = useUnfollow();
+
+  const handleFollowFromDropdown = async () => {
+    if (!profileId || isOwnPost) return;
+    try {
+      if (isFollowing) {
+        await unfollow.mutateAsync(profileId);
+      } else {
+        await follow.mutateAsync(profileId);
+      }
+      queryClient.invalidateQueries({ queryKey: ['following'] });
+    } catch (error) {
+      console.error('Follow error:', error);
+    }
+  };
   
   const handleShare = () => {
     if (navigator.share) {
@@ -117,9 +141,11 @@ export function SocialPostCard({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-popover">
-                  {!isOwnPost && (
+                  {!isOwnPost && user && (
                     <>
-                      <DropdownMenuItem>Follow @{post.profiles?.username}</DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleFollowFromDropdown}>
+                        {isFollowing ? 'Unfollow' : 'Follow'} @{post.profiles?.username}
+                      </DropdownMenuItem>
                       <DropdownMenuItem>Mute @{post.profiles?.username}</DropdownMenuItem>
                     </>
                   )}
