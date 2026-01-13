@@ -25,6 +25,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { AvatarUpload } from '@/components/profile/AvatarUpload';
 import { SocialLinks } from '@/components/profile/SocialLinks';
+import { MFASetup } from '@/components/auth/MFASetup';
 
 export default function Profile() {
   const { userId } = useParams<{ userId: string }>();
@@ -404,77 +405,99 @@ export default function Profile() {
 
           {/* Content Tabs - Different for retail vs developer */}
           {isRetailTrader && isOwnProfile ? (
-            // Retail trader view - About section only
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" /> About
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-4">
-                    <div className="flex items-start gap-3">
-                      <Award className="h-5 w-5 text-primary mt-0.5" />
-                      <div>
-                        <h3 className="font-medium">Experience Level</h3>
-                        <p className="text-muted-foreground capitalize">
-                          {profile.experience_level || 'Not specified'}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-3">
-                      <Calendar className="h-5 w-5 text-primary mt-0.5" />
-                      <div>
-                        <h3 className="font-medium">Member Since</h3>
-                        <p className="text-muted-foreground">
-                          {new Date(profile.created_at!).toLocaleDateString('en-US', { 
-                            month: 'long', 
-                            year: 'numeric' 
-                          })}
-                        </p>
-                      </div>
-                    </div>
+            // Retail trader view - About and Security tabs
+            <Tabs defaultValue="about">
+              <TabsList>
+                <TabsTrigger value="about">
+                  <User className="h-4 w-4 mr-2" />
+                  About
+                </TabsTrigger>
+                <TabsTrigger value="security">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Security
+                </TabsTrigger>
+              </TabsList>
 
-                    <div className="flex items-start gap-3">
-                      <Briefcase className="h-5 w-5 text-primary mt-0.5" />
-                      <div>
-                        <h3 className="font-medium">Account Type</h3>
-                        <p className="text-muted-foreground">Retail Trader</p>
+              <TabsContent value="about">
+                <Card>
+                  <CardContent className="pt-6 space-y-6">
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3">
+                          <Award className="h-5 w-5 text-primary mt-0.5" />
+                          <div>
+                            <h3 className="font-medium">Experience Level</h3>
+                            <p className="text-muted-foreground capitalize">
+                              {profile.experience_level || 'Not specified'}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-start gap-3">
+                          <Calendar className="h-5 w-5 text-primary mt-0.5" />
+                          <div>
+                            <h3 className="font-medium">Member Since</h3>
+                            <p className="text-muted-foreground">
+                              {new Date(profile.created_at!).toLocaleDateString('en-US', { 
+                                month: 'long', 
+                                year: 'numeric' 
+                              })}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                          <Briefcase className="h-5 w-5 text-primary mt-0.5" />
+                          <div>
+                            <h3 className="font-medium">Account Type</h3>
+                            <p className="text-muted-foreground">Retail Trader</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        {profile.trading_philosophy && (
+                          <div>
+                            <h3 className="font-medium mb-2">Trading Philosophy</h3>
+                            <p className="text-muted-foreground">{profile.trading_philosophy}</p>
+                          </div>
+                        )}
+                        
+                        {profile.bio && (
+                          <div>
+                            <h3 className="font-medium mb-2">Bio</h3>
+                            <p className="text-muted-foreground">{profile.bio}</p>
+                          </div>
+                        )}
+
+                        {!profile.trading_philosophy && !profile.bio && (
+                          <div className="text-center py-8">
+                            <p className="text-muted-foreground mb-4">
+                              Complete your profile to share more about yourself
+                            </p>
+                            <Button variant="outline" onClick={handleOpenEdit}>
+                              <Settings className="mr-2 h-4 w-4" /> Edit Profile
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="security">
+                <div className="space-y-4">
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold mb-2">Account Security</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Manage your account security settings
+                    </p>
                   </div>
-
-                  <div className="space-y-4">
-                    {profile.trading_philosophy && (
-                      <div>
-                        <h3 className="font-medium mb-2">Trading Philosophy</h3>
-                        <p className="text-muted-foreground">{profile.trading_philosophy}</p>
-                      </div>
-                    )}
-                    
-                    {profile.bio && (
-                      <div>
-                        <h3 className="font-medium mb-2">Bio</h3>
-                        <p className="text-muted-foreground">{profile.bio}</p>
-                      </div>
-                    )}
-
-                    {!profile.trading_philosophy && !profile.bio && (
-                      <div className="text-center py-8">
-                        <p className="text-muted-foreground mb-4">
-                          Complete your profile to share more about yourself
-                        </p>
-                        <Button variant="outline" onClick={handleOpenEdit}>
-                          <Settings className="mr-2 h-4 w-4" /> Edit Profile
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                  <MFASetup />
                 </div>
-              </CardContent>
-            </Card>
+              </TabsContent>
+            </Tabs>
           ) : (
             // Developer/Admin view - Marketplace and About tabs
             <Tabs defaultValue="marketplace">
@@ -487,6 +510,12 @@ export default function Profile() {
                   <User className="h-4 w-4 mr-2" />
                   About
                 </TabsTrigger>
+                {isOwnProfile && (
+                  <TabsTrigger value="security">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Security
+                  </TabsTrigger>
+                )}
               </TabsList>
 
               <TabsContent value="marketplace">
@@ -629,6 +658,21 @@ export default function Profile() {
                   </CardContent>
                 </Card>
               </TabsContent>
+
+              {/* Security Tab - MFA Setup */}
+              {isOwnProfile && (
+                <TabsContent value="security">
+                  <div className="space-y-4">
+                    <div className="mb-4">
+                      <h3 className="text-lg font-semibold mb-2">Account Security</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Manage your account security settings
+                      </p>
+                    </div>
+                    <MFASetup />
+                  </div>
+                </TabsContent>
+              )}
             </Tabs>
           )}
         </div>

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { MainNav } from '@/components/MainNav';
-import { OnlineUsers } from '@/components/OnlineUsers';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -223,8 +222,6 @@ export default function Explore() {
           {/* Right Sidebar */}
           <div className="hidden lg:block">
             <div className="sticky top-20 space-y-4">
-              <OnlineUsers />
-              
               {/* Quick Stats */}
               <Card>
                 <CardHeader className="pb-3">
