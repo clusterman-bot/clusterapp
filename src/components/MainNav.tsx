@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   TrendingUp, Home, Store, 
-  LayoutDashboard, LogOut, User, LineChart
+  LayoutDashboard, LogOut, User, LineChart, Shield, Code
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -113,7 +114,17 @@ export function MainNav() {
               <DropdownMenuContent className="w-56 bg-popover" align="end">
                 <div className="flex items-center justify-start gap-2 p-2">
                   <div className="flex flex-col space-y-1 leading-none">
-                    <p className="font-medium">{profile?.display_name || profile?.username}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{profile?.display_name || profile?.username}</p>
+                      {userRole?.role && (
+                        <Badge variant="secondary" className="text-xs capitalize">
+                          {userRole.role === 'admin' && <Shield className="h-3 w-3 mr-1" />}
+                          {userRole.role === 'developer' && <Code className="h-3 w-3 mr-1" />}
+                          {userRole.role === 'retail_trader' && <LineChart className="h-3 w-3 mr-1" />}
+                          {userRole.role === 'admin' ? 'Admin' : userRole.role === 'retail_trader' ? 'Trader' : 'Developer'}
+                        </Badge>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground">@{profile?.username}</p>
                   </div>
                 </div>

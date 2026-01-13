@@ -4,6 +4,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { usePublicFeed, useLikesForPosts, useLikePost, useUnlikePost, Post as SocialPost } from '@/hooks/useSocial';
 import { MainNav } from '@/components/MainNav';
 import { UserProfileSidebar } from '@/components/UserProfileSidebar';
+import { OnlineUsers } from '@/components/OnlineUsers';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -277,7 +278,10 @@ export default function Index() {
 
             {/* Right Sidebar - Top Models */}
             <div>
-              <div className="flex items-center justify-between mb-4">
+              {/* Online Users */}
+              <OnlineUsers />
+
+              <div className="flex items-center justify-between mb-4 mt-4">
                 <h3 className="font-semibold">Trending Models</h3>
                 <Button variant="ghost" size="sm" onClick={() => navigate('/explore')}>
                   View all
