@@ -278,6 +278,7 @@ export function useCreateComment() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['comments', variables.postId] });
       queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['public-feed'] });
       queryClient.invalidateQueries({ queryKey: ['posts'] });
     },
   });
