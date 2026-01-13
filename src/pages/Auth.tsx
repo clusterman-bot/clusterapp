@@ -7,9 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Code, LineChart, ArrowLeft } from 'lucide-react';
+import { Code, LineChart, ArrowLeft, Mail, CheckCircle } from 'lucide-react';
 
-type AuthMode = 'select' | 'developer-signup' | 'trader-signup' | 'login';
+type AuthMode = 'select' | 'developer-signup' | 'trader-signup' | 'login' | 'verify-email';
 
 export default function Auth() {
   const [mode, setMode] = useState<AuthMode>('select');
@@ -17,6 +17,7 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
   const { signIn, signUp, user, loading: authLoading } = useAuth();
   const { data: userRole, isLoading: roleLoading } = useUserRole();
   const setUserRole = useSetUserRole();
@@ -34,6 +35,14 @@ export default function Auth() {
     // Wait for auth to finish loading
     if (authLoading) return;
     if (!user) return;
+    
+    // Check if email is confirmed
+    if (!user.email_confirmed_at) {
+      // User exists but email not confirmed - show verify screen
+      setPendingEmail(user.email || '');
+      setMode('verify-email');
+      return;
+    }
     
     // Wait for role to finish loading, but don't wait forever
     if (roleLoading) return;
@@ -58,8 +67,8 @@ export default function Auth() {
     );
   }
 
-  // If user is logged in (and not just signed out), show loading while redirect happens
-  if (user && !justSignedOut && !roleLoading) {
+  // If user is logged in with confirmed email (and not just signed out), show loading while redirect happens
+  if (user && user.email_confirmed_at && !justSignedOut && !roleLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Redirecting...</p>
@@ -94,31 +103,17 @@ export default function Auth() {
       const { error } = await signUp(email, password, username.trim());
       if (error) throw error;
       
-      // Wait a moment for auth state to fully propagate
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Store the pending role for after email verification
+      localStorage.setItem('pending_user_role', role);
       
-      // Now set the role - user should be authenticated
-      try {
-        await setUserRole.mutateAsync(role);
-      } catch (roleError: any) {
-        console.error('Error setting role:', roleError);
-        // Role setting failed, but user is created - they can set role on onboarding
-      }
-      
-      // Mark as first-time user for onboarding tour
-      localStorage.setItem('show_onboarding_tour', role);
+      // Show verify email screen
+      setPendingEmail(email);
+      setMode('verify-email');
       
       toast({ 
-        title: 'Account created!', 
-        description: `Welcome to Cluster as a ${role === 'developer' ? 'Developer' : 'Retail Trader'}!` 
+        title: 'Check your email!', 
+        description: 'We sent you a verification link to confirm your account.' 
       });
-      
-      // Redirect based on role
-      if (role === 'retail_trader') {
-        navigate('/trader-dashboard', { replace: true });
-      } else {
-        navigate('/dashboard', { replace: true });
-      }
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
@@ -148,6 +143,71 @@ export default function Auth() {
     setPassword('');
     setUsername('');
   };
+
+  // Email verification screen
+  if (mode === 'verify-email') {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+              <Mail className="h-8 w-8 text-primary" />
+            </div>
+            <CardTitle className="text-2xl">Check your email</CardTitle>
+            <CardDescription className="text-base">
+              We sent a verification link to
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="bg-muted rounded-lg p-4">
+              <p className="font-medium text-foreground">{pendingEmail}</p>
+            </div>
+            
+            <div className="space-y-3 text-left">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                <p className="text-sm text-muted-foreground">
+                  Click the link in your email to verify your account
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <CheckCircle className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                <p className="text-sm text-muted-foreground">
+                  After verification, you'll be redirected back here to sign in
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <CheckCircle className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                <p className="text-sm text-muted-foreground">
+                  Check your spam folder if you don't see the email
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t">
+              <p className="text-sm text-muted-foreground mb-4">
+                Already verified your email?
+              </p>
+              <Button 
+                onClick={() => setMode('login')} 
+                className="w-full"
+              >
+                Sign In
+              </Button>
+            </div>
+
+            <button 
+              type="button" 
+              onClick={() => setMode('select')} 
+              className="text-sm text-muted-foreground hover:text-primary transition-colors"
+            >
+              ← Back to sign up options
+            </button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Role selection screen
   if (mode === 'select') {
@@ -304,8 +364,8 @@ export default function Auth() {
                   minLength={6} 
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={loading || setUserRole.isPending}>
-                {loading || setUserRole.isPending ? 'Creating account...' : `Create ${roleLabel} Account`}
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? 'Creating account...' : `Create ${roleLabel} Account`}
               </Button>
             </form>
             <div className="mt-4 text-center text-sm space-y-2">
