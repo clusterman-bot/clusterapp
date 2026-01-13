@@ -115,18 +115,25 @@ async function decryptKey(encrypted: string, secret: string): Promise<string> {
   }
   
   // Both methods failed - the credentials need to be re-entered
-  throw new Error('Failed to decrypt credentials - please reconnect your brokerage account');
+  console.error('[Alpaca] Both decryption methods failed - credentials may need to be re-entered');
+  throw new Error('CREDENTIALS_INVALID');
 }
 
 // Helper for error sanitization
-function sanitizeError(error: unknown): string {
+function sanitizeError(error: unknown): { message: string; code?: string } {
   const message = error instanceof Error ? error.message : 'Unknown error';
+  
+  // Specific error codes that frontend should handle
+  if (message === 'CREDENTIALS_INVALID') {
+    return { message: 'Your brokerage credentials need to be updated. Please reconnect your account.', code: 'CREDENTIALS_INVALID' };
+  }
+  
   const safeMessages: Record<string, string> = {
     'Missing required order parameters': 'Missing required order parameters',
     'Symbol is required': 'Symbol is required',
     'Missing order ID': 'Missing order ID',
   };
-  return safeMessages[message] || 'An error occurred while processing your request';
+  return { message: safeMessages[message] || 'An error occurred while processing your request' };
 }
 
 serve(async (req) => {
@@ -604,8 +611,13 @@ serve(async (req) => {
   } catch (error: unknown) {
     console.error('[Alpaca] Error:', error instanceof Error ? error.message : 'Unknown error');
     // SECURITY: Sanitize error messages to prevent information leakage
+    const sanitized = sanitizeError(error);
     return new Response(
-      JSON.stringify({ error: sanitizeError(error) }),
+      JSON.stringify({ 
+        error: sanitized.message, 
+        code: sanitized.code,
+        needsReconnect: sanitized.code === 'CREDENTIALS_INVALID'
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

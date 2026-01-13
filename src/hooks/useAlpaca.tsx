@@ -75,6 +75,10 @@ export function useAlpacaAccount() {
       
       // If no brokerage connected, return null instead of throwing
       if (data?.needsConnection) return null;
+      // If credentials are invalid, return object with needsReconnect flag
+      if (data?.needsReconnect) {
+        return { needsReconnect: true } as any;
+      }
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
       
