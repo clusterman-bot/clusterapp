@@ -62,26 +62,26 @@ export default function SMSConsent() {
     setIsSubmitting(true);
 
     try {
-      // Store consent record with timestamp for compliance
-      const consentRecord = {
-        user_id: user.id,
-        phone_number: phoneNumber,
-        trading_alerts: consents.tradingAlerts,
-        security_alerts: consents.securityAlerts,
-        service_updates: consents.serviceUpdates,
-        marketing: consents.marketing,
-        terms_accepted: consents.termsAccepted,
-        privacy_accepted: consents.privacyAccepted,
-        consent_timestamp: new Date().toISOString(),
-        ip_address: 'recorded-server-side', // Would be captured server-side
-        user_agent: navigator.userAgent,
-      };
+      // Store consent record in database for regulatory compliance (TCPA, GDPR)
+      const { error } = await supabase
+        .from('user_sms_consents')
+        .upsert({
+          user_id: user.id,
+          phone_number: phoneNumber,
+          trading_alerts: consents.tradingAlerts,
+          security_alerts: consents.securityAlerts,
+          service_updates: consents.serviceUpdates,
+          marketing: consents.marketing,
+          terms_accepted: consents.termsAccepted,
+          privacy_accepted: consents.privacyAccepted,
+          consent_timestamp: new Date().toISOString(),
+          user_agent: navigator.userAgent,
+          consent_method: 'web_form',
+        }, {
+          onConflict: 'user_id,phone_number',
+        });
 
-      // For demo purposes, store in localStorage
-      // In production, this would be stored in a database table
-      const existingConsents = JSON.parse(localStorage.getItem('sms_consents') || '[]');
-      existingConsents.push(consentRecord);
-      localStorage.setItem('sms_consents', JSON.stringify(existingConsents));
+      if (error) throw error;
 
       toast({
         title: 'Preferences saved',
@@ -89,10 +89,11 @@ export default function SMSConsent() {
       });
 
       navigate('/profile');
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Failed to save SMS consent:', error);
       toast({
         title: 'Error',
-        description: 'Failed to save preferences. Please try again.',
+        description: error.message || 'Failed to save preferences. Please try again.',
         variant: 'destructive',
       });
     } finally {

@@ -59,12 +59,13 @@ export default function Profile() {
   const { data: ownProfile } = useProfile();
   
   // Fetch the target profile if viewing someone else's
+  // Use public_profiles view for other users to respect privacy settings
   const { data: targetProfile, isLoading: profileLoading } = useQuery({
-    queryKey: ['profile', profileId],
+    queryKey: ['profile', profileId, 'public'],
     queryFn: async () => {
       if (!profileId) return null;
       const { data, error } = await supabase
-        .from('profiles')
+        .from('public_profiles')
         .select('*')
         .eq('id', profileId)
         .single();

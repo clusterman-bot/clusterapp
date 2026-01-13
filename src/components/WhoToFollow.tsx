@@ -14,8 +14,9 @@ export function WhoToFollow() {
   const { data: suggestedUsers = [] } = useQuery({
     queryKey: ['suggested-users'],
     queryFn: async () => {
+      // Use public_profiles view to respect privacy settings
       const { data, error } = await supabase
-        .from('profiles')
+        .from('public_profiles')
         .select('id, username, display_name, avatar_url, is_verified, bio, total_followers')
         .neq('id', user?.id || '')
         .order('total_followers', { ascending: false })
