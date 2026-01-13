@@ -86,19 +86,39 @@ function decryptKeyXOR(encrypted: string, secret: string): string {
 
 // Try AES-256-GCM first, fallback to XOR for legacy credentials
 async function decryptKey(encrypted: string, secret: string): Promise<string> {
-  try {
-    // AES-GCM encrypted data has minimum length: 16 (salt) + 12 (iv) + 16 (tag) = 44 bytes
-    const combined = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
-    if (combined.length >= 44) {
-      return await decryptKeyAES(encrypted, secret);
+  // AES-GCM encrypted data has minimum length: 16 (salt) + 12 (iv) + 16 (tag) = 44 bytes
+  const combined = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
+  
+  // Try AES-256-GCM first if data is long enough
+  if (combined.length >= 44) {
+    try {
+      const decrypted = await decryptKeyAES(encrypted, secret);
+      // Validate the decrypted value looks like an API key (alphanumeric, reasonable length)
+      if (decrypted && /^[A-Za-z0-9_-]{10,}$/.test(decrypted.trim())) {
+        console.log('[Brokerage] Successfully decrypted with AES-256-GCM');
+        return decrypted.trim();
+      }
+      console.log('[Brokerage] AES-GCM decryption produced invalid output, trying XOR');
+    } catch (error) {
+      console.log('[Brokerage] AES-GCM decryption failed:', error instanceof Error ? error.message : 'Unknown error');
     }
-    // Too short for AES-GCM, must be XOR
-    return decryptKeyXOR(encrypted, secret);
-  } catch (error) {
-    // AES-GCM failed (likely tag length error), try XOR fallback
-    console.log('[Brokerage] AES-GCM decryption failed, trying XOR fallback');
-    return decryptKeyXOR(encrypted, secret);
   }
+  
+  // Try XOR decryption for legacy credentials
+  try {
+    const decrypted = decryptKeyXOR(encrypted, secret);
+    // Validate the decrypted value
+    if (decrypted && /^[A-Za-z0-9_-]{10,}$/.test(decrypted.trim())) {
+      console.log('[Brokerage] Successfully decrypted with XOR (legacy)');
+      return decrypted.trim();
+    }
+    console.log('[Brokerage] XOR decryption produced invalid output');
+  } catch (error) {
+    console.log('[Brokerage] XOR decryption failed:', error instanceof Error ? error.message : 'Unknown error');
+  }
+  
+  // Both methods failed - the credentials need to be re-entered
+  throw new Error('Failed to decrypt credentials - please reconnect your brokerage account');
 }
 
 // Helper for error sanitization
