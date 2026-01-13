@@ -44,14 +44,29 @@ export function useProfile() {
   });
 }
 
-export function useProfileById(userId: string | undefined) {
+export function useProfileById(userId: string | undefined, currentUserId?: string) {
+  const isOwnProfile = userId === currentUserId;
+  
   return useQuery({
-    queryKey: ['profile', userId],
+    queryKey: ['profile', userId, isOwnProfile],
     queryFn: async () => {
       if (!userId) return null;
       
+      // Own profile: use base table for full access
+      if (isOwnProfile) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        if (error) throw error;
+        return data as Profile;
+      }
+      
+      // Other profiles: use public_profiles view for privacy
       const { data, error } = await supabase
-        .from('profiles')
+        .from('public_profiles')
         .select('*')
         .eq('id', userId)
         .single();

@@ -1380,6 +1380,82 @@ export type Database = {
         }
         Relationships: []
       }
+      user_sms_consents: {
+        Row: {
+          consent_method: string | null
+          consent_timestamp: string
+          created_at: string | null
+          id: string
+          ip_address: unknown
+          marketing: boolean
+          phone_number: string
+          privacy_accepted: boolean
+          revoked_at: string | null
+          security_alerts: boolean
+          service_updates: boolean
+          terms_accepted: boolean
+          trading_alerts: boolean
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          consent_method?: string | null
+          consent_timestamp?: string
+          created_at?: string | null
+          id?: string
+          ip_address?: unknown
+          marketing?: boolean
+          phone_number: string
+          privacy_accepted?: boolean
+          revoked_at?: string | null
+          security_alerts?: boolean
+          service_updates?: boolean
+          terms_accepted?: boolean
+          trading_alerts?: boolean
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          consent_method?: string | null
+          consent_timestamp?: string
+          created_at?: string | null
+          id?: string
+          ip_address?: unknown
+          marketing?: boolean
+          phone_number?: string
+          privacy_accepted?: boolean
+          revoked_at?: string | null
+          security_alerts?: boolean
+          service_updates?: boolean
+          terms_accepted?: boolean
+          trading_alerts?: boolean
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_sms_consents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_sms_consents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
+          },
+          {
+            foreignKeyName: "user_sms_consents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       validation_runs: {
         Row: {
           completed_at: string | null
