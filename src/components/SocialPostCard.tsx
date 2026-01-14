@@ -12,6 +12,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { Post as SocialPost, useFollow, useUnfollow, useIsFollowing } from '@/hooks/useSocial';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useUserRole';
+import { useRepost, useUnrepost, useRepostsForPosts, useBookmark, useUnbookmark, useBookmarksForPosts } from '@/hooks/useBookmarksAndReposts';
 import { PostEditDialog } from '@/components/PostEditDialog';
 import { DeletePostDialog } from '@/components/DeletePostDialog';
 import { CommentDialog } from '@/components/CommentDialog';
@@ -23,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 
 interface SocialPostCardProps {
   post: SocialPost;
@@ -47,10 +49,21 @@ export function SocialPostCard({
   const { user } = useAuth();
   const { isAdmin } = useIsAdmin();
   const queryClient = useQueryClient();
-  const [isBookmarked, setIsBookmarked] = useState(false);
+  const { toast } = useToast();
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showCommentDialog, setShowCommentDialog] = useState(false);
+
+  // Repost and Bookmark hooks
+  const repost = useRepost();
+  const unrepost = useUnrepost();
+  const bookmark = useBookmark();
+  const unbookmark = useUnbookmark();
+  const { data: repostedPosts } = useRepostsForPosts([post.id]);
+  const { data: bookmarkedPosts } = useBookmarksForPosts([post.id]);
+  
+  const isReposted = repostedPosts?.some(r => r.post_id === post.id) || false;
+  const isBookmarked = bookmarkedPosts?.some(b => b.post_id === post.id) || false;
 
   // Get the profile ID from post data
   const profileId = post.profiles?.id || post.user_id;
@@ -91,8 +104,34 @@ export function SocialPostCard({
     onShare?.(post.id);
   };
 
-  const handleBookmark = () => {
-    setIsBookmarked(!isBookmarked);
+  const handleRepost = async () => {
+    if (!user) return;
+    try {
+      if (isReposted) {
+        await unrepost.mutateAsync(post.id);
+        toast({ title: 'Removed repost' });
+      } else {
+        await repost.mutateAsync(post.id);
+        toast({ title: 'Reposted!' });
+      }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to repost', variant: 'destructive' });
+    }
+  };
+
+  const handleBookmark = async () => {
+    if (!user) return;
+    try {
+      if (isBookmarked) {
+        await unbookmark.mutateAsync(post.id);
+        toast({ title: 'Removed from saved' });
+      } else {
+        await bookmark.mutateAsync(post.id);
+        toast({ title: 'Saved!' });
+      }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to save', variant: 'destructive' });
+    }
     onBookmark?.(post.id);
   };
 
@@ -232,10 +271,16 @@ export function SocialPostCard({
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  className="text-muted-foreground hover:text-green-500 hover:bg-green-500/10 gap-2 px-2"
+                  className={`gap-2 px-2 ${
+                    isReposted 
+                      ? 'text-green-500 hover:text-green-600 hover:bg-green-500/10' 
+                      : 'text-muted-foreground hover:text-green-500 hover:bg-green-500/10'
+                  }`}
+                  onClick={handleRepost}
+                  disabled={repost.isPending || unrepost.isPending}
                 >
-                  <Repeat2 className="h-[18px] w-[18px]" />
-                  <span className="text-sm"></span>
+                  <Repeat2 className={`h-[18px] w-[18px] ${isReposted ? 'fill-current' : ''}`} />
+                  <span className="text-sm">{(post as any).reposts_count || ''}</span>
                 </Button>
 
                 {/* Like */}

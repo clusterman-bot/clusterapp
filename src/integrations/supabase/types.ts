@@ -112,6 +112,42 @@ export type Database = {
           },
         ]
       }
+      bookmarks: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookmarks_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookmarks_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           content: string
@@ -710,6 +746,7 @@ export type Database = {
           likes_count: number | null
           model_id: string | null
           post_type: string | null
+          reposts_count: number | null
           updated_at: string | null
           user_id: string
         }
@@ -721,6 +758,7 @@ export type Database = {
           likes_count?: number | null
           model_id?: string | null
           post_type?: string | null
+          reposts_count?: number | null
           updated_at?: string | null
           user_id: string
         }
@@ -732,6 +770,7 @@ export type Database = {
           likes_count?: number | null
           model_id?: string | null
           post_type?: string | null
+          reposts_count?: number | null
           updated_at?: string | null
           user_id?: string
         }
@@ -831,6 +870,42 @@ export type Database = {
           website_url?: string | null
         }
         Relationships: []
+      }
+      reposts: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reposts_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reposts_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       stocks: {
         Row: {
