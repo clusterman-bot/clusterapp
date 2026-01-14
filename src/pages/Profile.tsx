@@ -19,13 +19,17 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   TrendingUp, Users, BarChart3, Settings, 
   CheckCircle, UserPlus, UserMinus, TrendingDown, Target, Store,
-  User, Calendar, Award, Briefcase, Twitter, Linkedin, Github, Globe
+  User, Calendar, Award, Briefcase, Twitter, Linkedin, Github, Globe,
+  FileText, Heart, Bookmark
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { AvatarUpload } from '@/components/profile/AvatarUpload';
 import { SocialLinks } from '@/components/profile/SocialLinks';
 import { MFASetup } from '@/components/auth/MFASetup';
+import { ProfilePostsTab } from '@/components/profile/ProfilePostsTab';
+import { ProfileLikesTab } from '@/components/profile/ProfileLikesTab';
+import { ProfileBookmarksTab } from '@/components/profile/ProfileBookmarksTab';
 
 export default function Profile() {
   const { userId } = useParams<{ userId: string }>();
@@ -405,120 +409,63 @@ export default function Profile() {
           </Card>
 
           {/* Content Tabs - Different for retail vs developer */}
-          {isRetailTrader && isOwnProfile ? (
-            // Retail trader view - About and Security tabs
-            <Tabs defaultValue="about">
-              <TabsList>
-                <TabsTrigger value="about">
-                  <User className="h-4 w-4 mr-2" />
-                  About
+          {/* Profile Tabs - Show posts, likes, saved (if own profile), about */}
+          <Tabs defaultValue="posts">
+            <TabsList className="flex-wrap h-auto gap-1">
+              <TabsTrigger value="posts">
+                <FileText className="h-4 w-4 mr-2" />
+                Posts
+              </TabsTrigger>
+              <TabsTrigger value="likes">
+                <Heart className="h-4 w-4 mr-2" />
+                Likes
+              </TabsTrigger>
+              {isOwnProfile && (
+                <TabsTrigger value="saved">
+                  <Bookmark className="h-4 w-4 mr-2" />
+                  Saved
                 </TabsTrigger>
+              )}
+              {!isRetailTrader && (
+                <TabsTrigger value="marketplace">
+                  <Store className="h-4 w-4 mr-2" />
+                  Models
+                </TabsTrigger>
+              )}
+              <TabsTrigger value="about">
+                <User className="h-4 w-4 mr-2" />
+                About
+              </TabsTrigger>
+              {isOwnProfile && (
                 <TabsTrigger value="security">
                   <Settings className="h-4 w-4 mr-2" />
                   Security
                 </TabsTrigger>
-              </TabsList>
+              )}
+            </TabsList>
 
-              <TabsContent value="about">
-                <Card>
-                  <CardContent className="pt-6 space-y-6">
-                    <div className="grid gap-6 md:grid-cols-2">
-                      <div className="space-y-4">
-                        <div className="flex items-start gap-3">
-                          <Award className="h-5 w-5 text-primary mt-0.5" />
-                          <div>
-                            <h3 className="font-medium">Experience Level</h3>
-                            <p className="text-muted-foreground capitalize">
-                              {profile.experience_level || 'Not specified'}
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-start gap-3">
-                          <Calendar className="h-5 w-5 text-primary mt-0.5" />
-                          <div>
-                            <h3 className="font-medium">Member Since</h3>
-                            <p className="text-muted-foreground">
-                              {new Date(profile.created_at!).toLocaleDateString('en-US', { 
-                                month: 'long', 
-                                year: 'numeric' 
-                              })}
-                            </p>
-                          </div>
-                        </div>
+            {/* Posts Tab - includes reposts */}
+            <TabsContent value="posts">
+              <ProfilePostsTab 
+                userId={profileId!} 
+                displayName={profile.display_name || profile.username || undefined}
+              />
+            </TabsContent>
 
-                        <div className="flex items-start gap-3">
-                          <Briefcase className="h-5 w-5 text-primary mt-0.5" />
-                          <div>
-                            <h3 className="font-medium">Account Type</h3>
-                            <p className="text-muted-foreground">Retail Trader</p>
-                          </div>
-                        </div>
-                      </div>
+            {/* Likes Tab - visible to everyone */}
+            <TabsContent value="likes">
+              <ProfileLikesTab userId={profileId!} />
+            </TabsContent>
 
-                      <div className="space-y-4">
-                        {profile.trading_philosophy && (
-                          <div>
-                            <h3 className="font-medium mb-2">Trading Philosophy</h3>
-                            <p className="text-muted-foreground">{profile.trading_philosophy}</p>
-                          </div>
-                        )}
-                        
-                        {profile.bio && (
-                          <div>
-                            <h3 className="font-medium mb-2">Bio</h3>
-                            <p className="text-muted-foreground">{profile.bio}</p>
-                          </div>
-                        )}
-
-                        {!profile.trading_philosophy && !profile.bio && (
-                          <div className="text-center py-8">
-                            <p className="text-muted-foreground mb-4">
-                              Complete your profile to share more about yourself
-                            </p>
-                            <Button variant="outline" onClick={handleOpenEdit}>
-                              <Settings className="mr-2 h-4 w-4" /> Edit Profile
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+            {/* Saved/Bookmarks Tab - only visible to profile owner */}
+            {isOwnProfile && (
+              <TabsContent value="saved">
+                <ProfileBookmarksTab />
               </TabsContent>
+            )}
 
-              <TabsContent value="security">
-                <div className="space-y-4">
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold mb-2">Account Security</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Manage your account security settings
-                    </p>
-                  </div>
-                  <MFASetup />
-                </div>
-              </TabsContent>
-            </Tabs>
-          ) : (
-            // Developer/Admin view - Marketplace and About tabs
-            <Tabs defaultValue="marketplace">
-              <TabsList>
-                <TabsTrigger value="marketplace">
-                  <Store className="h-4 w-4 mr-2" />
-                  Marketplace
-                </TabsTrigger>
-                <TabsTrigger value="about">
-                  <User className="h-4 w-4 mr-2" />
-                  About
-                </TabsTrigger>
-                {isOwnProfile && (
-                  <TabsTrigger value="security">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Security
-                  </TabsTrigger>
-                )}
-              </TabsList>
-
+            {/* Marketplace Tab - for developers */}
+            {!isRetailTrader && (
               <TabsContent value="marketplace">
                 <div className="mb-4">
                   <h3 className="text-lg font-semibold mb-2">Trading Models</h3>
@@ -558,34 +505,26 @@ export default function Profile() {
                         <CardContent>
                           <div className="grid grid-cols-4 gap-2 mb-4">
                             <div className="text-center">
-                              <div className="flex items-center justify-center gap-1 mb-1">
-                                <TrendingUp className="h-3 w-3 text-muted-foreground" />
-                              </div>
+                              <TrendingUp className="h-3 w-3 text-muted-foreground mx-auto mb-1" />
                               <p className={`text-sm font-medium ${(model.total_return || 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
                                 {((model.total_return || 0) * 100).toFixed(1)}%
                               </p>
                               <p className="text-xs text-muted-foreground">Return</p>
                             </div>
                             <div className="text-center">
-                              <div className="flex items-center justify-center gap-1 mb-1">
-                                <BarChart3 className="h-3 w-3 text-muted-foreground" />
-                              </div>
+                              <BarChart3 className="h-3 w-3 text-muted-foreground mx-auto mb-1" />
                               <p className="text-sm font-medium">{(model.sharpe_ratio || 0).toFixed(2)}</p>
                               <p className="text-xs text-muted-foreground">Sharpe</p>
                             </div>
                             <div className="text-center">
-                              <div className="flex items-center justify-center gap-1 mb-1">
-                                <TrendingDown className="h-3 w-3 text-muted-foreground" />
-                              </div>
+                              <TrendingDown className="h-3 w-3 text-muted-foreground mx-auto mb-1" />
                               <p className="text-sm font-medium text-loss">
                                 {((model.max_drawdown || 0) * 100).toFixed(1)}%
                               </p>
                               <p className="text-xs text-muted-foreground">Drawdown</p>
                             </div>
                             <div className="text-center">
-                              <div className="flex items-center justify-center gap-1 mb-1">
-                                <Target className="h-3 w-3 text-muted-foreground" />
-                              </div>
+                              <Target className="h-3 w-3 text-muted-foreground mx-auto mb-1" />
                               <p className="text-sm font-medium">
                                 {((model.win_rate || 0) * 100).toFixed(0)}%
                               </p>
@@ -617,65 +556,94 @@ export default function Profile() {
                   )}
                 </div>
               </TabsContent>
+            )}
 
-              <TabsContent value="about">
-                <Card>
-                  <CardContent className="pt-6 space-y-6">
-                    <div className="grid gap-6 md:grid-cols-2">
-                      <div className="space-y-4">
-                        <div className="flex items-start gap-3">
-                          <Award className="h-5 w-5 text-primary mt-0.5" />
-                          <div>
-                            <h3 className="font-medium">Experience Level</h3>
-                            <p className="text-muted-foreground capitalize">
-                              {profile.experience_level || 'Not specified'}
-                            </p>
-                          </div>
+            {/* About Tab */}
+            <TabsContent value="about">
+              <Card>
+                <CardContent className="pt-6 space-y-6">
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-4">
+                      <div className="flex items-start gap-3">
+                        <Award className="h-5 w-5 text-primary mt-0.5" />
+                        <div>
+                          <h3 className="font-medium">Experience Level</h3>
+                          <p className="text-muted-foreground capitalize">
+                            {profile.experience_level || 'Not specified'}
+                          </p>
                         </div>
-                        
-                        <div className="flex items-start gap-3">
-                          <Calendar className="h-5 w-5 text-primary mt-0.5" />
-                          <div>
-                            <h3 className="font-medium">Member Since</h3>
-                            <p className="text-muted-foreground">
-                              {new Date(profile.created_at!).toLocaleDateString('en-US', { 
-                                month: 'long', 
-                                year: 'numeric' 
-                              })}
-                            </p>
-                          </div>
+                      </div>
+                      
+                      <div className="flex items-start gap-3">
+                        <Calendar className="h-5 w-5 text-primary mt-0.5" />
+                        <div>
+                          <h3 className="font-medium">Member Since</h3>
+                          <p className="text-muted-foreground">
+                            {new Date(profile.created_at!).toLocaleDateString('en-US', { 
+                              month: 'long', 
+                              year: 'numeric' 
+                            })}
+                          </p>
                         </div>
                       </div>
 
-                      <div className="space-y-4">
-                        {profile.trading_philosophy && (
-                          <div>
-                            <h3 className="font-medium mb-2">Trading Philosophy</h3>
-                            <p className="text-muted-foreground">{profile.trading_philosophy}</p>
-                          </div>
-                        )}
+                      <div className="flex items-start gap-3">
+                        <Briefcase className="h-5 w-5 text-primary mt-0.5" />
+                        <div>
+                          <h3 className="font-medium">Account Type</h3>
+                          <p className="text-muted-foreground capitalize">
+                            {userRole?.role === 'retail_trader' ? 'Retail Trader' : userRole?.role || 'Developer'}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
 
-              {/* Security Tab - MFA Setup */}
-              {isOwnProfile && (
-                <TabsContent value="security">
-                  <div className="space-y-4">
-                    <div className="mb-4">
-                      <h3 className="text-lg font-semibold mb-2">Account Security</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Manage your account security settings
-                      </p>
+                    <div className="space-y-4">
+                      {profile.trading_philosophy && (
+                        <div>
+                          <h3 className="font-medium mb-2">Trading Philosophy</h3>
+                          <p className="text-muted-foreground">{profile.trading_philosophy}</p>
+                        </div>
+                      )}
+                      
+                      {profile.bio && (
+                        <div>
+                          <h3 className="font-medium mb-2">Bio</h3>
+                          <p className="text-muted-foreground">{profile.bio}</p>
+                        </div>
+                      )}
+
+                      {isOwnProfile && !profile.trading_philosophy && !profile.bio && (
+                        <div className="text-center py-8">
+                          <p className="text-muted-foreground mb-4">
+                            Complete your profile to share more about yourself
+                          </p>
+                          <Button variant="outline" onClick={handleOpenEdit}>
+                            <Settings className="mr-2 h-4 w-4" /> Edit Profile
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                    <MFASetup />
                   </div>
-                </TabsContent>
-              )}
-            </Tabs>
-          )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Security Tab - only for own profile */}
+            {isOwnProfile && (
+              <TabsContent value="security">
+                <div className="space-y-4">
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold mb-2">Account Security</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Manage your account security settings
+                    </p>
+                  </div>
+                  <MFASetup />
+                </div>
+              </TabsContent>
+            )}
+          </Tabs>
         </div>
       </main>
     </div>
