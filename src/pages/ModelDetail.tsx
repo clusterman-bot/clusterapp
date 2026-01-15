@@ -7,6 +7,9 @@ import { useDeployedModel, useDeployModel, useStopModel, useModelSignals } from 
 import { MainNav } from '@/components/MainNav';
 import { BackButton } from '@/components/BackButton';
 import { ModelSubscribeButton } from '@/components/ModelSubscribeButton';
+import { TickerManager } from '@/components/model/TickerManager';
+import { StrategyConfig } from '@/components/model/StrategyConfig';
+import { PublishToggle } from '@/components/model/PublishToggle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   TrendingUp, Play, Trash2, Edit, Users, 
   BarChart3, TrendingDown, Target, Calendar, Shield,
-  Rocket, Square, Activity, Zap
+  Rocket, Square, Activity, Zap, Settings
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -440,23 +443,24 @@ export default function ModelDetail() {
           </TabsContent>
 
           <TabsContent value="settings">
-            <Card>
-              <CardHeader>
-                <CardTitle>Model Settings</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between py-2 border-b">
-                  <div>
-                    <p className="font-medium">Visibility</p>
-                    <p className="text-sm text-muted-foreground">
-                      {model.is_public ? 'Public - visible to all users' : 'Private - only you can see this'}
-                    </p>
-                  </div>
-                  <Badge variant={model.is_public ? 'default' : 'secondary'}>
-                    {model.is_public ? 'Public' : 'Private'}
-                  </Badge>
-                </div>
-                {model.is_public && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Publish/Draft Toggle */}
+              <PublishToggle 
+                modelId={model.id}
+                isPublic={model.is_public || false}
+                status={model.status || 'draft'}
+                isOwner={isOwner || false}
+              />
+
+              {/* Performance Fee Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="h-5 w-5" />
+                    Model Info
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="flex items-center justify-between py-2 border-b">
                     <div>
                       <p className="font-medium">Performance Fee</p>
@@ -464,19 +468,33 @@ export default function ModelDetail() {
                         Charged to subscribers on profitable trades
                       </p>
                     </div>
-                    <span className="font-medium">{model.performance_fee_percent}%</span>
+                    <span className="font-medium">{model.performance_fee_percent || 20}%</span>
                   </div>
-                )}
-                <div className="flex items-center justify-between py-2">
-                  <div>
+                  <div className="py-2">
                     <p className="font-medium">Strategy Overview</p>
                     <p className="text-sm text-muted-foreground mt-1">
                       {model.strategy_overview || 'No overview provided'}
                     </p>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              {/* Ticker Manager */}
+              <TickerManager modelId={model.id} isOwner={isOwner || false} />
+
+              {/* Strategy Config */}
+              <StrategyConfig 
+                modelId={model.id} 
+                model={{
+                  risk_level: (model as any).risk_level,
+                  position_size_percent: (model as any).position_size_percent,
+                  max_positions: (model as any).max_positions,
+                  stop_loss_percent: (model as any).stop_loss_percent,
+                  take_profit_percent: (model as any).take_profit_percent,
+                }}
+                isOwner={isOwner || false}
+              />
+            </div>
           </TabsContent>
         </Tabs>
       </main>

@@ -391,10 +391,10 @@ async function executeTradeForOwnerAndSubscribers(
   
   console.log(`[TradingBot] Executing ${side} trade for signal ${signal.id}`);
 
-  // Get all active subscribers
+  // Get all active subscribers with their allocations
   const { data: subscriptions, error: subError } = await supabase
     .from('subscriptions')
-    .select('*, profiles:subscriber_id(id)')
+    .select('*, profiles:subscriber_id(id), allocations(*)')
     .eq('model_id', deployment.model_id)
     .eq('status', 'active');
 
@@ -404,11 +404,12 @@ async function executeTradeForOwnerAndSubscribers(
   }
 
   const usersToTrade = [
-    { userId: deployment.user_id, subscriptionId: null, isOwner: true },
+    { userId: deployment.user_id, subscriptionId: null, isOwner: true, allocation: null },
     ...(subscriptions || []).map((sub: any) => ({
       userId: sub.subscriber_id,
       subscriptionId: sub.id,
       isOwner: false,
+      allocation: sub.allocations?.[0] || null,
     })),
   ];
 
@@ -470,7 +471,7 @@ async function executeTradeForOwnerAndSubscribers(
       const orderResult = await response.json();
       console.log(`[TradingBot] Order result for ${trader.userId}:`, orderResult);
 
-      // Log subscriber trade
+      // Log subscriber trade with allocation
       if (!trader.isOwner && trader.subscriptionId) {
         await supabase.from('subscriber_trades').insert({
           subscription_id: trader.subscriptionId,
@@ -484,6 +485,7 @@ async function executeTradeForOwnerAndSubscribers(
           executed_price: orderResult.filled_avg_price ? parseFloat(orderResult.filled_avg_price) : null,
           executed_at: response.ok ? new Date().toISOString() : null,
           error_message: response.ok ? null : orderResult.message,
+          allocation_id: trader.allocation?.id || null,
         });
       }
 

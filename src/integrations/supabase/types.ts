@@ -14,6 +14,84 @@ export type Database = {
   }
   public: {
     Tables: {
+      allocations: {
+        Row: {
+          allocated_amount: number
+          created_at: string
+          current_value: number
+          id: string
+          is_active: boolean | null
+          model_id: string
+          subscription_id: string
+          total_pnl: number | null
+          total_pnl_percent: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          allocated_amount?: number
+          created_at?: string
+          current_value?: number
+          id?: string
+          is_active?: boolean | null
+          model_id: string
+          subscription_id: string
+          total_pnl?: number | null
+          total_pnl_percent?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          allocated_amount?: number
+          created_at?: string
+          current_value?: number
+          id?: string
+          is_active?: boolean | null
+          model_id?: string
+          subscription_id?: string
+          total_pnl?: number | null
+          total_pnl_percent?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "allocations_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allocations_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: true
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allocations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allocations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_posts"
+            referencedColumns: ["author_profile_id"]
+          },
+          {
+            foreignKeyName: "allocations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       backtests: {
         Row: {
           benchmark: string | null
@@ -488,6 +566,41 @@ export type Database = {
           },
         ]
       }
+      model_tickers: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean | null
+          model_id: string
+          ticker: string
+          weight: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          model_id: string
+          ticker: string
+          weight?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          model_id?: string
+          ticker?: string
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_tickers_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       models: {
         Row: {
           configuration: Json | null
@@ -500,13 +613,18 @@ export type Database = {
           indicators_config: Json | null
           is_public: boolean | null
           max_drawdown: number | null
+          max_positions: number | null
           ml_model_uuid: string | null
           model_type: string | null
           name: string
           performance_fee_percent: number | null
+          position_size_percent: number | null
+          risk_level: string | null
           sharpe_ratio: number | null
           status: string | null
+          stop_loss_percent: number | null
           strategy_overview: string | null
+          take_profit_percent: number | null
           theta: number | null
           ticker: string | null
           total_return: number | null
@@ -527,13 +645,18 @@ export type Database = {
           indicators_config?: Json | null
           is_public?: boolean | null
           max_drawdown?: number | null
+          max_positions?: number | null
           ml_model_uuid?: string | null
           model_type?: string | null
           name: string
           performance_fee_percent?: number | null
+          position_size_percent?: number | null
+          risk_level?: string | null
           sharpe_ratio?: number | null
           status?: string | null
+          stop_loss_percent?: number | null
           strategy_overview?: string | null
+          take_profit_percent?: number | null
           theta?: number | null
           ticker?: string | null
           total_return?: number | null
@@ -554,13 +677,18 @@ export type Database = {
           indicators_config?: Json | null
           is_public?: boolean | null
           max_drawdown?: number | null
+          max_positions?: number | null
           ml_model_uuid?: string | null
           model_type?: string | null
           name?: string
           performance_fee_percent?: number | null
+          position_size_percent?: number | null
+          risk_level?: string | null
           sharpe_ratio?: number | null
           status?: string | null
+          stop_loss_percent?: number | null
           strategy_overview?: string | null
+          take_profit_percent?: number | null
           theta?: number | null
           ticker?: string | null
           total_return?: number | null
@@ -807,6 +935,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          allocated_balance: number | null
           avatar_url: string | null
           bio: string | null
           created_at: string | null
@@ -816,6 +945,7 @@ export type Database = {
           id: string
           is_verified: boolean | null
           linkedin_url: string | null
+          paper_balance: number | null
           show_contact_info: boolean | null
           total_earnings: number | null
           total_followers: number | null
@@ -828,6 +958,7 @@ export type Database = {
           website_url: string | null
         }
         Insert: {
+          allocated_balance?: number | null
           avatar_url?: string | null
           bio?: string | null
           created_at?: string | null
@@ -837,6 +968,7 @@ export type Database = {
           id: string
           is_verified?: boolean | null
           linkedin_url?: string | null
+          paper_balance?: number | null
           show_contact_info?: boolean | null
           total_earnings?: number | null
           total_followers?: number | null
@@ -849,6 +981,7 @@ export type Database = {
           website_url?: string | null
         }
         Update: {
+          allocated_balance?: number | null
           avatar_url?: string | null
           bio?: string | null
           created_at?: string | null
@@ -858,6 +991,7 @@ export type Database = {
           id?: string
           is_verified?: boolean | null
           linkedin_url?: string | null
+          paper_balance?: number | null
           show_contact_info?: boolean | null
           total_earnings?: number | null
           total_followers?: number | null
@@ -954,6 +1088,7 @@ export type Database = {
       }
       subscriber_trades: {
         Row: {
+          allocation_id: string | null
           alpaca_order_id: string | null
           created_at: string
           error_message: string | null
@@ -970,6 +1105,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          allocation_id?: string | null
           alpaca_order_id?: string | null
           created_at?: string
           error_message?: string | null
@@ -986,6 +1122,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          allocation_id?: string | null
           alpaca_order_id?: string | null
           created_at?: string
           error_message?: string | null
@@ -1002,6 +1139,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "subscriber_trades_allocation_id_fkey"
+            columns: ["allocation_id"]
+            isOneToOne: false
+            referencedRelation: "allocations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "subscriber_trades_signal_id_fkey"
             columns: ["signal_id"]
