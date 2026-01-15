@@ -3,10 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
-import { useSubscribeToModel, useIsSubscribed, useUnsubscribeFromModel } from '@/hooks/useSubscriptions';
+import { useSubscribeToModel, useIsSubscribed, useUnsubscribeFromModel, useMySubscriptions } from '@/hooks/useSubscriptions';
+import { useAllocationForSubscription } from '@/hooks/useAllocations';
+import { AllocationDialog } from '@/components/model/AllocationDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
-import { Check, Plus, Loader2 } from 'lucide-react';
+import { Check, Plus, Loader2, Wallet } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -43,6 +45,10 @@ export function ModelSubscribeButton({
 
   const isSubscribed = !!subscription;
   const isRetailTrader = userRole?.role === 'retail_trader';
+  
+  // Check allocation for this subscription
+  const { data: allocation } = useAllocationForSubscription(subscription?.id);
+  const [showAllocationDialog, setShowAllocationDialog] = useState(false);
 
   const handleClick = () => {
     if (!user) {
@@ -196,6 +202,38 @@ export function ModelSubscribeButton({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Allocation Dialog - shown after subscribing for retail traders */}
+      {subscription && (
+        <AllocationDialog
+          open={showAllocationDialog}
+          onOpenChange={setShowAllocationDialog}
+          subscriptionId={subscription.id}
+          modelId={modelId}
+          modelName={modelName}
+        />
+      )}
+
+      {/* Show allocate button for subscribed retail traders */}
+      {isSubscribed && isRetailTrader && !allocation && (
+        <Button
+          variant="outline"
+          size={size}
+          className={`ml-2 ${className}`}
+          onClick={() => setShowAllocationDialog(true)}
+        >
+          <Wallet className="h-4 w-4 mr-1" />
+          Allocate Funds
+        </Button>
+      )}
+
+      {/* Show allocated amount for subscribed users */}
+      {isSubscribed && allocation && (
+        <Badge variant="secondary" className="ml-2">
+          <Wallet className="h-3 w-3 mr-1" />
+          ${allocation.current_value.toLocaleString()} allocated
+        </Badge>
+      )}
     </>
   );
 }
