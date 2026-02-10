@@ -16,10 +16,7 @@ import { useConnectBrokerageAccount } from '@/hooks/useBrokerageAccounts';
 
 const EXCHANGES = [
   { id: 'alpaca', name: 'Alpaca', description: 'Commission-free stock & crypto trading API' },
-  { id: 'coinbase', name: 'Coinbase', description: 'Popular cryptocurrency exchange' },
-  { id: 'robinhood', name: 'Robinhood', description: 'Commission-free stock & options trading' },
-  { id: 'interactive_brokers', name: 'Interactive Brokers', description: 'Professional-grade trading platform' },
-  { id: 'binance', name: 'Binance', description: 'Global cryptocurrency exchange' },
+  { id: 'tradier', name: 'Tradier', description: 'Brokerage API for equities and options trading' },
 ] as const;
 
 type ExchangeId = typeof EXCHANGES[number]['id'];
@@ -44,80 +41,23 @@ const EXCHANGE_STEPS: Record<ExchangeId, { signUp: { url: string; steps: string[
       secretPlaceholder: 'Enter your Alpaca secret key',
     },
   },
-  coinbase: {
+  tradier: {
     signUp: {
-      url: 'https://www.coinbase.com/signup',
+      url: 'https://brokerage.tradier.com/signup',
       steps: [
-        'Go to coinbase.com and click "Get Started"',
-        'Create your account with email and verify your identity',
-        'Enable two-factor authentication for security',
+        'Go to tradier.com and click "Open an Account"',
+        'Complete your application with personal and financial information',
+        'Fund your account or use the sandbox for paper trading',
       ],
     },
     apiKey: {
       steps: [
-        'Go to Settings → API in your Coinbase account',
-        'Click "New API Key" and select the permissions you need',
-        'Copy the API Key and API Secret — store the secret safely!',
+        'Log into your Tradier dashboard at developer.tradier.com',
+        'Navigate to Account → API Access and generate a new access token',
+        'Copy the Access Token — this serves as both your key and secret',
       ],
-      keyPlaceholder: 'Enter your Coinbase API key',
-      secretPlaceholder: 'Enter your Coinbase API secret',
-    },
-  },
-  robinhood: {
-    signUp: {
-      url: 'https://robinhood.com/signup',
-      steps: [
-        'Go to robinhood.com and click "Sign Up"',
-        'Download the app or continue on web',
-        'Complete identity verification and fund your account',
-      ],
-    },
-    apiKey: {
-      steps: [
-        'Robinhood does not offer public API keys directly',
-        'Use a third-party integration service for API access',
-        'Enter the credentials provided by your integration service',
-      ],
-      keyPlaceholder: 'Enter your API key',
-      secretPlaceholder: 'Enter your API secret',
-    },
-  },
-  interactive_brokers: {
-    signUp: {
-      url: 'https://www.interactivebrokers.com/en/index.php?f=46346',
-      steps: [
-        'Go to interactivebrokers.com and click "Open Account"',
-        'Choose Individual or Organization account type',
-        'Complete the application with identity and financial information',
-      ],
-    },
-    apiKey: {
-      steps: [
-        'Log into Client Portal and go to Settings → API',
-        'Enable API access and generate your API credentials',
-        'Copy the API Key and Secret for use below',
-      ],
-      keyPlaceholder: 'Enter your IB API key',
-      secretPlaceholder: 'Enter your IB API secret',
-    },
-  },
-  binance: {
-    signUp: {
-      url: 'https://www.binance.com/en/register',
-      steps: [
-        'Go to binance.com and click "Register"',
-        'Create your account and complete KYC verification',
-        'Enable two-factor authentication for security',
-      ],
-    },
-    apiKey: {
-      steps: [
-        'Go to Account → API Management in your Binance dashboard',
-        'Click "Create API" and label it for this integration',
-        'Copy the API Key and Secret Key — the secret is only shown once!',
-      ],
-      keyPlaceholder: 'Enter your Binance API key',
-      secretPlaceholder: 'Enter your Binance API secret',
+      keyPlaceholder: 'Enter your Tradier access token',
+      secretPlaceholder: 'Enter your Tradier account ID',
     },
   },
 };
