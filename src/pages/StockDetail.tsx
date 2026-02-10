@@ -18,11 +18,12 @@ export default function StockDetail() {
 
   const { data: dbStock, isLoading: dbLoading } = useStockBySymbol(symbol);
 
-  // Alpaca fallbacks — only fire when the local DB has no match
-  const { data: alpacaQuote, isLoading: quoteLoading } = useAlpacaQuote(!dbStock ? symbol : undefined);
+  // Always fetch live quote for accurate pricing
+  const { data: alpacaQuote, isLoading: quoteLoading } = useAlpacaQuote(symbol);
+  // Asset info only needed when symbol isn't in local DB
   const { data: alpacaAsset, isLoading: assetLoading } = useAlpacaAssetInfo(!dbStock ? symbol : undefined);
 
-  const isLoading = dbLoading || (!dbStock && (quoteLoading || assetLoading));
+  const isLoading = dbLoading || (!dbStock && !alpacaQuote && (quoteLoading || assetLoading));
 
   // Build a unified stock object from whichever source has data
   const stock = dbStock
@@ -39,6 +40,9 @@ export default function StockDetail() {
           sector: alpacaAsset?.exchange || null,
         }
       : null;
+
+  // Live price: prefer Alpaca quote, fall back to DB price
+  const livePrice = alpacaQuote?.price ?? stock?.current_price ?? 0;
 
   const { data: isInWatchlist } = useIsInWatchlist(dbStock?.id);
   const addToWatchlist = useAddToWatchlist();
@@ -116,8 +120,8 @@ export default function StockDetail() {
           <div className="lg:col-span-3">
             <AdvancedChart
               symbol={stock.symbol}
-              currentPrice={stock.current_price}
-              previousClose={stock.previous_close || stock.current_price}
+              currentPrice={livePrice}
+              previousClose={stock.previous_close || livePrice}
               dayHigh={stock.day_high}
               dayLow={stock.day_low}
             />
@@ -126,7 +130,7 @@ export default function StockDetail() {
             <QuickTradePanel
               symbol={stock.symbol}
               stockId={stock.id}
-              currentPrice={stock.current_price}
+              currentPrice={livePrice}
               dayHigh={stock.day_high}
               dayLow={stock.day_low}
             />
