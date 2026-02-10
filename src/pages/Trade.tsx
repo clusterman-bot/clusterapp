@@ -180,7 +180,7 @@ export default function Trade() {
         {user && !needsReconnect && (
           hasConnectedAccount ? (
             <Card className="mb-6 bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
-              <CardContent className="pt-6">
+              <CardContent className="pt-6 space-y-4">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Total Portfolio Value</p>
@@ -202,17 +202,17 @@ export default function Trade() {
                       </div>
                     )}
                   </div>
-                    <div className="flex gap-2 bg-muted/50 rounded-lg p-1">
-                      <Button onClick={() => navigate('/trade/portfolio')} size="sm">
-                        <Briefcase className="mr-2 h-4 w-4" /> Portfolio
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => navigate('/trade/orders')}>
-                        <Clock className="mr-2 h-4 w-4" /> Orders
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => navigate('/settings/brokerage')}>
-                        <Settings className="mr-2 h-4 w-4" /> Accounts
-                      </Button>
-                    </div>
+                </div>
+                <div className="flex gap-2 bg-muted/50 rounded-lg p-1 w-fit">
+                  <Button onClick={() => navigate('/trade/portfolio')} size="sm">
+                    <Briefcase className="mr-2 h-4 w-4" /> Portfolio
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => navigate('/trade/orders')}>
+                    <Clock className="mr-2 h-4 w-4" /> Orders
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => navigate('/settings/brokerage')}>
+                    <Settings className="mr-2 h-4 w-4" /> Accounts
+                  </Button>
                 </div>
               </CardContent>
             </Card>
