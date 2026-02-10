@@ -277,6 +277,32 @@ export function useAlpacaPlaceOrder() {
   });
 }
 
+// Fetch single asset info from Alpaca (name, exchange, tradable)
+export function useAlpacaAssetInfo(symbol: string | undefined) {
+  const { user } = useAuth();
+  const { isPaper } = useTradingMode();
+
+  return useQuery({
+    queryKey: ['alpaca-asset-info', symbol],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('alpaca-trading/search-assets', {
+        body: { isPaper, query: symbol, limit: 5 },
+      });
+
+      if (data?.needsConnection) return null;
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      const assets = data.assets as AlpacaAsset[];
+      const exact = assets.find((a: AlpacaAsset) => a.symbol === symbol);
+      return exact || null;
+    },
+    enabled: !!user && !!symbol,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+}
+
 // Cancel order via Alpaca
 export function useAlpacaCancelOrder() {
   const { isPaper } = useTradingMode();
