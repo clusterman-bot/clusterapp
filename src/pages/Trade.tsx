@@ -202,17 +202,17 @@ export default function Trade() {
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-2">
-                    <Button onClick={() => navigate('/trade/portfolio')}>
-                      <Briefcase className="mr-2 h-4 w-4" /> Portfolio
-                    </Button>
-                    <Button variant="outline" onClick={() => navigate('/trade/orders')}>
-                      <Clock className="mr-2 h-4 w-4" /> Orders
-                    </Button>
-                    <Button variant="outline" onClick={() => navigate('/settings/brokerage')}>
-                      <Settings className="mr-2 h-4 w-4" /> Accounts
-                    </Button>
-                  </div>
+                    <div className="flex gap-2 bg-muted/50 rounded-lg p-1">
+                      <Button onClick={() => navigate('/trade/portfolio')} size="sm">
+                        <Briefcase className="mr-2 h-4 w-4" /> Portfolio
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => navigate('/trade/orders')}>
+                        <Clock className="mr-2 h-4 w-4" /> Orders
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => navigate('/settings/brokerage')}>
+                        <Settings className="mr-2 h-4 w-4" /> Accounts
+                      </Button>
+                    </div>
                 </div>
               </CardContent>
             </Card>
