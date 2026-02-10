@@ -8,12 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Star, StarOff } from 'lucide-react';
 import { useStockBySymbol, useIsInWatchlist, useAddToWatchlist, useRemoveFromWatchlist } from '@/hooks/useTrading';
 import { TradingModeToggle } from '@/components/TradingModeToggle';
-import { TickerTape } from '@/components/trade/TickerTape';
 import { AdvancedChart } from '@/components/trade/AdvancedChart';
-import { TechnicalIndicators } from '@/components/trade/TechnicalIndicators';
-import { OrderBook } from '@/components/trade/OrderBook';
 import { QuickTradePanel } from '@/components/trade/QuickTradePanel';
-import { MarketStats } from '@/components/trade/MarketStats';
 
 export default function StockDetail() {
   const { symbol } = useParams<{ symbol: string }>();
@@ -63,9 +59,7 @@ export default function StockDetail() {
   return (
     <div className="min-h-screen bg-background">
       <MainNav />
-      
-      {/* Ticker Tape */}
-      <TickerTape />
+
 
       <main className="container py-4">
         {/* Header */}
@@ -95,10 +89,9 @@ export default function StockDetail() {
           </div>
         </div>
 
-        {/* Main Grid - TradingView Style */}
+        {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          {/* Chart - Takes 3 columns */}
-          <div className="lg:col-span-3 space-y-4">
+          <div className="lg:col-span-3">
             <AdvancedChart 
               symbol={stock.symbol}
               currentPrice={stock.current_price}
@@ -106,33 +99,12 @@ export default function StockDetail() {
               dayHigh={stock.day_high}
               dayLow={stock.day_low}
             />
-            
-            {/* Bottom Row: Order Book & Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <OrderBook currentPrice={stock.current_price} symbol={stock.symbol} />
-              <MarketStats 
-                currentPrice={stock.current_price}
-                previousClose={stock.previous_close || stock.current_price}
-                dayHigh={stock.day_high}
-                dayLow={stock.day_low}
-                volume={stock.volume}
-                marketCap={stock.market_cap}
-              />
-            </div>
           </div>
-
-          {/* Right Sidebar - Trade Panel & Technicals */}
-          <div className="space-y-4">
+          <div>
             <QuickTradePanel 
               symbol={stock.symbol}
               stockId={stock.id}
               currentPrice={stock.current_price}
-              dayHigh={stock.day_high}
-              dayLow={stock.day_low}
-            />
-            <TechnicalIndicators 
-              currentPrice={stock.current_price}
-              previousClose={stock.previous_close || stock.current_price}
               dayHigh={stock.day_high}
               dayLow={stock.day_low}
             />
