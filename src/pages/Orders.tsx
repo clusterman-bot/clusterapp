@@ -70,7 +70,8 @@ function OrderRow({ order, onCancel }: { order: Order; onCancel: (id: string) =>
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            {order.quantity} shares @ {formatPrice(order.executed_price || order.price || 0)}
+            {order.quantity} shares
+            {(order.executed_price || order.price) ? ` @ ${formatPrice(order.executed_price || order.price || 0)}` : ''}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             {format(new Date(order.created_at), 'MMM d, yyyy h:mm a')}
@@ -81,7 +82,7 @@ function OrderRow({ order, onCancel }: { order: Order; onCancel: (id: string) =>
       <div className="flex items-center gap-4 ml-8 md:ml-0">
         <div className="text-right">
           <p className="font-semibold">
-            {formatPrice((order.executed_price || order.price || 0) * order.quantity)}
+            {(order.executed_price || order.price) ? formatPrice((order.executed_price || order.price || 0) * order.quantity) : '—'}
           </p>
           {getStatusBadge(order.status)}
         </div>
