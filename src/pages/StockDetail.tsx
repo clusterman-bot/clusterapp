@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { MainNav } from '@/components/MainNav';
@@ -7,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Star, StarOff } from 'lucide-react';
 import { useStockBySymbol, useIsInWatchlist, useAddToWatchlist, useRemoveFromWatchlist } from '@/hooks/useTrading';
+import { useAlpacaQuote, useAlpacaAssetInfo } from '@/hooks/useAlpaca';
 import { TradingModeToggle } from '@/components/TradingModeToggle';
 import { AdvancedChart } from '@/components/trade/AdvancedChart';
 import { QuickTradePanel } from '@/components/trade/QuickTradePanel';
@@ -15,9 +15,32 @@ export default function StockDetail() {
   const { symbol } = useParams<{ symbol: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
-  
-  const { data: stock, isLoading } = useStockBySymbol(symbol);
-  const { data: isInWatchlist } = useIsInWatchlist(stock?.id);
+
+  const { data: dbStock, isLoading: dbLoading } = useStockBySymbol(symbol);
+
+  // Alpaca fallbacks — only fire when the local DB has no match
+  const { data: alpacaQuote, isLoading: quoteLoading } = useAlpacaQuote(!dbStock ? symbol : undefined);
+  const { data: alpacaAsset, isLoading: assetLoading } = useAlpacaAssetInfo(!dbStock ? symbol : undefined);
+
+  const isLoading = dbLoading || (!dbStock && (quoteLoading || assetLoading));
+
+  // Build a unified stock object from whichever source has data
+  const stock = dbStock
+    ? dbStock
+    : alpacaQuote
+      ? {
+          id: '', // no local id
+          symbol: symbol!.toUpperCase(),
+          name: alpacaAsset?.name || symbol!.toUpperCase(),
+          current_price: alpacaQuote.price,
+          previous_close: alpacaQuote.price,
+          day_high: null as number | null,
+          day_low: null as number | null,
+          sector: alpacaAsset?.exchange || null,
+        }
+      : null;
+
+  const { data: isInWatchlist } = useIsInWatchlist(dbStock?.id);
   const addToWatchlist = useAddToWatchlist();
   const removeFromWatchlist = useRemoveFromWatchlist();
 
@@ -51,15 +74,14 @@ export default function StockDetail() {
   }
 
   const toggleWatchlist = () => {
-    if (!stock) return;
-    if (isInWatchlist) removeFromWatchlist.mutate(stock.id);
-    else addToWatchlist.mutate(stock.id);
+    if (!dbStock) return; // watchlist only works for DB stocks
+    if (isInWatchlist) removeFromWatchlist.mutate(dbStock.id);
+    else addToWatchlist.mutate(dbStock.id);
   };
 
   return (
     <div className="min-h-screen bg-background">
       <MainNav />
-
 
       <main className="container py-4">
         {/* Header */}
@@ -80,7 +102,7 @@ export default function StockDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {user && (
+            {user && dbStock && (
               <Button variant="outline" size="icon" onClick={toggleWatchlist}>
                 {isInWatchlist ? <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" /> : <StarOff className="h-4 w-4" />}
               </Button>
@@ -92,7 +114,7 @@ export default function StockDetail() {
         {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           <div className="lg:col-span-3">
-            <AdvancedChart 
+            <AdvancedChart
               symbol={stock.symbol}
               currentPrice={stock.current_price}
               previousClose={stock.previous_close || stock.current_price}
@@ -101,7 +123,7 @@ export default function StockDetail() {
             />
           </div>
           <div>
-            <QuickTradePanel 
+            <QuickTradePanel
               symbol={stock.symbol}
               stockId={stock.id}
               currentPrice={stock.current_price}
