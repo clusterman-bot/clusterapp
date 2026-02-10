@@ -1,31 +1,26 @@
 
+# Fix "Stock Not Found" for Any Symbol
 
-# Remove Fake Data from Trade Page
+## Problem
+The `StockDetail` page only looks up stocks from a local database table that has just 15 hardcoded symbols (AAPL, TSLA, etc.). Any symbol not in that list -- like QQQ, SLV, or thousands of others -- shows "Stock not found" even though the Trade page search (powered by Alpaca) finds them fine.
 
-## Overview
-Strip out all randomly generated/fake data components from the stock detail page, keeping only the candlestick chart (even though its data is generated) and the quick trade panel (which executes real orders via Alpaca).
+## Solution
+Make the `StockDetail` page fall back to fetching stock info from Alpaca's quote API when the symbol isn't in the local database. This way any tradable symbol works.
 
-## What Gets Removed
+## Technical Details
 
-- **Ticker Tape** (`TickerTape`) -- scrolling banner with fake prices
-- **Technical Indicators** (`TechnicalIndicators`) -- random RSI, MACD, buy/sell signals
-- **Order Book** (`OrderBook`) -- fake bid/ask depth data
-- **Market Stats** (`MarketStats`) -- random P/E, EPS, beta, volume comparisons
+### 1. Update `src/pages/StockDetail.tsx`
+- Import `useAlpacaQuote` from `useAlpaca`
+- After `useStockBySymbol` returns no result, use `useAlpacaQuote(symbol)` as a fallback
+- Build a compatible stock-like object from the Alpaca quote data (symbol, name from URL param, price from quote)
+- The page will work for both local DB stocks AND any Alpaca-supported symbol
+- Show "Stock not found" only if BOTH the local DB and Alpaca return nothing
 
-## What Stays
+### 2. Update `src/hooks/useAlpaca.tsx` -- Add asset info hook
+- Add a new `useAlpacaAssetInfo` hook that fetches a single asset's metadata (name, exchange, tradable status) via the existing `alpaca-trading/search` endpoint with the exact symbol
+- This provides the stock name and exchange info for symbols not in the local DB
 
-- **Advanced Chart** (`AdvancedChart`) -- the candlestick/area/line chart with timeframes and indicator overlays (SMA, EMA, Bollinger Bands, RSI, Volume)
-- **Quick Trade Panel** (`QuickTradePanel`) -- real order placement via Alpaca
-- **Stock header** -- symbol, name, sector badge, watchlist button, trading mode toggle
-
-## Changes
-
-### `src/pages/StockDetail.tsx`
-- Remove imports for `TickerTape`, `TechnicalIndicators`, `OrderBook`, `MarketStats`
-- Remove the `<TickerTape />` below the nav
-- Change the layout from a 4-column grid to a simpler 3+1 layout:
-  - Left (3 cols): Chart only (no Order Book or Market Stats below it)
-  - Right (1 col): QuickTradePanel only (no TechnicalIndicators below it)
-
-The result is a clean, focused stock detail page with just the chart and the trade panel -- similar to Robinhood's stock view.
-
+### 3. Result
+- Users can search for QQQ, SLV, or any of 10,000+ Alpaca-supported symbols
+- The chart, trade panel, and watchlist all work for any symbol
+- No database changes needed
