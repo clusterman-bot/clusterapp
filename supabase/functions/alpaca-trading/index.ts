@@ -502,13 +502,39 @@ serve(async (req) => {
           headers: alpacaHeaders,
           body: JSON.stringify(orderPayload),
         });
-        const data = await response.json();
+        let data = await response.json();
 
         console.log('[Alpaca] Order response:', JSON.stringify(data));
 
         if (!response.ok) {
           throw new Error(data.message || 'Failed to place order');
         }
+
+        // For market orders, poll for fill status (up to 5 seconds)
+        if (orderType === 'market' && data.status !== 'filled') {
+          const alpacaOrderId = data.id;
+          for (let attempt = 0; attempt < 5; attempt++) {
+            await new Promise(r => setTimeout(r, 1000));
+            const pollRes = await fetch(`${alpacaBaseUrl}/v2/orders/${alpacaOrderId}`, {
+              headers: alpacaHeaders,
+            });
+            if (pollRes.ok) {
+              const pollData = await pollRes.json();
+              console.log(`[Alpaca] Poll attempt ${attempt + 1}:`, pollData.status);
+              if (pollData.status === 'filled' || pollData.status === 'partially_filled') {
+                data = pollData;
+                break;
+              }
+              if (pollData.status === 'canceled' || pollData.status === 'expired' || pollData.status === 'rejected') {
+                data = pollData;
+                break;
+              }
+            }
+          }
+        }
+
+        const isFilled = data.status === 'filled' || data.status === 'partially_filled';
+        const filledPrice = data.filled_avg_price ? parseFloat(data.filled_avg_price) : null;
 
         // Log the order in our database
         await supabaseAdmin.from('orders').insert({
@@ -517,11 +543,11 @@ serve(async (req) => {
           order_type: orderType,
           order_side: side,
           quantity: quantity,
-          price: data.filled_avg_price ? parseFloat(data.filled_avg_price) : null,
-          executed_price: data.filled_avg_price ? parseFloat(data.filled_avg_price) : null,
+          price: filledPrice,
+          executed_price: filledPrice,
           limit_price: limitPrice || null,
           stop_price: stopPrice || null,
-          status: data.status === 'filled' ? 'executed' : 'pending',
+          status: isFilled ? 'executed' : (data.status === 'canceled' || data.status === 'rejected' || data.status === 'expired') ? 'cancelled' : 'pending',
           executed_at: data.filled_at || null,
         });
 
