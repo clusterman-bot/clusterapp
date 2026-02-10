@@ -3,16 +3,124 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Shield, Key, ExternalLink, CheckCircle2, 
   AlertTriangle, Loader2, Eye, EyeOff,
-  BookOpen, ArrowRight
+  ArrowRight, ArrowLeft
 } from 'lucide-react';
 import { useConnectBrokerageAccount } from '@/hooks/useBrokerageAccounts';
+
+const EXCHANGES = [
+  { id: 'alpaca', name: 'Alpaca', description: 'Commission-free stock & crypto trading API' },
+  { id: 'coinbase', name: 'Coinbase', description: 'Popular cryptocurrency exchange' },
+  { id: 'robinhood', name: 'Robinhood', description: 'Commission-free stock & options trading' },
+  { id: 'interactive_brokers', name: 'Interactive Brokers', description: 'Professional-grade trading platform' },
+  { id: 'binance', name: 'Binance', description: 'Global cryptocurrency exchange' },
+] as const;
+
+type ExchangeId = typeof EXCHANGES[number]['id'];
+
+const EXCHANGE_STEPS: Record<ExchangeId, { signUp: { url: string; steps: string[] }; apiKey: { steps: string[]; keyPlaceholder: string; secretPlaceholder: string } }> = {
+  alpaca: {
+    signUp: {
+      url: 'https://alpaca.markets/signup',
+      steps: [
+        'Go to alpaca.markets and click "Sign Up"',
+        'Enter your email, create a password, and verify your identity',
+        'Choose Paper Trading (practice) or Live Trading (real money)',
+      ],
+    },
+    apiKey: {
+      steps: [
+        'In your Alpaca dashboard, navigate to Paper or Live Trading',
+        'Click on "View" or "Generate" under API Keys',
+        'Copy both the API Key ID and Secret Key — the secret is only shown once!',
+      ],
+      keyPlaceholder: 'PKXXXXXXXXXXXXXXXXXX',
+      secretPlaceholder: 'Enter your Alpaca secret key',
+    },
+  },
+  coinbase: {
+    signUp: {
+      url: 'https://www.coinbase.com/signup',
+      steps: [
+        'Go to coinbase.com and click "Get Started"',
+        'Create your account with email and verify your identity',
+        'Enable two-factor authentication for security',
+      ],
+    },
+    apiKey: {
+      steps: [
+        'Go to Settings → API in your Coinbase account',
+        'Click "New API Key" and select the permissions you need',
+        'Copy the API Key and API Secret — store the secret safely!',
+      ],
+      keyPlaceholder: 'Enter your Coinbase API key',
+      secretPlaceholder: 'Enter your Coinbase API secret',
+    },
+  },
+  robinhood: {
+    signUp: {
+      url: 'https://robinhood.com/signup',
+      steps: [
+        'Go to robinhood.com and click "Sign Up"',
+        'Download the app or continue on web',
+        'Complete identity verification and fund your account',
+      ],
+    },
+    apiKey: {
+      steps: [
+        'Robinhood does not offer public API keys directly',
+        'Use a third-party integration service for API access',
+        'Enter the credentials provided by your integration service',
+      ],
+      keyPlaceholder: 'Enter your API key',
+      secretPlaceholder: 'Enter your API secret',
+    },
+  },
+  interactive_brokers: {
+    signUp: {
+      url: 'https://www.interactivebrokers.com/en/index.php?f=46346',
+      steps: [
+        'Go to interactivebrokers.com and click "Open Account"',
+        'Choose Individual or Organization account type',
+        'Complete the application with identity and financial information',
+      ],
+    },
+    apiKey: {
+      steps: [
+        'Log into Client Portal and go to Settings → API',
+        'Enable API access and generate your API credentials',
+        'Copy the API Key and Secret for use below',
+      ],
+      keyPlaceholder: 'Enter your IB API key',
+      secretPlaceholder: 'Enter your IB API secret',
+    },
+  },
+  binance: {
+    signUp: {
+      url: 'https://www.binance.com/en/register',
+      steps: [
+        'Go to binance.com and click "Register"',
+        'Create your account and complete KYC verification',
+        'Enable two-factor authentication for security',
+      ],
+    },
+    apiKey: {
+      steps: [
+        'Go to Account → API Management in your Binance dashboard',
+        'Click "Create API" and label it for this integration',
+        'Copy the API Key and Secret Key — the secret is only shown once!',
+      ],
+      keyPlaceholder: 'Enter your Binance API key',
+      secretPlaceholder: 'Enter your Binance API secret',
+    },
+  },
+};
 
 interface ConnectBrokerageModalProps {
   open: boolean;
@@ -25,505 +133,313 @@ export function ConnectBrokerageModal({
   onOpenChange, 
   defaultAccountType = 'paper' 
 }: ConnectBrokerageModalProps) {
-  const [mode, setMode] = useState<'guided' | 'quick'>('guided');
   const [step, setStep] = useState(1);
+  const [exchange, setExchange] = useState<ExchangeId | ''>('');
   const [accountType, setAccountType] = useState<'paper' | 'live'>(defaultAccountType);
   const [apiKey, setApiKey] = useState('');
   const [apiSecret, setApiSecret] = useState('');
   const [showSecret, setShowSecret] = useState(false);
-  const [dailyLimit, setDailyLimit] = useState('10000');
-  const [perTradeLimit, setPerTradeLimit] = useState('1000');
 
   const connectAccount = useConnectBrokerageAccount();
 
+  const selectedExchange = EXCHANGES.find(e => e.id === exchange);
+  const exchangeConfig = exchange ? EXCHANGE_STEPS[exchange] : null;
+
   const handleConnect = async () => {
+    if (!exchange) return;
     await connectAccount.mutateAsync({
       apiKey,
       apiSecret,
       accountType,
-      dailyLimit: parseFloat(dailyLimit),
-      perTradeLimit: parseFloat(perTradeLimit),
+      brokerName: selectedExchange?.name || exchange,
     });
 
-    // Reset and close on success
-    setApiKey('');
-    setApiSecret('');
-    setStep(1);
+    resetModal();
     onOpenChange(false);
   };
 
   const resetModal = () => {
     setStep(1);
+    setExchange('');
     setApiKey('');
     setApiSecret('');
     setShowSecret(false);
   };
 
+  const totalSteps = 4;
+
   return (
-    <Dialog open={open} onOpenChange={(open) => {
-      if (!open) resetModal();
-      onOpenChange(open);
+    <Dialog open={open} onOpenChange={(o) => {
+      if (!o) resetModal();
+      onOpenChange(o);
     }}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
-            Connect Your Alpaca Account
+            Connect Exchange Account
           </DialogTitle>
           <DialogDescription>
-            Link your brokerage account to start trading with your own funds
+            Link your brokerage or exchange account to start trading
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={mode} onValueChange={(v) => setMode(v as 'guided' | 'quick')} className="mt-4">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="guided">
-              <BookOpen className="h-4 w-4 mr-2" />
-              Guided Setup
-            </TabsTrigger>
-            <TabsTrigger value="quick">
-              <Key className="h-4 w-4 mr-2" />
-              Quick Connect
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="guided" className="mt-4 space-y-4">
-            {/* Step Indicator */}
-            <div className="flex items-center justify-between mb-6">
-              {[1, 2, 3, 4].map((s) => (
-                <div key={s} className="flex items-center">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                    step >= s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-                  }`}>
-                    {step > s ? <CheckCircle2 className="h-4 w-4" /> : s}
-                  </div>
-                  {s < 4 && (
-                    <div className={`w-full h-1 mx-2 ${step > s ? 'bg-primary' : 'bg-muted'}`} 
-                      style={{ minWidth: '40px' }} 
-                    />
-                  )}
-                </div>
-              ))}
+        {/* Step Indicator */}
+        <div className="flex items-center justify-between mt-4 mb-2">
+          {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
+            <div key={s} className="flex items-center">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                step >= s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              }`}>
+                {step > s ? <CheckCircle2 className="h-4 w-4" /> : s}
+              </div>
+              {s < totalSteps && (
+                <div className={`w-full h-1 mx-2 transition-colors ${step > s ? 'bg-primary' : 'bg-muted'}`} 
+                  style={{ minWidth: '40px' }} 
+                />
+              )}
             </div>
+          ))}
+        </div>
 
-            {/* Step 1: Create Account */}
-            {step === 1 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Step 1: Create an Alpaca Account</CardTitle>
-                  <CardDescription>
-                    Alpaca is a commission-free trading platform that we integrate with
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4">
-                    <div className="flex items-start gap-4 p-4 bg-muted/50 rounded-lg">
-                      <div className="bg-primary/10 p-2 rounded-full">
-                        <span className="text-lg font-bold text-primary">1</span>
+        {/* Step 1: Choose Exchange */}
+        {step === 1 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Step 1: Choose Your Exchange</CardTitle>
+              <CardDescription>Select which exchange or brokerage you want to connect</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Select value={exchange} onValueChange={(v) => setExchange(v as ExchangeId)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an exchange..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXCHANGES.map((ex) => (
+                    <SelectItem key={ex.id} value={ex.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{ex.name}</span>
                       </div>
-                      <div>
-                        <p className="font-medium">Visit Alpaca Markets</p>
-                        <p className="text-sm text-muted-foreground">
-                          Go to alpaca.markets and click "Sign Up"
-                        </p>
-                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {selectedExchange && (
+                <p className="text-sm text-muted-foreground">{selectedExchange.description}</p>
+              )}
+
+              <div className="flex justify-end">
+                <Button onClick={() => setStep(2)} disabled={!exchange}>
+                  Continue <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 2: Create Account */}
+        {step === 2 && exchangeConfig && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Step 2: Create a {selectedExchange?.name} Account</CardTitle>
+              <CardDescription>
+                Follow these steps to set up your {selectedExchange?.name} account
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3">
+                {exchangeConfig.signUp.steps.map((text, i) => (
+                  <div key={i} className="flex items-start gap-4 p-4 bg-muted/50 rounded-lg">
+                    <div className="bg-primary/10 p-2 rounded-full shrink-0">
+                      <span className="text-lg font-bold text-primary">{i + 1}</span>
                     </div>
-                    <div className="flex items-start gap-4 p-4 bg-muted/50 rounded-lg">
-                      <div className="bg-primary/10 p-2 rounded-full">
-                        <span className="text-lg font-bold text-primary">2</span>
-                      </div>
-                      <div>
-                        <p className="font-medium">Complete Registration</p>
-                        <p className="text-sm text-muted-foreground">
-                          Enter your email, create a password, and verify your identity
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-4 p-4 bg-muted/50 rounded-lg">
-                      <div className="bg-primary/10 p-2 rounded-full">
-                        <span className="text-lg font-bold text-primary">3</span>
-                      </div>
-                      <div>
-                        <p className="font-medium">Choose Account Type</p>
-                        <p className="text-sm text-muted-foreground">
-                          Select Paper Trading (practice) or Live Trading (real money)
-                        </p>
-                      </div>
-                    </div>
+                    <p className="text-sm mt-1">{text}</p>
                   </div>
+                ))}
+              </div>
 
-                  <Button 
-                    variant="outline" 
-                    className="w-full" 
-                    onClick={() => window.open('https://alpaca.markets/signup', '_blank')}
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={() => window.open(exchangeConfig.signUp.url, '_blank')}
+              >
+                Open {selectedExchange?.name} Sign Up <ExternalLink className="h-4 w-4 ml-2" />
+              </Button>
+
+              <div className="flex justify-between">
+                <Button variant="outline" onClick={() => setStep(1)}>
+                  <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                </Button>
+                <Button onClick={() => setStep(3)}>
+                  Continue <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 3: Enter API Keys */}
+        {step === 3 && exchangeConfig && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Step 3: Enter Your API Keys</CardTitle>
+              <CardDescription>
+                Generate API keys from your {selectedExchange?.name} account
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 mb-4">
+                {exchangeConfig.apiKey.steps.map((text, i) => (
+                  <div key={i} className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                    <div className="bg-primary/10 p-1.5 rounded-full shrink-0">
+                      <span className="text-sm font-bold text-primary">{i + 1}</span>
+                    </div>
+                    <p className="text-sm mt-0.5">{text}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <Label>Account Type</Label>
+                <div className="grid grid-cols-2 gap-4 mt-2">
+                  <Card 
+                    className={`cursor-pointer transition-all ${
+                      accountType === 'paper' ? 'border-primary ring-2 ring-primary/20' : ''
+                    }`}
+                    onClick={() => setAccountType('paper')}
                   >
-                    Open Alpaca Sign Up <ExternalLink className="h-4 w-4 ml-2" />
-                  </Button>
-
-                  <div className="flex justify-between">
-                    <Button variant="ghost" onClick={() => setMode('quick')}>
-                      I already have an account
-                    </Button>
-                    <Button onClick={() => setStep(2)}>
-                      Continue <ArrowRight className="h-4 w-4 ml-2" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Step 2: Generate API Keys */}
-            {step === 2 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Step 2: Generate API Keys</CardTitle>
-                  <CardDescription>
-                    Create API keys to securely connect your account
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4">
-                    <div className="flex items-start gap-4 p-4 bg-muted/50 rounded-lg">
-                      <div className="bg-primary/10 p-2 rounded-full">
-                        <span className="text-lg font-bold text-primary">1</span>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">Paper</Badge>
+                        <span className="text-sm font-medium">Practice</span>
                       </div>
-                      <div>
-                        <p className="font-medium">Go to Paper Trading Dashboard</p>
-                        <p className="text-sm text-muted-foreground">
-                          In your Alpaca account, navigate to Paper Trading
-                        </p>
+                      <p className="text-xs text-muted-foreground mt-1">Simulated trading</p>
+                    </CardContent>
+                  </Card>
+                  <Card 
+                    className={`cursor-pointer transition-all ${
+                      accountType === 'live' ? 'border-primary ring-2 ring-primary/20' : ''
+                    }`}
+                    onClick={() => setAccountType('live')}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="destructive">Live</Badge>
+                        <span className="text-sm font-medium">Real Money</span>
                       </div>
-                    </div>
-                    <div className="flex items-start gap-4 p-4 bg-muted/50 rounded-lg">
-                      <div className="bg-primary/10 p-2 rounded-full">
-                        <span className="text-lg font-bold text-primary">2</span>
-                      </div>
-                      <div>
-                        <p className="font-medium">Find API Keys Section</p>
-                        <p className="text-sm text-muted-foreground">
-                          Click on "View" or "Generate" under API Keys
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-4 p-4 bg-muted/50 rounded-lg">
-                      <div className="bg-primary/10 p-2 rounded-full">
-                        <span className="text-lg font-bold text-primary">3</span>
-                      </div>
-                      <div>
-                        <p className="font-medium">Copy Your Keys</p>
-                        <p className="text-sm text-muted-foreground">
-                          Save both the API Key ID and Secret Key somewhere safe
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Alert>
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertDescription>
-                      <strong>Important:</strong> The Secret Key is only shown once. Make sure to copy it!
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="flex justify-between">
-                    <Button variant="outline" onClick={() => setStep(1)}>
-                      Back
-                    </Button>
-                    <Button onClick={() => setStep(3)}>
-                      I have my API keys <ArrowRight className="h-4 w-4 ml-2" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Step 3: Enter Credentials */}
-            {step === 3 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Step 3: Enter Your API Keys</CardTitle>
-                  <CardDescription>
-                    Your keys are encrypted and stored securely
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4">
-                    <div>
-                      <Label>Account Type</Label>
-                      <div className="grid grid-cols-2 gap-4 mt-2">
-                        <Card 
-                          className={`cursor-pointer transition-all ${
-                            accountType === 'paper' ? 'border-primary ring-2 ring-primary/20' : ''
-                          }`}
-                          onClick={() => setAccountType('paper')}
-                        >
-                          <CardContent className="p-4">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="secondary">Paper</Badge>
-                              <span className="text-sm font-medium">Practice Mode</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Simulated trading with fake money
-                            </p>
-                          </CardContent>
-                        </Card>
-                        <Card 
-                          className={`cursor-pointer transition-all ${
-                            accountType === 'live' ? 'border-primary ring-2 ring-primary/20' : ''
-                          }`}
-                          onClick={() => setAccountType('live')}
-                        >
-                          <CardContent className="p-4">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="destructive">Live</Badge>
-                              <span className="text-sm font-medium">Real Money</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Trade with actual funds
-                            </p>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="apiKey">API Key ID</Label>
-                      <Input
-                        id="apiKey"
-                        type="text"
-                        placeholder="PKXXXXXXXXXXXXXXXXXX"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        className="font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="apiSecret">Secret Key</Label>
-                      <div className="relative">
-                        <Input
-                          id="apiSecret"
-                          type={showSecret ? 'text' : 'password'}
-                          placeholder="Enter your secret key"
-                          value={apiSecret}
-                          onChange={(e) => setApiSecret(e.target.value)}
-                          className="font-mono pr-10"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-0 top-0 h-full"
-                          onClick={() => setShowSecret(!showSecret)}
-                        >
-                          {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <Button variant="outline" onClick={() => setStep(2)}>
-                      Back
-                    </Button>
-                    <Button 
-                      onClick={() => setStep(4)}
-                      disabled={!apiKey || !apiSecret}
-                    >
-                      Continue <ArrowRight className="h-4 w-4 ml-2" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Step 4: Set Limits */}
-            {step === 4 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Step 4: Set Trading Limits</CardTitle>
-                  <CardDescription>
-                    Protect yourself with trading safeguards
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4">
-                    <div>
-                      <Label htmlFor="dailyLimit">Daily Trading Limit ($)</Label>
-                      <Input
-                        id="dailyLimit"
-                        type="number"
-                        value={dailyLimit}
-                        onChange={(e) => setDailyLimit(e.target.value)}
-                        placeholder="10000"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Maximum total value of trades per day
-                      </p>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="perTradeLimit">Per-Trade Limit ($)</Label>
-                      <Input
-                        id="perTradeLimit"
-                        type="number"
-                        value={perTradeLimit}
-                        onChange={(e) => setPerTradeLimit(e.target.value)}
-                        placeholder="1000"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Maximum value for a single trade
-                      </p>
-                    </div>
-                  </div>
-
-                  <Alert className="bg-primary/5 border-primary/20">
-                    <Shield className="h-4 w-4 text-primary" />
-                    <AlertDescription>
-                      Your API keys are encrypted before storage. We never store them in plain text.
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="flex justify-between">
-                    <Button variant="outline" onClick={() => setStep(3)}>
-                      Back
-                    </Button>
-                    <Button 
-                      onClick={handleConnect}
-                      disabled={connectAccount.isPending}
-                    >
-                      {connectAccount.isPending ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Connecting...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="h-4 w-4 mr-2" />
-                          Connect Account
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          <TabsContent value="quick" className="mt-4 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Connect</CardTitle>
-                <CardDescription>
-                  Enter your Alpaca API credentials to connect instantly
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label>Account Type</Label>
-                  <div className="grid grid-cols-2 gap-4 mt-2">
-                    <Button
-                      variant={accountType === 'paper' ? 'default' : 'outline'}
-                      onClick={() => setAccountType('paper')}
-                      className="justify-start"
-                    >
-                      <Badge variant="secondary" className="mr-2">Paper</Badge>
-                      Practice
-                    </Button>
-                    <Button
-                      variant={accountType === 'live' ? 'default' : 'outline'}
-                      onClick={() => setAccountType('live')}
-                      className="justify-start"
-                    >
-                      <Badge variant="destructive" className="mr-2">Live</Badge>
-                      Real Money
-                    </Button>
-                  </div>
+                      <p className="text-xs text-muted-foreground mt-1">Trade with real funds</p>
+                    </CardContent>
+                  </Card>
                 </div>
+              </div>
 
-                <div>
-                  <Label htmlFor="apiKeyQuick">API Key ID</Label>
+              <div>
+                <Label htmlFor="apiKey">API Key</Label>
+                <Input
+                  id="apiKey"
+                  type="text"
+                  placeholder={exchangeConfig.apiKey.keyPlaceholder}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="font-mono"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="apiSecret">Secret Key</Label>
+                <div className="relative">
                   <Input
-                    id="apiKeyQuick"
-                    type="text"
-                    placeholder="PKXXXXXXXXXXXXXXXXXX"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    className="font-mono"
+                    id="apiSecret"
+                    type={showSecret ? 'text' : 'password'}
+                    placeholder={exchangeConfig.apiKey.secretPlaceholder}
+                    value={apiSecret}
+                    onChange={(e) => setApiSecret(e.target.value)}
+                    className="font-mono pr-10"
                   />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full"
+                    onClick={() => setShowSecret(!showSecret)}
+                  >
+                    {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
                 </div>
+              </div>
 
-                <div>
-                  <Label htmlFor="apiSecretQuick">Secret Key</Label>
-                  <div className="relative">
-                    <Input
-                      id="apiSecretQuick"
-                      type={showSecret ? 'text' : 'password'}
-                      placeholder="Enter your secret key"
-                      value={apiSecret}
-                      onChange={(e) => setApiSecret(e.target.value)}
-                      className="font-mono pr-10"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-0 top-0 h-full"
-                      onClick={() => setShowSecret(!showSecret)}
-                    >
-                      {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="dailyLimitQuick">Daily Limit ($)</Label>
-                    <Input
-                      id="dailyLimitQuick"
-                      type="number"
-                      value={dailyLimit}
-                      onChange={(e) => setDailyLimit(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="perTradeLimitQuick">Per-Trade Limit ($)</Label>
-                    <Input
-                      id="perTradeLimitQuick"
-                      type="number"
-                      value={perTradeLimit}
-                      onChange={(e) => setPerTradeLimit(e.target.value)}
-                    />
-                  </div>
-                </div>
-
+              <div className="flex justify-between">
+                <Button variant="outline" onClick={() => setStep(2)}>
+                  <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                </Button>
                 <Button 
-                  className="w-full"
+                  onClick={() => setStep(4)}
+                  disabled={!apiKey || !apiSecret}
+                >
+                  Continue <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 4: Confirm & Connect */}
+        {step === 4 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Step 4: Confirm & Connect</CardTitle>
+              <CardDescription>Review your details and connect</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3">
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <span className="text-sm text-muted-foreground">Exchange</span>
+                  <span className="text-sm font-medium">{selectedExchange?.name}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <span className="text-sm text-muted-foreground">Account Type</span>
+                  <Badge variant={accountType === 'paper' ? 'secondary' : 'destructive'}>
+                    {accountType === 'paper' ? 'Paper' : 'Live'}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <span className="text-sm text-muted-foreground">API Key</span>
+                  <span className="text-sm font-mono">{apiKey.slice(0, 8)}...{apiKey.slice(-4)}</span>
+                </div>
+              </div>
+
+              <Alert className="bg-primary/5 border-primary/20">
+                <Shield className="h-4 w-4 text-primary" />
+                <AlertDescription>
+                  Your API keys are encrypted before storage. We never store them in plain text.
+                </AlertDescription>
+              </Alert>
+
+              <div className="flex justify-between">
+                <Button variant="outline" onClick={() => setStep(3)}>
+                  <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                </Button>
+                <Button 
                   onClick={handleConnect}
-                  disabled={connectAccount.isPending || !apiKey || !apiSecret}
+                  disabled={connectAccount.isPending}
                 >
                   {connectAccount.isPending ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Verifying & Connecting...
+                      Connecting...
                     </>
                   ) : (
                     <>
-                      <Shield className="h-4 w-4 mr-2" />
-                      Connect Account
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Connect {selectedExchange?.name}
                     </>
                   )}
                 </Button>
-
-                <p className="text-xs text-center text-muted-foreground">
-                  Need help? <button onClick={() => setMode('guided')} className="text-primary underline">
-                    Follow our guided setup
-                  </button>
-                </p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </DialogContent>
     </Dialog>
   );

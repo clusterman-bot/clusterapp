@@ -89,6 +89,7 @@ export function useConnectBrokerageAccount() {
       apiKey: string;
       apiSecret: string;
       accountType: 'paper' | 'live';
+      brokerName?: string;
       dailyLimit?: number;
       perTradeLimit?: number;
     }) => {
@@ -101,6 +102,7 @@ export function useConnectBrokerageAccount() {
           apiKey: params.apiKey,
           apiSecret: params.apiSecret,
           accountType: params.accountType,
+          brokerName: params.brokerName || 'Alpaca',
           dailyLimit: params.dailyLimit || 10000,
           perTradeLimit: params.perTradeLimit || 1000,
         },
