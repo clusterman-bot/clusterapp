@@ -39,23 +39,12 @@ function formatCurrency(amount: number): string {
 }
 
 function AccountCard({ account }: { account: BrokerageAccount }) {
-  const [showSettings, setShowSettings] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [dailyLimit, setDailyLimit] = useState(account.daily_trade_limit.toString());
-  const [perTradeLimit, setPerTradeLimit] = useState(account.per_trade_limit.toString());
 
   const disconnectAccount = useDisconnectBrokerageAccount();
   const verifyAccount = useVerifyBrokerageAccount();
-  const updateLimits = useUpdateTradingLimits();
 
-  const handleUpdateLimits = async () => {
-    await updateLimits.mutateAsync({
-      accountId: account.id,
-      dailyLimit: parseFloat(dailyLimit),
-      perTradeLimit: parseFloat(perTradeLimit),
-    });
-    setShowSettings(false);
-  };
+
 
   return (
     <>
@@ -105,13 +94,6 @@ function AccountCard({ account }: { account: BrokerageAccount }) {
               <Button 
                 variant="ghost" 
                 size="icon"
-                onClick={() => setShowSettings(!showSettings)}
-              >
-                <Settings2 className="h-4 w-4" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon"
                 className="text-destructive hover:text-destructive"
                 onClick={() => setShowDeleteConfirm(true)}
               >
@@ -121,23 +103,6 @@ function AccountCard({ account }: { account: BrokerageAccount }) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-3 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <DollarSign className="h-4 w-4" />
-                Daily Limit
-              </div>
-              <p className="text-lg font-semibold">{formatCurrency(account.daily_trade_limit)}</p>
-            </div>
-            <div className="p-3 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Activity className="h-4 w-4" />
-                Per-Trade Limit
-              </div>
-              <p className="text-lg font-semibold">{formatCurrency(account.per_trade_limit)}</p>
-            </div>
-          </div>
-
           {account.last_verified_at && (
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <Clock className="h-3 w-3" />
@@ -145,44 +110,6 @@ function AccountCard({ account }: { account: BrokerageAccount }) {
             </p>
           )}
 
-          {showSettings && (
-            <>
-              <Separator />
-              <div className="space-y-4">
-                <h4 className="font-medium">Trading Limits</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor={`daily-${account.id}`}>Daily Limit ($)</Label>
-                    <Input
-                      id={`daily-${account.id}`}
-                      type="number"
-                      value={dailyLimit}
-                      onChange={(e) => setDailyLimit(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor={`per-trade-${account.id}`}>Per-Trade Limit ($)</Label>
-                    <Input
-                      id={`per-trade-${account.id}`}
-                      type="number"
-                      value={perTradeLimit}
-                      onChange={(e) => setPerTradeLimit(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <Button 
-                  onClick={handleUpdateLimits}
-                  disabled={updateLimits.isPending}
-                  className="w-full"
-                >
-                  {updateLimits.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : null}
-                  Save Changes
-                </Button>
-              </div>
-            </>
-          )}
         </CardContent>
       </Card>
 
@@ -354,13 +281,6 @@ export function BrokerageAccountsManager() {
                   <span>Activity Logging</span>
                 </div>
                 <Badge variant="outline" className="text-green-600">Active</Badge>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  <span>Trading Limits</span>
-                </div>
-                <Badge variant="outline" className="text-green-600">Configured</Badge>
               </div>
             </CardContent>
           </Card>
