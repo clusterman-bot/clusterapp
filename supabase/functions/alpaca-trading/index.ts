@@ -562,6 +562,65 @@ serve(async (req) => {
         );
       }
 
+      case 'get-bars': {
+        // Get historical bars for charting
+        const symbol = body.symbol?.toUpperCase();
+        const barTimeframe = body.timeframe || '1Day';
+        const start = body.start;
+        const end = body.end;
+        const limit = body.limit || 1000;
+
+        if (!symbol) {
+          throw new Error('Symbol is required');
+        }
+
+        console.log(`[Alpaca] Getting bars for: ${symbol}, timeframe=${barTimeframe}, start=${start}`);
+
+        const params = new URLSearchParams({
+          timeframe: barTimeframe,
+          limit: String(limit),
+          adjustment: 'raw',
+          feed: 'iex',
+          sort: 'asc',
+        });
+        if (start) params.set('start', start);
+        if (end) params.set('end', end);
+
+        const response = await fetch(
+          `https://data.alpaca.markets/v2/stocks/${symbol}/bars?${params}`,
+          {
+            headers: {
+              'APCA-API-KEY-ID': alpacaApiKey,
+              'APCA-API-SECRET-KEY': alpacaApiSecret,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const errData = await response.json();
+          console.error('[Alpaca] Bars error:', errData);
+          throw new Error(errData.message || 'Failed to fetch bars');
+        }
+
+        const barsData = await response.json();
+        const bars = (barsData.bars || []).map((b: any) => ({
+          timestamp: new Date(b.t).getTime(),
+          date: b.t,
+          open: b.o,
+          high: b.h,
+          low: b.l,
+          close: b.c,
+          volume: b.v,
+        }));
+
+        console.log(`[Alpaca] Returned ${bars.length} bars for ${symbol}`);
+
+        return new Response(
+          JSON.stringify({ success: true, bars }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       case 'cancel-order': {
         // Cancel an order
         const { alpacaOrderId } = body;
