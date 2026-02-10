@@ -1,70 +1,41 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useUserRole, useSetUserRole, AppRole } from '@/hooks/useUserRole';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Code, LineChart, ArrowLeft, Mail, CheckCircle } from 'lucide-react';
+import { Mail, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
-type AuthMode = 'select' | 'developer-signup' | 'trader-signup' | 'login' | 'verify-email';
+type AuthMode = 'signup' | 'login' | 'verify-email';
 
 export default function Auth() {
-  const [mode, setMode] = useState<AuthMode>('select');
+  const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
   const { signIn, signUp, user, loading: authLoading } = useAuth();
-  const { data: userRole, isLoading: roleLoading } = useUserRole();
-  const setUserRole = useSetUserRole();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
-  // Check if user just signed out (indicated by 'signout' param)
   const justSignedOut = searchParams.get('signout') === 'true';
 
-  // Redirect authenticated users appropriately (but not if they just signed out)
   useEffect(() => {
-    // If user just signed out, don't redirect - wait for auth state to clear
     if (justSignedOut) return;
-    // Wait for auth to finish loading
     if (authLoading) return;
     if (!user) return;
-    
-    // Check if email is confirmed
     if (!user.email_confirmed_at) {
-      // User exists but email not confirmed - show verify screen
       setPendingEmail(user.email || '');
       setMode('verify-email');
       return;
     }
-    
-    // Wait for role to finish loading
-    if (roleLoading) return;
-    
-    // If user has no role (new Google sign-up), redirect to onboarding
-    if (!userRole) {
-      navigate('/onboarding', { replace: true });
-      return;
-    }
-    
-    // Route based on role
-    if (userRole.role === 'admin') {
-      navigate('/admin', { replace: true });
-    } else if (userRole.role === 'retail_trader') {
-      navigate('/trader-dashboard', { replace: true });
-    } else {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [user, userRole, authLoading, roleLoading, navigate, justSignedOut]);
+    navigate('/trade', { replace: true });
+  }, [user, authLoading, navigate, justSignedOut]);
 
-  // Show loading while checking auth state (only when not coming from signout)
   if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -73,10 +44,7 @@ export default function Auth() {
     );
   }
 
-  // If user is logged in with confirmed email (and not just signed out), show loading while redirect happens
-  if (user && user.email_confirmed_at && !justSignedOut && !roleLoading) {
-    // If user has no role, they'll be redirected to onboarding
-    // If user has a role, they'll be redirected to their dashboard
+  if (user && user.email_confirmed_at && !justSignedOut) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Redirecting...</p>
@@ -84,44 +52,15 @@ export default function Auth() {
     );
   }
 
-  const validateUsername = (username: string): string | null => {
-    const trimmed = username.trim();
-    if (!trimmed) {
-      return 'Username is required';
-    }
-    if (trimmed.length < 3 || trimmed.length > 30) {
-      return 'Username must be 3-30 characters';
-    }
-    if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
-      return 'Username can only contain letters, numbers, underscores, and hyphens';
-    }
-    return null;
-  };
-
-  const handleSignUp = async (e: React.FormEvent, role: AppRole) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      const usernameError = validateUsername(username);
-      if (usernameError) {
-        throw new Error(usernameError);
-      }
-      
-      const { error } = await signUp(email, password, username.trim());
+      const { error } = await signUp(email, password, '');
       if (error) throw error;
-      
-      // Store the pending role for after email verification
-      localStorage.setItem('pending_user_role', role);
-      
-      // Show verify email screen
       setPendingEmail(email);
       setMode('verify-email');
-      
-      toast({ 
-        title: 'Check your email!', 
-        description: 'We sent you a verification link to confirm your account.' 
-      });
+      toast({ title: 'Check your email!', description: 'We sent you a verification link to confirm your account.' });
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
@@ -132,24 +71,14 @@ export default function Auth() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
       const { error } = await signIn(email, password);
       if (error) throw error;
-      
-      // Navigate immediately after successful login
-      // The dashboard pages will handle role-based routing
-      navigate('/dashboard', { replace: true });
+      navigate('/trade', { replace: true });
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
       setLoading(false);
     }
-  };
-
-  const resetForm = () => {
-    setEmail('');
-    setPassword('');
-    setUsername('');
   };
 
   const handleGoogleSignIn = async () => {
@@ -178,262 +107,83 @@ export default function Auth() {
               <Mail className="h-8 w-8 text-primary" />
             </div>
             <CardTitle className="text-2xl">Check your email</CardTitle>
-            <CardDescription className="text-base">
-              We sent a verification link to
-            </CardDescription>
+            <CardDescription className="text-base">We sent a verification link to</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="bg-muted rounded-lg p-4">
               <p className="font-medium text-foreground">{pendingEmail}</p>
             </div>
-            
             <div className="space-y-3 text-left">
               <div className="flex items-start gap-3">
                 <CheckCircle className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                <p className="text-sm text-muted-foreground">
-                  Click the link in your email to verify your account
-                </p>
+                <p className="text-sm text-muted-foreground">Click the link in your email to verify your account</p>
               </div>
               <div className="flex items-start gap-3">
                 <CheckCircle className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                <p className="text-sm text-muted-foreground">
-                  After verification, you'll be redirected back here to sign in
-                </p>
+                <p className="text-sm text-muted-foreground">After verification, you'll be redirected back here to sign in</p>
               </div>
               <div className="flex items-start gap-3">
                 <CheckCircle className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                <p className="text-sm text-muted-foreground">
-                  Check your spam folder if you don't see the email
-                </p>
+                <p className="text-sm text-muted-foreground">Check your spam folder if you don't see the email</p>
               </div>
             </div>
-
             <div className="pt-4 border-t">
-              <p className="text-sm text-muted-foreground mb-4">
-                Already verified your email?
-              </p>
-              <Button 
-                onClick={() => setMode('login')} 
-                className="w-full"
-              >
-                Sign In
-              </Button>
+              <p className="text-sm text-muted-foreground mb-4">Already verified your email?</p>
+              <Button onClick={() => setMode('login')} className="w-full">Sign In</Button>
             </div>
-
-            <button 
-              type="button" 
-              onClick={() => setMode('select')} 
-              className="text-sm text-muted-foreground hover:text-primary transition-colors"
-            >
-              ← Back to sign up options
-            </button>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  // Role selection screen
-  if (mode === 'select') {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-2xl">
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <img src="/favicon.png" alt="Cluster" className="h-10 w-10" />
-              <span className="text-3xl font-bold">Cluster</span>
-            </div>
-            <h1 className="text-2xl font-bold mb-2">Welcome to Cluster</h1>
-            <p className="text-muted-foreground">Choose how you want to join</p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6 mb-6">
-            {/* Developer Card */}
-            <Card 
-              className="cursor-pointer transition-all hover:border-primary hover:shadow-lg"
-              onClick={() => { resetForm(); setMode('developer-signup'); }}
-            >
-              <CardHeader>
-                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-                  <Code className="h-6 w-6 text-primary" />
-                </div>
-                <CardTitle>Developer / Quant</CardTitle>
-                <CardDescription>Build and monetize AI trading models</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Create trading strategies
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Run backtests with professional metrics
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Publish models and earn fees
-                  </li>
-                </ul>
-                <Button className="w-full mt-4">Sign Up as Developer</Button>
-              </CardContent>
-            </Card>
-
-            {/* Retail Trader Card */}
-            <Card 
-              className="cursor-pointer transition-all hover:border-primary hover:shadow-lg"
-              onClick={() => { resetForm(); setMode('trader-signup'); }}
-            >
-              <CardHeader>
-                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-                  <LineChart className="h-6 w-6 text-primary" />
-                </div>
-                <CardTitle>Retail Trader</CardTitle>
-                <CardDescription>Subscribe to proven trading strategies</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Discover top-performing models
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Subscribe to strategies you trust
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Trade stocks and track portfolio
-                  </li>
-                </ul>
-                <Button className="w-full mt-4">Sign Up as Trader</Button>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
-            </div>
-          </div>
-
-          <Button
-            variant="outline"
-            className="w-full max-w-md mx-auto flex items-center justify-center gap-2"
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24">
-              <path
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                fill="#4285F4"
-              />
-              <path
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                fill="#34A853"
-              />
-              <path
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                fill="#FBBC05"
-              />
-              <path
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                fill="#EA4335"
-              />
-            </svg>
-            {loading ? 'Connecting...' : 'Continue with Google'}
-          </Button>
-
-          <div className="text-center mt-6">
-            <button 
-              type="button" 
-              onClick={() => { resetForm(); setMode('login'); }} 
-              className="text-primary hover:underline"
-            >
-              Already have an account? Sign in
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Sign up forms (Developer or Trader)
-  if (mode === 'developer-signup' || mode === 'trader-signup') {
-    const role: AppRole = mode === 'developer-signup' ? 'developer' : 'retail_trader';
-    const roleLabel = mode === 'developer-signup' ? 'Developer / Quant' : 'Retail Trader';
-    const RoleIcon = mode === 'developer-signup' ? Code : LineChart;
-
+  // Signup form
+  if (mode === 'signup') {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <button 
-              onClick={() => setMode('select')} 
-              className="absolute left-4 top-4 p-2 hover:bg-accent rounded-lg transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
             <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                <RoleIcon className="h-5 w-5 text-primary" />
-              </div>
+              <img src="/favicon.png" alt="Cluster" className="h-8 w-8" />
+              <span className="text-2xl font-bold">Cluster</span>
             </div>
-            <CardTitle>Create {roleLabel} Account</CardTitle>
-            <CardDescription>
-              {mode === 'developer-signup' 
-                ? 'Start building AI trading models' 
-                : 'Start discovering trading strategies'}
-            </CardDescription>
+            <CardTitle>Create your account</CardTitle>
+            <CardDescription>Start trading stocks today</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={(e) => handleSignUp(e, role)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <Input 
-                  id="username" 
-                  value={username} 
-                  onChange={(e) => setUsername(e.target.value)} 
-                  placeholder={mode === 'developer-signup' ? 'quantmaster' : 'trader123'} 
-                  required 
-                />
-              </div>
+            <form onSubmit={handleSignUp} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input 
-                  id="email" 
-                  type="email" 
-                  value={email} 
-                  onChange={(e) => setEmail(e.target.value)} 
-                  placeholder="you@example.com" 
-                  required 
-                />
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input 
-                  id="password" 
-                  type="password" 
-                  value={password} 
-                  onChange={(e) => setPassword(e.target.value)} 
-                  placeholder="••••••••" 
-                  required 
-                  minLength={6} 
-                />
+                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Creating account...' : `Create ${roleLabel} Account`}
+                {loading ? 'Creating account...' : 'Create Account'}
               </Button>
             </form>
-            <div className="mt-4 text-center text-sm space-y-2">
-              <button 
-                type="button" 
-                onClick={() => setMode('login')} 
-                className="text-primary hover:underline"
-              >
+
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+              </div>
+            </div>
+
+            <Button variant="outline" className="w-full flex items-center justify-center gap-2" onClick={handleGoogleSignIn} disabled={loading}>
+              <svg className="h-5 w-5" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+              </svg>
+              {loading ? 'Connecting...' : 'Continue with Google'}
+            </Button>
+
+            <div className="mt-4 text-center text-sm">
+              <button type="button" onClick={() => setMode('login')} className="text-primary hover:underline">
                 Already have an account? Sign in
               </button>
             </div>
@@ -443,17 +193,11 @@ export default function Auth() {
     );
   }
 
-  // Login form
+  // Login form (default)
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <button 
-            onClick={() => setMode('select')} 
-            className="absolute left-4 top-4 p-2 hover:bg-accent rounded-lg transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
           <div className="flex items-center justify-center gap-2 mb-4">
             <img src="/favicon.png" alt="Cluster" className="h-8 w-8" />
             <span className="text-2xl font-bold">Cluster</span>
@@ -465,26 +209,11 @@ export default function Auth() {
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-                placeholder="you@example.com" 
-                required 
-              />
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input 
-                id="password" 
-                type="password" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                placeholder="••••••••" 
-                required 
-                minLength={6} 
-              />
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
@@ -492,47 +221,24 @@ export default function Auth() {
           </form>
 
           <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
+            <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
             </div>
           </div>
 
-          <Button
-            variant="outline"
-            className="w-full flex items-center justify-center gap-2"
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-          >
+          <Button variant="outline" className="w-full flex items-center justify-center gap-2" onClick={handleGoogleSignIn} disabled={loading}>
             <svg className="h-5 w-5" viewBox="0 0 24 24">
-              <path
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                fill="#4285F4"
-              />
-              <path
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                fill="#34A853"
-              />
-              <path
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                fill="#FBBC05"
-              />
-              <path
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                fill="#EA4335"
-              />
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
             </svg>
             {loading ? 'Connecting...' : 'Continue with Google'}
           </Button>
 
           <div className="mt-4 text-center text-sm">
-            <button 
-              type="button" 
-              onClick={() => setMode('select')} 
-              className="text-primary hover:underline"
-            >
+            <button type="button" onClick={() => setMode('signup')} className="text-primary hover:underline">
               Don't have an account? Sign up
             </button>
           </div>

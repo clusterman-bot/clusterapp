@@ -1,16 +1,10 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
-import { useUserRole } from '@/hooks/useUserRole';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { 
-  TrendingUp, Home, Store, 
-  LayoutDashboard, LogOut, User, LineChart, Shield, Code,
-  HelpCircle, FileText, ScrollText, MessageSquare
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { LineChart, LogOut, Briefcase, ClipboardList, Settings } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,29 +16,17 @@ import {
 export function MainNav() {
   const { user, signOut } = useAuth();
   const { data: profile } = useProfile();
-  const { data: userRole } = useUserRole();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
 
   const handleSignOut = async () => {
-    // Clear all query cache first to remove stale user data
     queryClient.clear();
     await signOut();
-    // Navigate with signout param to prevent Auth page from redirecting back
     navigate('/auth?signout=true', { replace: true });
   };
 
   const isActive = (path: string) => location.pathname === path;
-
-  // Determine dashboard path based on role
-  const getDashboardPath = () => {
-    if (userRole?.role === 'admin') return '/admin';
-    if (userRole?.role === 'retail_trader') return '/trader-dashboard';
-    return '/dashboard';
-  };
-
-  const dashboardPath = getDashboardPath();
 
   return (
     <header className="border-b border-border sticky top-0 bg-background z-50">
@@ -52,7 +34,7 @@ export function MainNav() {
         <div className="flex items-center gap-8">
           <div 
             className="flex items-center gap-2 cursor-pointer" 
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/trade')}
           >
             <img src="/favicon.png" alt="Cluster" className="h-7 w-7" />
             <span className="text-xl font-bold">Cluster</span>
@@ -60,75 +42,37 @@ export function MainNav() {
 
           <nav className="hidden md:flex items-center gap-1">
             <Button 
-              variant={isActive('/') ? 'secondary' : 'ghost'} 
+              variant={location.pathname.startsWith('/trade') ? 'secondary' : 'ghost'} 
               size="sm"
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/trade')}
             >
-              <Home className="mr-2 h-4 w-4" />
-              Home
+              <LineChart className="mr-2 h-4 w-4" />
+              Trade
             </Button>
             <Button 
-              variant={isActive('/explore') ? 'secondary' : 'ghost'} 
+              variant={isActive('/trade/portfolio') ? 'secondary' : 'ghost'} 
               size="sm"
-              onClick={() => navigate('/explore')}
+              onClick={() => navigate('/trade/portfolio')}
             >
-              <Store className="mr-2 h-4 w-4" />
-              Marketplace
+              <Briefcase className="mr-2 h-4 w-4" />
+              Portfolio
             </Button>
-            {/* Admins should not have access to Trade */}
-            {userRole?.role !== 'admin' && (
-              <Button 
-                variant={location.pathname.startsWith('/trade') ? 'secondary' : 'ghost'} 
-                size="sm"
-                onClick={() => navigate('/trade')}
-              >
-                <LineChart className="mr-2 h-4 w-4" />
-                Trade
-              </Button>
-            )}
-            {user && (
-              <Button 
-                variant={location.pathname === dashboardPath ? 'secondary' : 'ghost'} 
-                size="sm"
-                onClick={() => navigate(dashboardPath)}
-              >
-                <LayoutDashboard className="mr-2 h-4 w-4" />
-                Dashboard
-              </Button>
-            )}
-            
-            {/* Legal/FAQ Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button 
-                  variant={['/faq', '/privacy', '/terms', '/sms-consent'].includes(location.pathname) ? 'secondary' : 'ghost'} 
-                  size="sm"
-                >
-                  <HelpCircle className="mr-2 h-4 w-4" />
-                  Help
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-popover" align="start">
-                <DropdownMenuItem onClick={() => navigate('/faq')}>
-                  <HelpCircle className="mr-2 h-4 w-4" />
-                  FAQ
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/privacy')}>
-                  <Shield className="mr-2 h-4 w-4" />
-                  Privacy Policy
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/terms')}>
-                  <FileText className="mr-2 h-4 w-4" />
-                  Terms of Service
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/sms-consent')}>
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  SMS Preferences
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button 
+              variant={isActive('/trade/orders') ? 'secondary' : 'ghost'} 
+              size="sm"
+              onClick={() => navigate('/trade/orders')}
+            >
+              <ClipboardList className="mr-2 h-4 w-4" />
+              Orders
+            </Button>
+            <Button 
+              variant={isActive('/settings/brokerage') ? 'secondary' : 'ghost'} 
+              size="sm"
+              onClick={() => navigate('/settings/brokerage')}
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
+            </Button>
           </nav>
         </div>
 
@@ -148,29 +92,10 @@ export function MainNav() {
               <DropdownMenuContent className="w-56 bg-popover" align="end">
                 <div className="flex items-center justify-start gap-2 p-2">
                   <div className="flex flex-col space-y-1 leading-none">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium">{profile?.display_name || profile?.username}</p>
-                      {userRole?.role && (
-                        <Badge variant="secondary" className="text-xs capitalize">
-                          {userRole.role === 'admin' && <Shield className="h-3 w-3 mr-1" />}
-                          {userRole.role === 'developer' && <Code className="h-3 w-3 mr-1" />}
-                          {userRole.role === 'retail_trader' && <LineChart className="h-3 w-3 mr-1" />}
-                          {userRole.role === 'admin' ? 'Admin' : userRole.role === 'retail_trader' ? 'Trader' : 'Developer'}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">@{profile?.username}</p>
+                    <p className="font-medium">{profile?.display_name || profile?.username || 'User'}</p>
+                    <p className="text-xs text-muted-foreground">{user.email}</p>
                   </div>
                 </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/profile')}>
-                  <User className="mr-2 h-4 w-4" />
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate(dashboardPath)}>
-                  <LayoutDashboard className="mr-2 h-4 w-4" />
-                  Dashboard
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
                   <LogOut className="mr-2 h-4 w-4" />
@@ -179,7 +104,7 @@ export function MainNav() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button onClick={() => navigate('/auth')}>Get Started</Button>
+            <Button onClick={() => navigate('/auth')}>Sign In</Button>
           )}
         </div>
       </div>
