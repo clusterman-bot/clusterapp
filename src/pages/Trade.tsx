@@ -253,20 +253,22 @@ export default function Trade() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-flex">
-            <TabsTrigger value="explore" className="gap-2">
-              <BarChart3 className="h-4 w-4" /> Explore
-            </TabsTrigger>
-            <TabsTrigger value="watchlist" className="gap-2">
-              <Star className="h-4 w-4" /> Watchlist
-              {watchlist && watchlist.length > 0 && (
-                <Badge variant="secondary" className="ml-1">{watchlist.length}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="movers" className="gap-2">
-              <TrendingUp className="h-4 w-4" /> Movers
-            </TabsTrigger>
-          </TabsList>
+          <Card className="p-1">
+            <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-flex bg-transparent">
+              <TabsTrigger value="explore" className="gap-2">
+                <BarChart3 className="h-4 w-4" /> Explore
+              </TabsTrigger>
+              <TabsTrigger value="watchlist" className="gap-2">
+                <Star className="h-4 w-4" /> Watchlist
+                {watchlist && watchlist.length > 0 && (
+                  <Badge variant="secondary" className="ml-1">{watchlist.length}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="movers" className="gap-2">
+                <TrendingUp className="h-4 w-4" /> Movers
+              </TabsTrigger>
+            </TabsList>
+          </Card>
 
           <TabsContent value="explore" className="space-y-6">
             {searchQuery ? (
