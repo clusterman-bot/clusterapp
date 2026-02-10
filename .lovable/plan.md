@@ -1,26 +1,26 @@
 
-# Fix "Stock Not Found" for Any Symbol
+
+# Show Real-Time Stock Prices in Trade Panel
 
 ## Problem
-The `StockDetail` page only looks up stocks from a local database table that has just 15 hardcoded symbols (AAPL, TSLA, etc.). Any symbol not in that list -- like QQQ, SLV, or thousands of others -- shows "Stock not found" even though the Trade page search (powered by Alpaca) finds them fine.
+The stock price displayed in the Quick Trade panel and chart comes from the local database's `current_price` column, which is static/stale data. For symbols fetched via Alpaca fallback, the quote is live, but for the 15 database stocks (AAPL, TSLA, etc.), the price shown is whatever was last saved -- not the current market price.
 
 ## Solution
-Make the `StockDetail` page fall back to fetching stock info from Alpaca's quote API when the symbol isn't in the local database. This way any tradable symbol works.
+Always fetch a live Alpaca quote for every symbol on the StockDetail page, regardless of whether the stock exists in the local database. Use the live quote price as the authoritative price for the trade panel and chart.
 
-## Technical Details
+## Changes
 
-### 1. Update `src/pages/StockDetail.tsx`
-- Import `useAlpacaQuote` from `useAlpaca`
-- After `useStockBySymbol` returns no result, use `useAlpacaQuote(symbol)` as a fallback
-- Build a compatible stock-like object from the Alpaca quote data (symbol, name from URL param, price from quote)
-- The page will work for both local DB stocks AND any Alpaca-supported symbol
-- Show "Stock not found" only if BOTH the local DB and Alpaca return nothing
+### 1. `src/pages/StockDetail.tsx`
+- Always call `useAlpacaQuote(symbol)` (not conditionally based on `!dbStock`)
+- Use the Alpaca quote price as `currentPrice` when available, falling back to the DB price only if the quote hasn't loaded yet
+- This ensures the Quick Trade panel, chart, and order summary all reflect the real market price
 
-### 2. Update `src/hooks/useAlpaca.tsx` -- Add asset info hook
-- Add a new `useAlpacaAssetInfo` hook that fetches a single asset's metadata (name, exchange, tradable status) via the existing `alpaca-trading/search` endpoint with the exact symbol
-- This provides the stock name and exchange info for symbols not in the local DB
+### 2. What stays the same
+- The `QuickTradePanel` and `AdvancedChart` components don't need changes -- they already accept `currentPrice` as a prop
+- The Alpaca quote hook already auto-refreshes every 10 seconds, so the price will stay current
 
-### 3. Result
-- Users can search for QQQ, SLV, or any of 10,000+ Alpaca-supported symbols
-- The chart, trade panel, and watchlist all work for any symbol
-- No database changes needed
+### Result
+- All stock prices shown on the detail page will be live market prices from Alpaca
+- The "Estimated Cost" in the trade panel will be accurate
+- Prices refresh automatically every 10 seconds
+
