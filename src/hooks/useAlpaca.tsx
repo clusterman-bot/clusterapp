@@ -303,6 +303,60 @@ export function useAlpacaAssetInfo(symbol: string | undefined) {
   });
 }
 
+// Alpaca bar data for charting
+export interface AlpacaBar {
+  timestamp: number;
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+const TIMEFRAME_MAP: Record<string, { barSize: string; daysBack: number }> = {
+  '1D': { barSize: '1Min', daysBack: 1 },
+  '1W': { barSize: '15Min', daysBack: 7 },
+  '1M': { barSize: '1Day', daysBack: 30 },
+  '3M': { barSize: '1Day', daysBack: 90 },
+  '1Y': { barSize: '1Day', daysBack: 365 },
+  'ALL': { barSize: '1Day', daysBack: 730 },
+};
+
+export function useAlpacaBars(symbol: string | undefined, uiTimeframe: string = '1M') {
+  const { user } = useAuth();
+  const { isPaper } = useTradingMode();
+
+  const mapping = TIMEFRAME_MAP[uiTimeframe] || TIMEFRAME_MAP['1M'];
+
+  return useQuery({
+    queryKey: ['alpaca-bars', symbol, uiTimeframe, isPaper],
+    queryFn: async () => {
+      const start = new Date();
+      start.setDate(start.getDate() - mapping.daysBack);
+
+      const { data, error } = await supabase.functions.invoke('alpaca-trading/get-bars', {
+        body: {
+          isPaper,
+          symbol,
+          timeframe: mapping.barSize,
+          start: start.toISOString(),
+          limit: 1000,
+        },
+      });
+
+      if (data?.needsConnection) return null;
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      return data.bars as AlpacaBar[];
+    },
+    enabled: !!user && !!symbol,
+    staleTime: 60000,
+    retry: false,
+  });
+}
+
 // Cancel order via Alpaca
 export function useAlpacaCancelOrder() {
   const { isPaper } = useTradingMode();

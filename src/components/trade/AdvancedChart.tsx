@@ -16,9 +16,10 @@ import {
   Area,
 } from 'recharts';
 import { 
-  TrendingUp, TrendingDown, Maximize2, Minus, Plus,
+  TrendingUp, TrendingDown, Maximize2,
   BarChart3, Activity, Layers
 } from 'lucide-react';
+import { useAlpacaBars, AlpacaBar } from '@/hooks/useAlpaca';
 
 interface ChartData {
   time: string;
@@ -44,73 +45,27 @@ interface AdvancedChartProps {
   symbol: string;
   currentPrice: number;
   previousClose: number;
-  dayHigh?: number;
-  dayLow?: number;
+  dayHigh?: number | null;
+  dayLow?: number | null;
 }
 
-// Generate realistic OHLC data with technical indicators
-function generateOHLCData(currentPrice: number, previousClose: number, days: number = 60): ChartData[] {
-  const data: ChartData[] = [];
-  let price = previousClose || currentPrice * 0.95;
-  const volatility = currentPrice * 0.02;
-  
-  for (let i = 0; i < days; i++) {
-    const date = new Date();
-    date.setDate(date.getDate() - (days - i));
-    
-    const change = (Math.random() - 0.48) * volatility;
-    const open = price;
-    const close = price + change;
-    const high = Math.max(open, close) + Math.random() * volatility * 0.5;
-    const low = Math.min(open, close) - Math.random() * volatility * 0.5;
-    const volume = Math.floor(1000000 + Math.random() * 5000000);
-    
-    data.push({
-      time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      open,
-      high,
-      low,
-      close,
-      volume,
-    });
-    
-    price = close;
-  }
-  
-  // Ensure last point matches current price
-  if (data.length > 0) {
-    data[data.length - 1].close = currentPrice;
-    data[data.length - 1].high = Math.max(data[data.length - 1].high, currentPrice);
-    data[data.length - 1].low = Math.min(data[data.length - 1].low, currentPrice);
-  }
-  
-  // Calculate indicators
+function addIndicators(data: ChartData[]): void {
   for (let i = 0; i < data.length; i++) {
-    // SMA 20
     if (i >= 19) {
       const sum = data.slice(i - 19, i + 1).reduce((acc, d) => acc + d.close, 0);
       data[i].sma20 = sum / 20;
     }
-    
-    // SMA 50
     if (i >= 49) {
       const sum = data.slice(i - 49, i + 1).reduce((acc, d) => acc + d.close, 0);
       data[i].sma50 = sum / 50;
     }
-    
-    // EMA 12 & 26 (simplified)
     if (i >= 11) {
-      const ema12Sum = data.slice(i - 11, i + 1).reduce((acc, d) => acc + d.close, 0);
-      data[i].ema12 = ema12Sum / 12;
+      data[i].ema12 = data.slice(i - 11, i + 1).reduce((acc, d) => acc + d.close, 0) / 12;
     }
     if (i >= 25) {
-      const ema26Sum = data.slice(i - 25, i + 1).reduce((acc, d) => acc + d.close, 0);
-      data[i].ema26 = ema26Sum / 26;
-      data[i].macd = (data[i].ema12 || 0) - data[i].ema26;
+      data[i].ema26 = data.slice(i - 25, i + 1).reduce((acc, d) => acc + d.close, 0) / 26;
+      data[i].macd = (data[i].ema12 || 0) - data[i].ema26!;
     }
-    
-    // RSI (simplified)
     if (i >= 13) {
       let gains = 0, losses = 0;
       for (let j = i - 13; j <= i; j++) {
@@ -118,11 +73,8 @@ function generateOHLCData(currentPrice: number, previousClose: number, days: num
         if (change > 0) gains += change;
         else losses += Math.abs(change);
       }
-      const rs = gains / (losses || 1);
-      data[i].rsi = 100 - (100 / (1 + rs));
+      data[i].rsi = 100 - (100 / (1 + gains / (losses || 1)));
     }
-    
-    // Bollinger Bands
     if (i >= 19) {
       const slice = data.slice(i - 19, i + 1);
       const mean = slice.reduce((acc, d) => acc + d.close, 0) / 20;
@@ -133,41 +85,56 @@ function generateOHLCData(currentPrice: number, previousClose: number, days: num
       data[i].lowerBand = mean - 2 * stdDev;
     }
   }
-  
+}
+
+function barsToChartData(bars: AlpacaBar[], timeframe: string): ChartData[] {
+  const data: ChartData[] = bars.map(b => {
+    const d = new Date(b.date);
+    const isIntraday = timeframe === '1D' || timeframe === '1W';
+    return {
+      time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      date: isIntraday
+        ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      open: b.open,
+      high: b.high,
+      low: b.low,
+      close: b.close,
+      volume: b.volume,
+    };
+  });
+  addIndicators(data);
   return data;
 }
 
-// Custom candlestick renderer
-function Candlestick({ x, y, width, height, open, close, high, low, yScale }: any) {
-  const isGreen = close >= open;
-  const bodyY = yScale(Math.max(open, close));
-  const bodyHeight = Math.abs(yScale(open) - yScale(close)) || 1;
-  const wickTop = yScale(high);
-  const wickBottom = yScale(low);
-  const centerX = x + width / 2;
+function generateOHLCData(currentPrice: number, previousClose: number, days: number = 60): ChartData[] {
+  const data: ChartData[] = [];
+  let price = previousClose || currentPrice * 0.95;
+  const volatility = currentPrice * 0.02;
   
-  return (
-    <g>
-      {/* Wick */}
-      <line
-        x1={centerX}
-        y1={wickTop}
-        x2={centerX}
-        y2={wickBottom}
-        stroke={isGreen ? 'hsl(var(--profit))' : 'hsl(var(--loss))'}
-        strokeWidth={1}
-      />
-      {/* Body */}
-      <rect
-        x={x + width * 0.2}
-        y={bodyY}
-        width={width * 0.6}
-        height={bodyHeight}
-        fill={isGreen ? 'hsl(var(--profit))' : 'hsl(var(--loss))'}
-        stroke={isGreen ? 'hsl(var(--profit))' : 'hsl(var(--loss))'}
-      />
-    </g>
-  );
+  for (let i = 0; i < days; i++) {
+    const date = new Date();
+    date.setDate(date.getDate() - (days - i));
+    const change = (Math.random() - 0.48) * volatility;
+    const open = price;
+    const close = price + change;
+    const high = Math.max(open, close) + Math.random() * volatility * 0.5;
+    const low = Math.min(open, close) - Math.random() * volatility * 0.5;
+    const volume = Math.floor(1000000 + Math.random() * 5000000);
+    data.push({
+      time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      open, high, low, close, volume,
+    });
+    price = close;
+  }
+  if (data.length > 0) {
+    data[data.length - 1].close = currentPrice;
+    data[data.length - 1].high = Math.max(data[data.length - 1].high, currentPrice);
+    data[data.length - 1].low = Math.min(data[data.length - 1].low, currentPrice);
+  }
+  addIndicators(data);
+  return data;
 }
 
 const timeframes = ['1D', '1W', '1M', '3M', '1Y', 'ALL'];
@@ -177,27 +144,32 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
   const [timeframe, setTimeframe] = useState('1M');
   const [activeIndicators, setActiveIndicators] = useState<string[]>(['SMA', 'VOL']);
   const [chartType, setChartType] = useState<'line' | 'candle' | 'area'>('area');
-  
+
+  const { data: alpacaBars, isLoading: barsLoading } = useAlpacaBars(symbol, timeframe);
+
+  const isLive = !!alpacaBars && alpacaBars.length > 0;
+
   const priceChange = currentPrice - previousClose;
   const priceChangePercent = previousClose > 0 ? (priceChange / previousClose) * 100 : 0;
   const isPositive = priceChange >= 0;
   
   const chartData = useMemo(() => {
+    if (isLive) {
+      return barsToChartData(alpacaBars!, timeframe);
+    }
+    // Fallback to simulated
     const days = timeframe === '1D' ? 1 : timeframe === '1W' ? 7 : timeframe === '1M' ? 30 : timeframe === '3M' ? 90 : timeframe === '1Y' ? 365 : 365;
     return generateOHLCData(currentPrice, previousClose, days);
-  }, [currentPrice, previousClose, timeframe]);
+  }, [alpacaBars, isLive, currentPrice, previousClose, timeframe]);
   
   const toggleIndicator = (ind: string) => {
     setActiveIndicators(prev => 
-      prev.includes(ind) 
-        ? prev.filter(i => i !== ind) 
-        : [...prev, ind]
+      prev.includes(ind) ? prev.filter(i => i !== ind) : [...prev, ind]
     );
   };
   
   const minPrice = Math.min(...chartData.map(d => d.low)) * 0.995;
   const maxPrice = Math.max(...chartData.map(d => d.high)) * 1.005;
-  
   const latestData = chartData[chartData.length - 1];
   
   return (
@@ -212,6 +184,16 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
                 <Badge variant="outline" className="font-mono">
                   {currentPrice.toFixed(2)}
                 </Badge>
+                {barsLoading ? (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Loading…</Badge>
+                ) : (
+                  <Badge
+                    variant={isLive ? 'default' : 'secondary'}
+                    className="text-[10px] px-1.5 py-0"
+                  >
+                    {isLive ? 'Live' : 'Simulated'}
+                  </Badge>
+                )}
               </div>
               <div className={`flex items-center gap-1 text-sm ${isPositive ? 'text-profit' : 'text-loss'}`}>
                 {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -222,27 +204,14 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
             </div>
           </div>
           
-          {/* Chart Type Selector */}
           <div className="flex items-center gap-2">
-            <Button 
-              variant={chartType === 'line' ? 'secondary' : 'ghost'} 
-              size="sm"
-              onClick={() => setChartType('line')}
-            >
+            <Button variant={chartType === 'line' ? 'secondary' : 'ghost'} size="sm" onClick={() => setChartType('line')}>
               <Activity className="h-4 w-4" />
             </Button>
-            <Button 
-              variant={chartType === 'area' ? 'secondary' : 'ghost'} 
-              size="sm"
-              onClick={() => setChartType('area')}
-            >
+            <Button variant={chartType === 'area' ? 'secondary' : 'ghost'} size="sm" onClick={() => setChartType('area')}>
               <Layers className="h-4 w-4" />
             </Button>
-            <Button 
-              variant={chartType === 'candle' ? 'secondary' : 'ghost'} 
-              size="sm"
-              onClick={() => setChartType('candle')}
-            >
+            <Button variant={chartType === 'candle' ? 'secondary' : 'ghost'} size="sm" onClick={() => setChartType('candle')}>
               <BarChart3 className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="sm">
@@ -256,18 +225,13 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
           <Tabs value={timeframe} onValueChange={setTimeframe}>
             <TabsList className="bg-muted/50">
               {timeframes.map(tf => (
-                <TabsTrigger 
-                  key={tf} 
-                  value={tf}
-                  className="text-xs font-mono data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                >
+                <TabsTrigger key={tf} value={tf} className="text-xs font-mono data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                   {tf}
                 </TabsTrigger>
               ))}
             </TabsList>
           </Tabs>
           
-          {/* Indicator Toggles */}
           <div className="flex items-center gap-1">
             {indicators.map(ind => (
               <Button
@@ -294,12 +258,7 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
                 </linearGradient>
               </defs>
               
-              <CartesianGrid 
-                strokeDasharray="3 3" 
-                stroke="hsl(var(--border))" 
-                opacity={0.3}
-                vertical={false}
-              />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} vertical={false} />
               
               <XAxis 
                 dataKey="date" 
@@ -330,15 +289,9 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
                 labelStyle={{ color: 'hsl(var(--foreground))' }}
                 formatter={(value: number, name: string) => {
                   const labels: Record<string, string> = {
-                    close: 'Close',
-                    open: 'Open',
-                    high: 'High',
-                    low: 'Low',
-                    sma20: 'SMA 20',
-                    sma50: 'SMA 50',
-                    upperBand: 'Upper BB',
-                    lowerBand: 'Lower BB',
-                    volume: 'Volume',
+                    close: 'Close', open: 'Open', high: 'High', low: 'Low',
+                    sma20: 'SMA 20', sma50: 'SMA 50',
+                    upperBand: 'Upper BB', lowerBand: 'Lower BB', volume: 'Volume',
                   };
                   return [
                     name === 'volume' ? value.toLocaleString() : `$${value.toFixed(2)}`,
@@ -347,95 +300,35 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
                 }}
               />
               
-              {/* Bollinger Bands */}
               {activeIndicators.includes('BB') && (
                 <>
-                  <Area
-                    type="monotone"
-                    dataKey="upperBand"
-                    stroke="hsl(var(--muted-foreground))"
-                    strokeWidth={1}
-                    strokeDasharray="3 3"
-                    fill="none"
-                    dot={false}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="lowerBand"
-                    stroke="hsl(var(--muted-foreground))"
-                    strokeWidth={1}
-                    strokeDasharray="3 3"
-                    fill="none"
-                    dot={false}
-                  />
+                  <Area type="monotone" dataKey="upperBand" stroke="hsl(var(--muted-foreground))" strokeWidth={1} strokeDasharray="3 3" fill="none" dot={false} />
+                  <Area type="monotone" dataKey="lowerBand" stroke="hsl(var(--muted-foreground))" strokeWidth={1} strokeDasharray="3 3" fill="none" dot={false} />
                 </>
               )}
               
-              {/* Price Area/Line */}
               {chartType === 'area' && (
-                <Area
-                  type="monotone"
-                  dataKey="close"
-                  stroke={isPositive ? 'hsl(var(--profit))' : 'hsl(var(--loss))'}
-                  strokeWidth={2}
-                  fill="url(#priceGradient)"
-                  dot={false}
-                />
+                <Area type="monotone" dataKey="close" stroke={isPositive ? 'hsl(var(--profit))' : 'hsl(var(--loss))'} strokeWidth={2} fill="url(#priceGradient)" dot={false} />
               )}
               
               {chartType === 'line' && (
-                <Line
-                  type="monotone"
-                  dataKey="close"
-                  stroke={isPositive ? 'hsl(var(--profit))' : 'hsl(var(--loss))'}
-                  strokeWidth={2}
-                  dot={false}
-                />
+                <Line type="monotone" dataKey="close" stroke={isPositive ? 'hsl(var(--profit))' : 'hsl(var(--loss))'} strokeWidth={2} dot={false} />
               )}
               
-              {/* SMA Lines */}
               {activeIndicators.includes('SMA') && (
                 <>
-                  <Line
-                    type="monotone"
-                    dataKey="sma20"
-                    stroke="hsl(var(--chart-1))"
-                    strokeWidth={1}
-                    dot={false}
-                    strokeDasharray="5 5"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="sma50"
-                    stroke="hsl(var(--chart-2))"
-                    strokeWidth={1}
-                    dot={false}
-                    strokeDasharray="5 5"
-                  />
+                  <Line type="monotone" dataKey="sma20" stroke="hsl(var(--chart-1))" strokeWidth={1} dot={false} strokeDasharray="5 5" />
+                  <Line type="monotone" dataKey="sma50" stroke="hsl(var(--chart-2))" strokeWidth={1} dot={false} strokeDasharray="5 5" />
                 </>
               )}
               
-              {/* EMA Lines */}
               {activeIndicators.includes('EMA') && (
                 <>
-                  <Line
-                    type="monotone"
-                    dataKey="ema12"
-                    stroke="hsl(var(--chart-3))"
-                    strokeWidth={1}
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="ema26"
-                    stroke="hsl(var(--chart-4))"
-                    strokeWidth={1}
-                    dot={false}
-                  />
+                  <Line type="monotone" dataKey="ema12" stroke="hsl(var(--chart-3))" strokeWidth={1} dot={false} />
+                  <Line type="monotone" dataKey="ema26" stroke="hsl(var(--chart-4))" strokeWidth={1} dot={false} />
                 </>
               )}
               
-              {/* Current Price Reference Line */}
               <ReferenceLine 
                 y={currentPrice} 
                 stroke={isPositive ? 'hsl(var(--profit))' : 'hsl(var(--loss))'} 
@@ -452,25 +345,18 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
           </ResponsiveContainer>
         </div>
         
-        {/* Volume Chart */}
         {activeIndicators.includes('VOL') && (
           <div className="h-[80px] mt-2">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 0, right: 60, left: 0, bottom: 0 }}>
                 <XAxis dataKey="date" hide />
                 <YAxis 
-                  orientation="right"
-                  axisLine={false}
-                  tickLine={false}
+                  orientation="right" axisLine={false} tickLine={false}
                   tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
                   tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`}
                   width={50}
                 />
-                <Bar 
-                  dataKey="volume" 
-                  fill="hsl(var(--muted-foreground))"
-                  opacity={0.3}
-                />
+                <Bar dataKey="volume" fill="hsl(var(--muted-foreground))" opacity={0.3} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
