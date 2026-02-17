@@ -26,3 +26,9 @@ verify_jwt = false
 
 [functions.ai-strategy-builder]
 verify_jwt = false
+
+[functions.send-verification-email]
+verify_jwt = false
+
+[functions.verify-email-token]
+verify_jwt = false
