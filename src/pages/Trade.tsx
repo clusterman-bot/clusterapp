@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Search, TrendingUp, TrendingDown, Star, 
-  Briefcase, Clock, BarChart3, Settings, Link2, AlertTriangle
+  Briefcase, Clock, BarChart3, Settings, Link2, AlertTriangle, Bot
 } from 'lucide-react';
 import { useStocks, useWatchlist, Stock } from '@/hooks/useTrading';
 import { useAlpacaAccount, useAlpacaPositions, useAlpacaSearch, AlpacaAsset } from '@/hooks/useAlpaca';
@@ -147,9 +147,12 @@ export default function Trade() {
       <MainNav />
 
       <main className="container py-6">
-        {/* Trading Mode Toggle */}
+        {/* AI Bot Builder CTA + Trading Mode Toggle */}
         {user && (
-          <div className="mb-6 flex justify-end">
+          <div className="mb-6 flex items-center justify-between">
+            <Button onClick={() => navigate('/trade/ai-builder')} variant="outline" className="gap-2">
+              <Bot className="h-4 w-4" /> AI Bot Builder
+            </Button>
             <TradingModeToggle />
           </div>
         )}
