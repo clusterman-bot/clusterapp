@@ -372,7 +372,44 @@ serve(async (req) => {
     if (signalType !== 'HOLD') {
       try {
         const side = signalType.toLowerCase();
-        const qty = Math.min(max_quantity, Math.max(1, Math.floor(max_quantity * confidence)));
+        let qty = Math.min(max_quantity, Math.max(1, Math.floor(max_quantity * confidence)));
+
+        // For SELL signals, check if we actually hold this stock
+        if (side === 'sell') {
+          try {
+            const posResponse = await fetch(`${alpacaBaseUrl}/v2/positions/${symbol}`, { headers: alpacaHeaders });
+            if (posResponse.status === 404 || !posResponse.ok) {
+              console.log(`[StockMonitor] No position in ${symbol}, skipping SELL signal`);
+              signalRecord.trade_executed = false;
+              signalRecord.error_message = 'No position held — SELL skipped';
+              // Still log the signal but don't trade
+              const { error: insertErr } = await supabaseAdmin.from('automation_signals').insert(signalRecord);
+              if (insertErr) console.error('[StockMonitor] Failed to insert signal:', insertErr);
+              await supabaseAdmin.from('stock_automations').update({ last_checked_at: new Date().toISOString() }).eq('id', automationId);
+              return new Response(JSON.stringify({ signal: signalType, traded: false, reason: 'No position held' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+            const posData = await posResponse.json();
+            const heldQty = Math.abs(parseFloat(posData.qty || '0'));
+            if (heldQty <= 0) {
+              console.log(`[StockMonitor] Zero position in ${symbol}, skipping SELL`);
+              signalRecord.error_message = 'Zero position — SELL skipped';
+              const { error: insertErr } = await supabaseAdmin.from('automation_signals').insert(signalRecord);
+              if (insertErr) console.error('[StockMonitor] Failed to insert signal:', insertErr);
+              await supabaseAdmin.from('stock_automations').update({ last_checked_at: new Date().toISOString() }).eq('id', automationId);
+              return new Response(JSON.stringify({ signal: signalType, traded: false, reason: 'Zero position' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+            // Don't sell more than we hold
+            qty = Math.min(qty, Math.floor(heldQty));
+            console.log(`[StockMonitor] Holding ${heldQty} shares of ${symbol}, will sell ${qty}`);
+          } catch (posErr) {
+            console.error(`[StockMonitor] Error checking position for ${symbol}:`, posErr);
+            signalRecord.error_message = 'Failed to check position — SELL skipped';
+            const { error: insertErr } = await supabaseAdmin.from('automation_signals').insert(signalRecord);
+            if (insertErr) console.error('[StockMonitor] Failed to insert signal:', insertErr);
+            await supabaseAdmin.from('stock_automations').update({ last_checked_at: new Date().toISOString() }).eq('id', automationId);
+            return new Response(JSON.stringify({ signal: signalType, traded: false, reason: 'Position check failed' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+        }
 
         console.log(`[StockMonitor] Placing ${side} order: ${qty} shares of ${symbol} at ~${currentPrice}`);
 
