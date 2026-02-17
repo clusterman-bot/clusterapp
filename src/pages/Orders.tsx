@@ -6,28 +6,24 @@ import { BackButton } from '@/components/BackButton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Clock, CheckCircle, XCircle, AlertCircle,
-  TrendingUp, TrendingDown, ArrowRight, Calendar
+  ArrowRight, Calendar, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
-import { useOrders, useCancelOrder, Order } from '@/hooks/useTrading';
-import { format } from 'date-fns';
-
-function formatPrice(price: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(price);
-}
+import { useAlpacaOrders, useAlpacaCancelOrder, AlpacaOrder } from '@/hooks/useAlpaca';
+import { useTradingMode } from '@/hooks/useTradingMode';
+import { TradingModeIndicator } from '@/components/TradingModeToggle';
+import { formatDistanceToNow } from 'date-fns';
 
 function getStatusIcon(status: string) {
   switch (status) {
-    case 'executed':
+    case 'filled':
       return <CheckCircle className="h-4 w-4 text-profit" />;
-    case 'cancelled':
+    case 'canceled':
+    case 'expired':
       return <XCircle className="h-4 w-4 text-muted-foreground" />;
-    case 'failed':
+    case 'rejected':
       return <AlertCircle className="h-4 w-4 text-loss" />;
     default:
       return <Clock className="h-4 w-4 text-yellow-500" />;
@@ -36,45 +32,41 @@ function getStatusIcon(status: string) {
 
 function getStatusBadge(status: string) {
   switch (status) {
-    case 'executed':
-      return <Badge className="bg-profit/20 text-profit border-profit/30">Executed</Badge>;
-    case 'cancelled':
-      return <Badge variant="secondary">Cancelled</Badge>;
-    case 'failed':
-      return <Badge variant="destructive">Failed</Badge>;
+    case 'filled':
+      return <Badge className="bg-profit/20 text-profit border-profit/30 capitalize">{status}</Badge>;
+    case 'canceled':
+    case 'expired':
+      return <Badge variant="secondary" className="capitalize">{status}</Badge>;
+    case 'rejected':
+      return <Badge variant="destructive" className="capitalize">{status}</Badge>;
     default:
-      return <Badge className="bg-yellow-500/20 text-yellow-600 border-yellow-500/30">Pending</Badge>;
+      return <Badge className="bg-yellow-500/20 text-yellow-600 border-yellow-500/30 capitalize">{status.replace('_', ' ')}</Badge>;
   }
 }
 
-function OrderRow({ order, onCancel }: { order: Order; onCancel: (id: string) => void }) {
-  const navigate = useNavigate();
-  
+function OrderRow({ order, onCancel }: { order: AlpacaOrder; onCancel: (id: string) => void }) {
+  const qty = parseFloat(order.filled_qty) || parseFloat(order.qty);
+  const price = order.filled_avg_price ? parseFloat(order.filled_avg_price) : null;
+
   return (
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 hover:bg-muted/50 rounded-lg transition-colors border-b last:border-b-0">
       <div className="flex items-start gap-4">
         {getStatusIcon(order.status)}
         <div>
           <div className="flex items-center gap-2">
-            <span 
-              className="font-semibold cursor-pointer hover:text-primary transition-colors"
-              onClick={() => navigate(`/trade/stocks/${order.stocks?.symbol}`)}
-            >
-              {order.stocks?.symbol}
-            </span>
-            <Badge variant={order.order_side === 'buy' ? 'default' : 'secondary'} className={order.order_side === 'buy' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'}>
-              {order.order_side.toUpperCase()}
+            <span className="font-semibold">{order.symbol}</span>
+            <Badge variant={order.side === 'buy' ? 'default' : 'secondary'} className={order.side === 'buy' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'}>
+              {order.side.toUpperCase()}
             </Badge>
-            <Badge variant="outline" className="capitalize">
-              {order.order_type.replace('_', ' ')}
+            <Badge variant="outline" className="capitalize text-xs">
+              {order.type.replace('_', ' ')}
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            {order.quantity} shares
-            {(order.executed_price || order.price) ? ` @ ${formatPrice(order.executed_price || order.price || 0)}` : ''}
+            {qty} shares{price ? ` @ $${price.toFixed(2)}` : ''}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            {format(new Date(order.created_at), 'MMM d, yyyy h:mm a')}
+            {formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
           </p>
         </div>
       </div>
@@ -82,12 +74,12 @@ function OrderRow({ order, onCancel }: { order: Order; onCancel: (id: string) =>
       <div className="flex items-center gap-4 ml-8 md:ml-0">
         <div className="text-right">
           <p className="font-semibold">
-            {(order.executed_price || order.price) ? formatPrice((order.executed_price || order.price || 0) * order.quantity) : '—'}
+            {price ? `$${(price * qty).toFixed(2)}` : '—'}
           </p>
           {getStatusBadge(order.status)}
         </div>
         
-        {order.status === 'pending' && (
+        {['new', 'accepted', 'pending_new', 'partially_filled'].includes(order.status) && (
           <Button 
             variant="outline" 
             size="sm"
@@ -107,10 +99,11 @@ function OrderRow({ order, onCancel }: { order: Order; onCancel: (id: string) =>
 export default function Orders() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { isPaper } = useTradingMode();
   const [activeTab, setActiveTab] = useState('all');
   
-  const { data: orders, isLoading } = useOrders(activeTab === 'all' ? undefined : activeTab);
-  const cancelOrder = useCancelOrder();
+  const { data: orders, isLoading } = useAlpacaOrders(activeTab === 'all' ? 'all' : activeTab);
+  const cancelOrder = useAlpacaCancelOrder();
 
   if (!user) {
     return (
@@ -128,9 +121,10 @@ export default function Orders() {
     );
   }
 
-  const pendingOrders = orders?.filter(o => o.status === 'pending') || [];
-  const executedOrders = orders?.filter(o => o.status === 'executed') || [];
-  const cancelledOrders = orders?.filter(o => o.status === 'cancelled' || o.status === 'failed') || [];
+  const allOrders = orders || [];
+  const pendingOrders = allOrders.filter(o => ['new', 'accepted', 'pending_new', 'partially_filled'].includes(o.status));
+  const filledOrders = allOrders.filter(o => o.status === 'filled');
+  const cancelledOrders = allOrders.filter(o => ['canceled', 'expired', 'rejected'].includes(o.status));
 
   return (
     <div className="min-h-screen bg-background">
@@ -140,7 +134,10 @@ export default function Orders() {
         <BackButton />
 
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">Orders</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold">Orders</h1>
+            <TradingModeIndicator />
+          </div>
           <Button onClick={() => navigate('/trade')}>
             Trade <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
@@ -162,9 +159,9 @@ export default function Orders() {
             <CardContent className="pt-6">
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle className="h-4 w-4 text-profit" />
-                <p className="text-sm text-muted-foreground">Executed</p>
+                <p className="text-sm text-muted-foreground">Filled</p>
               </div>
-              <p className="text-2xl font-bold">{executedOrders.length}</p>
+              <p className="text-2xl font-bold">{filledOrders.length}</p>
             </CardContent>
           </Card>
 
@@ -185,18 +182,17 @@ export default function Orders() {
               <TabsList>
                 <TabsTrigger value="all">
                   All Orders
-                  {orders && orders.length > 0 && (
-                    <Badge variant="secondary" className="ml-2">{orders.length}</Badge>
+                  {allOrders.length > 0 && (
+                    <Badge variant="secondary" className="ml-2">{allOrders.length}</Badge>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="pending">
+                <TabsTrigger value="open">
                   Pending
                   {pendingOrders.length > 0 && (
                     <Badge variant="secondary" className="ml-2">{pendingOrders.length}</Badge>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="executed">Executed</TabsTrigger>
-                <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+                <TabsTrigger value="closed">Filled</TabsTrigger>
               </TabsList>
             </Tabs>
           </CardHeader>
@@ -216,9 +212,9 @@ export default function Orders() {
                   </div>
                 ))}
               </div>
-            ) : orders && orders.length > 0 ? (
+            ) : allOrders.length > 0 ? (
               <div className="space-y-1">
-                {orders.map((order) => (
+                {allOrders.map((order) => (
                   <OrderRow 
                     key={order.id} 
                     order={order} 
