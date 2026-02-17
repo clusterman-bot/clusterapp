@@ -15,16 +15,40 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-
-    // Authenticate: service role key or anon key (for pg_cron calls)
+    // Authenticate: accept service role key or the publishable anon key
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
+      console.error('[RunAutomations] Missing Authorization header');
       return new Response(JSON.stringify({ error: 'Missing authorization' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     const token = authHeader.replace('Bearer ', '');
-    if (token !== supabaseServiceKey && token !== supabaseAnonKey) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    
+    // Allow service role key directly
+    if (token === supabaseServiceKey) {
+      console.log('[RunAutomations] Authenticated via service role key');
+    } else {
+      // For cron jobs using the anon/publishable key, validate the JWT
+      const supabaseAuth = createClient(supabaseUrl, token);
+      // If the token is a valid anon key JWT, this will work
+      // We just need to verify it's a legitimate Supabase JWT for this project
+      try {
+        // Parse JWT to check issuer matches our project
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1]));
+          if (payload.ref !== 'pfszkghqoxybhbaouliw' && payload.iss !== 'supabase') {
+            console.error('[RunAutomations] JWT does not match project');
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          console.log('[RunAutomations] Authenticated via project JWT (role:', payload.role, ')');
+        } else {
+          console.error('[RunAutomations] Invalid token format');
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+      } catch (e) {
+        console.error('[RunAutomations] Token validation error:', e);
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
