@@ -996,6 +996,7 @@ export type Database = {
           bio: string | null
           created_at: string | null
           display_name: string | null
+          email_verified: boolean | null
           experience_level: string | null
           github_handle: string | null
           id: string
@@ -1011,6 +1012,8 @@ export type Database = {
           updated_at: string | null
           user_type: string | null
           username: string | null
+          verification_token: string | null
+          verification_token_expires_at: string | null
           website_url: string | null
         }
         Insert: {
@@ -1019,6 +1022,7 @@ export type Database = {
           bio?: string | null
           created_at?: string | null
           display_name?: string | null
+          email_verified?: boolean | null
           experience_level?: string | null
           github_handle?: string | null
           id: string
@@ -1034,6 +1038,8 @@ export type Database = {
           updated_at?: string | null
           user_type?: string | null
           username?: string | null
+          verification_token?: string | null
+          verification_token_expires_at?: string | null
           website_url?: string | null
         }
         Update: {
@@ -1042,6 +1048,7 @@ export type Database = {
           bio?: string | null
           created_at?: string | null
           display_name?: string | null
+          email_verified?: boolean | null
           experience_level?: string | null
           github_handle?: string | null
           id?: string
@@ -1057,6 +1064,8 @@ export type Database = {
           updated_at?: string | null
           user_type?: string | null
           username?: string | null
+          verification_token?: string | null
+          verification_token_expires_at?: string | null
           website_url?: string | null
         }
         Relationships: []

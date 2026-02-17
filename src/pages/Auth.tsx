@@ -34,11 +34,22 @@ export default function Auth() {
     if (justSignedOut) return;
     if (authLoading) return;
     if (!user) return;
-    if (!user.email_confirmed_at) {
-      setPendingEmail(user.email || '');
-      setMode('verify-email');
-      return;
-    }
+    // Check custom email_verified flag from profiles
+    const checkVerification = async () => {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email_verified')
+        .eq('id', user.id)
+        .single();
+      
+      if (!profile?.email_verified) {
+        setPendingEmail(user.email || '');
+        setMode('verify-email');
+        return;
+      }
+      navigate('/trade', { replace: true });
+    };
+    checkVerification();
     navigate('/trade', { replace: true });
   }, [user, authLoading, navigate, justSignedOut]);
 
@@ -50,7 +61,7 @@ export default function Auth() {
     );
   }
 
-  if (user && user.email_confirmed_at && !justSignedOut) {
+  if (user && !justSignedOut && mode !== 'verify-email') {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Redirecting...</p>

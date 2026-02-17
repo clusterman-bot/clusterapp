@@ -21,6 +21,7 @@ import Community from "./pages/Community";
 import AIBotBuilder from "./pages/AIBotBuilder";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+import VerifyEmail from "./pages/VerifyEmail";
 
 const queryClient = new QueryClient();
 
@@ -49,6 +50,7 @@ const App = () => (
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/faq" element={<FAQ />} />
               <Route path="/sms-consent" element={<SMSConsent />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
