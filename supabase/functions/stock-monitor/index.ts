@@ -229,7 +229,32 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const encryptionSecret = Deno.env.get('ENCRYPTION_SECRET')!;
+
+    // ==================== AUTHENTICATION ====================
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Missing authorization' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const isServiceRole = token === supabaseServiceKey;
+
+    let authenticatedUserId: string | null = null;
+
+    if (!isServiceRole) {
+      // Validate user JWT
+      const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getUser(token);
+      if (claimsError || !claimsData?.user) {
+        return new Response(JSON.stringify({ error: 'Invalid authorization' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      authenticatedUserId = claimsData.user.id;
+    }
+
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
@@ -246,6 +271,15 @@ serve(async (req) => {
       .eq('id', automationId)
       .eq('is_active', true)
       .single();
+
+    if (autoErr || !automation) {
+      return new Response(JSON.stringify({ error: 'Automation not found or inactive' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // If user JWT (not service role), verify they own this automation
+    if (authenticatedUserId && automation.user_id !== authenticatedUserId) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     if (autoErr || !automation) {
       return new Response(JSON.stringify({ error: 'Automation not found or inactive' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
