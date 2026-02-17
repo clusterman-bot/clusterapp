@@ -1,85 +1,49 @@
 
 
-# Custom Email Verification via Resend
+# Redesign Profile Edit Dialog and Remove Account Type
 
-Replace the default `@auth.lovable.cloud` verification emails with branded emails sent from `seif@clusterapp.space` using Resend.
+## Problem
+1. The profile edit dialog is too tall for the screen -- it has too many fields stacked vertically in a single scrollable column.
+2. The "Account Type" concept (Developer / Trader badge) should be removed from the profile header, the About tab, and the onboarding role selection step.
 
-## Approach
+## Changes
 
-Instead of relying on the built-in auth email, we'll:
-1. Disable the default confirmation email by enabling auto-confirm on signup
-2. Mark users as "unverified" in a custom field until they click our custom verification link
-3. Send a branded verification email via Resend from a new edge function
-4. Create a verification callback page that confirms the user's email
+### 1. Redesign the Edit Profile Dialog (`src/pages/Profile.tsx`)
 
-## What Gets Built
+Replace the current tall single-column form with a more compact layout:
+- Use a **tabbed layout inside the dialog** with two tabs: "Profile" and "Social Links"
+- **Profile tab**: Display Name, Username, Bio (reduced to 2 rows), Experience Level -- all compact
+- **Social Links tab**: Twitter, GitHub, LinkedIn, Website in a clean 2-column grid
+- Remove Trading Philosophy from the edit dialog (it's rarely used and adds height)
+- Add `max-h-[80vh] overflow-y-auto` to the dialog content as a safety net
+- This cuts the dialog height roughly in half
 
-### 1. New Edge Function: `send-verification-email`
-- Called after signup with the user's email and a signed verification token
-- Uses Resend API to send a branded HTML email from `seif@clusterapp.space`
-- The email contains a verification link pointing to `/verify-email?token=...`
-- Token is a JWT-like signed value (using HMAC with a secret) containing the user ID and expiry
+### 2. Remove Account Type Badge from Profile Header (lines 300-302)
 
-### 2. New Edge Function: `verify-email-token`
-- Called when user clicks the verification link
-- Validates the token, checks expiry
-- Updates the user's profile to mark `email_verified = true`
-- Returns success/failure status
+Remove the `<Badge>` that shows "Admin", "Trader", or "Developer" next to the user's name in the profile header.
 
-### 3. Database Changes
-- Add `email_verified` boolean column (default `false`) to the `profiles` table
-- This acts as our custom verification flag since we'll auto-confirm at the auth level
+### 3. Remove Account Type from About Tab (lines 676-684)
 
-### 4. Auth Config Change
-- Enable auto-confirm for email signups (so users can log in immediately but with limited access)
-- The custom `email_verified` flag on profiles controls actual verification status
+Remove the "Account Type" section with the Briefcase icon from the About tab.
 
-### 5. Frontend Changes
+### 4. Remove Role Badge from UserProfileSidebar (`src/components/UserProfileSidebar.tsx`)
 
-**`src/hooks/useAuth.tsx`**
-- After successful signup, call the `send-verification-email` edge function
-- Pass the user's email and ID
+Remove the role badge (Developer/Trader/Admin) and the related imports (`useUserRole`, role display logic, `Code`, `LineChart`, `Settings` icons).
 
-**`src/pages/Auth.tsx`**
-- Keep the existing "Check your email" verification screen as-is (it already looks great)
-- Update the flow so it triggers our custom email instead of relying on the built-in one
+### 5. Remove Role Selection from Onboarding (`src/pages/Onboarding.tsx`)
 
-**New page: `src/pages/VerifyEmail.tsx`**
-- Handles the `/verify-email?token=...` route
-- Calls the `verify-email-token` edge function
-- Shows success/error state
-- Redirects to `/trade` on success
+- Remove the "Role" step entirely from the 3-step onboarding flow (Username -> Role -> Social becomes Username -> Social)
+- Default all new users to the `retail_trader` role automatically (set during username submission)
+- Update the progress indicator from 3 dots to 2
+- Remove the role selection cards UI
 
-**`src/App.tsx`**
-- Add `/verify-email` route
+### Files Modified
+- `src/pages/Profile.tsx` -- Redesign edit dialog, remove role badge from header and About tab
+- `src/components/UserProfileSidebar.tsx` -- Remove role badge
+- `src/pages/Onboarding.tsx` -- Remove role step, auto-assign retail_trader
 
-### 6. Access Control
-- Update protected routes/components to check `profiles.email_verified` instead of `user.email_confirmed_at`
-- Users can log in but see a "Please verify your email" banner until verified
+### Technical Notes
+- The `user_roles` table and hooks remain intact for existing users and admin functionality
+- New users will silently get `retail_trader` role during onboarding
+- No database changes needed
 
-## Secret Needed
-- **RESEND_API_KEY** -- Your Resend API key (we'll ask you to provide this before building)
-
-## Technical Details
-
-### Verification Token Flow
-1. On signup, generate a random token, store a hash in the `profiles` table (`verification_token` column, `verification_token_expires_at`)
-2. Send email with link: `https://clusterapp.lovable.app/verify-email?token=<token>&uid=<user_id>`
-3. On click, edge function validates token against stored hash and checks expiry (24 hours)
-4. On success, set `email_verified = true` and clear the token
-
-### Email Template
-- Clean, branded HTML email
-- "From: Cluster <seif@clusterapp.space>"
-- Subject: "Verify your Cluster account"
-- Contains a prominent "Verify Email" button linking to the verification page
-
-### Files to Create/Edit
-- `supabase/functions/send-verification-email/index.ts` (new)
-- `supabase/functions/verify-email-token/index.ts` (new)
-- `src/pages/VerifyEmail.tsx` (new)
-- `src/hooks/useAuth.tsx` (edit signup flow)
-- `src/pages/Auth.tsx` (update verification check)
-- `src/App.tsx` (add route)
-- `supabase/config.toml` (add function entries)
-- Database migration: add `email_verified`, `verification_token`, `verification_token_expires_at` to profiles
