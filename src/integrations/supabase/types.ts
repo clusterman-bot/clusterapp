@@ -1099,6 +1099,7 @@ export type Database = {
       }
       stock_automations: {
         Row: {
+          allow_shorting: boolean
           created_at: string | null
           horizon_minutes: number | null
           id: string
@@ -1120,6 +1121,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          allow_shorting?: boolean
           created_at?: string | null
           horizon_minutes?: number | null
           id?: string
@@ -1141,6 +1143,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          allow_shorting?: boolean
           created_at?: string | null
           horizon_minutes?: number | null
           id?: string

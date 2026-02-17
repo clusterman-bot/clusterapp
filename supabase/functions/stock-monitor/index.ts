@@ -285,7 +285,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Automation not found or inactive' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const { user_id, symbol, indicators, rsi_oversold, rsi_overbought, theta, max_quantity, horizon_minutes } = automation;
+    const { user_id, symbol, indicators, rsi_oversold, rsi_overbought, theta, max_quantity, horizon_minutes, allow_shorting } = automation;
 
     console.log(`[StockMonitor] Processing ${symbol} for user ${user_id}, horizon=${horizon_minutes}min, theta=${theta}`);
 
@@ -374,15 +374,14 @@ serve(async (req) => {
         const side = signalType.toLowerCase();
         let qty = Math.min(max_quantity, Math.max(1, Math.floor(max_quantity * confidence)));
 
-        // For SELL signals, check if we actually hold this stock
-        if (side === 'sell') {
+        // For SELL signals, check position unless shorting is allowed
+        if (side === 'sell' && !allow_shorting) {
           try {
             const posResponse = await fetch(`${alpacaBaseUrl}/v2/positions/${symbol}`, { headers: alpacaHeaders });
             if (posResponse.status === 404 || !posResponse.ok) {
-              console.log(`[StockMonitor] No position in ${symbol}, skipping SELL signal`);
+              console.log(`[StockMonitor] No position in ${symbol}, skipping SELL signal (shorting disabled)`);
               signalRecord.trade_executed = false;
-              signalRecord.error_message = 'No position held — SELL skipped';
-              // Still log the signal but don't trade
+              signalRecord.error_message = 'No position held — SELL skipped (shorting disabled)';
               const { error: insertErr } = await supabaseAdmin.from('automation_signals').insert(signalRecord);
               if (insertErr) console.error('[StockMonitor] Failed to insert signal:', insertErr);
               await supabaseAdmin.from('stock_automations').update({ last_checked_at: new Date().toISOString() }).eq('id', automationId);
@@ -390,10 +389,9 @@ serve(async (req) => {
             }
             const posData = await posResponse.json();
             const heldQty = parseFloat(posData.qty || '0');
-            // If quantity is zero or negative (short), do NOT sell more
             if (heldQty <= 0) {
-              console.log(`[StockMonitor] Zero position in ${symbol}, skipping SELL`);
-              signalRecord.error_message = 'Zero position — SELL skipped';
+              console.log(`[StockMonitor] Zero/short position in ${symbol}, skipping SELL (shorting disabled)`);
+              signalRecord.error_message = 'Zero/short position — SELL skipped (shorting disabled)';
               const { error: insertErr } = await supabaseAdmin.from('automation_signals').insert(signalRecord);
               if (insertErr) console.error('[StockMonitor] Failed to insert signal:', insertErr);
               await supabaseAdmin.from('stock_automations').update({ last_checked_at: new Date().toISOString() }).eq('id', automationId);
@@ -410,6 +408,8 @@ serve(async (req) => {
             await supabaseAdmin.from('stock_automations').update({ last_checked_at: new Date().toISOString() }).eq('id', automationId);
             return new Response(JSON.stringify({ signal: signalType, traded: false, reason: 'Position check failed' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
+        } else if (side === 'sell' && allow_shorting) {
+          console.log(`[StockMonitor] Shorting allowed for ${symbol}, proceeding with SELL without position check`);
         }
 
         console.log(`[StockMonitor] Placing ${side} order: ${qty} shares of ${symbol} at ~${currentPrice}`);
