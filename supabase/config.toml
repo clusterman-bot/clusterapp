@@ -17,3 +17,9 @@ verify_jwt = false
 
 [functions.trading-bot]
 verify_jwt = false
+
+[functions.stock-monitor]
+verify_jwt = false
+
+[functions.run-automations]
+verify_jwt = false

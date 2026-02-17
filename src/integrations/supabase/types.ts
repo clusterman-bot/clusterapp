@@ -92,6 +92,62 @@ export type Database = {
           },
         ]
       }
+      automation_signals: {
+        Row: {
+          alpaca_order_id: string | null
+          automation_id: string
+          confidence: number | null
+          created_at: string | null
+          error_message: string | null
+          executed_price: number | null
+          id: string
+          indicator_snapshot: Json | null
+          price_at_signal: number | null
+          signal_type: string
+          symbol: string
+          trade_executed: boolean | null
+          user_id: string
+        }
+        Insert: {
+          alpaca_order_id?: string | null
+          automation_id: string
+          confidence?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          executed_price?: number | null
+          id?: string
+          indicator_snapshot?: Json | null
+          price_at_signal?: number | null
+          signal_type: string
+          symbol: string
+          trade_executed?: boolean | null
+          user_id: string
+        }
+        Update: {
+          alpaca_order_id?: string | null
+          automation_id?: string
+          confidence?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          executed_price?: number | null
+          id?: string
+          indicator_snapshot?: Json | null
+          price_at_signal?: number | null
+          signal_type?: string
+          symbol?: string
+          trade_executed?: boolean | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_signals_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "stock_automations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       backtests: {
         Row: {
           benchmark: string | null
@@ -1040,6 +1096,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      stock_automations: {
+        Row: {
+          created_at: string | null
+          horizon_minutes: number | null
+          id: string
+          indicators: Json
+          is_active: boolean | null
+          last_checked_at: string | null
+          last_signal_at: string | null
+          max_quantity: number | null
+          position_size_percent: number | null
+          rsi_overbought: number | null
+          rsi_oversold: number | null
+          stop_loss_percent: number | null
+          symbol: string
+          take_profit_percent: number | null
+          theta: number | null
+          total_signals: number | null
+          total_trades: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          horizon_minutes?: number | null
+          id?: string
+          indicators?: Json
+          is_active?: boolean | null
+          last_checked_at?: string | null
+          last_signal_at?: string | null
+          max_quantity?: number | null
+          position_size_percent?: number | null
+          rsi_overbought?: number | null
+          rsi_oversold?: number | null
+          stop_loss_percent?: number | null
+          symbol: string
+          take_profit_percent?: number | null
+          theta?: number | null
+          total_signals?: number | null
+          total_trades?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          horizon_minutes?: number | null
+          id?: string
+          indicators?: Json
+          is_active?: boolean | null
+          last_checked_at?: string | null
+          last_signal_at?: string | null
+          max_quantity?: number | null
+          position_size_percent?: number | null
+          rsi_overbought?: number | null
+          rsi_oversold?: number | null
+          stop_loss_percent?: number | null
+          symbol?: string
+          take_profit_percent?: number | null
+          theta?: number | null
+          total_signals?: number | null
+          total_trades?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       stocks: {
         Row: {

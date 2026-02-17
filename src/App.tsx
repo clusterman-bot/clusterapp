@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Trade from "./pages/Trade";
 import StockDetail from "./pages/StockDetail";
+import StockAutomationConfig from "./pages/StockAutomationConfig";
 import Portfolio from "./pages/Portfolio";
 import Orders from "./pages/Orders";
 import BrokerageSettings from "./pages/BrokerageSettings";
@@ -33,6 +34,7 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/trade" element={<Trade />} />
               <Route path="/trade/stocks/:symbol" element={<StockDetail />} />
+              <Route path="/trade/stocks/:symbol/automate" element={<StockAutomationConfig />} />
               <Route path="/trade/portfolio" element={<Portfolio />} />
               <Route path="/trade/orders" element={<Orders />} />
               <Route path="/settings/brokerage" element={<BrokerageSettings />} />
