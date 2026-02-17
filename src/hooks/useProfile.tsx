@@ -12,6 +12,7 @@ export interface Profile {
   experience_level: string;
   user_type: string;
   is_verified: boolean;
+  email_verified: boolean;
   total_followers: number;
   total_following: number;
   total_earnings: number;

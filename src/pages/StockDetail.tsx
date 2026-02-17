@@ -1,5 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useEmailVerified } from '@/hooks/useEmailVerified';
+import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import { MainNav } from '@/components/MainNav';
 import { BackButton } from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
@@ -14,6 +16,7 @@ import { QuickTradePanel } from '@/components/trade/QuickTradePanel';
 export default function StockDetail() {
   const { symbol } = useParams<{ symbol: string }>();
   const { user } = useAuth();
+  const { isVerified } = useEmailVerified();
   const navigate = useNavigate();
 
   const { data: dbStock, isLoading: dbLoading } = useStockBySymbol(symbol);
@@ -106,23 +109,26 @@ export default function StockDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {user && (
+            {user && isVerified && (
               <Button variant="outline" size="sm" onClick={() => navigate(`/trade/stocks/${stock.symbol}/automate`)}>
                 <Activity className="mr-2 h-4 w-4" /> Automate
               </Button>
             )}
-            {user && dbStock && (
+            {user && isVerified && dbStock && (
               <Button variant="outline" size="icon" onClick={toggleWatchlist}>
                 {isInWatchlist ? <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" /> : <StarOff className="h-4 w-4" />}
               </Button>
             )}
-            {user && <TradingModeToggle />}
+            {user && isVerified && <TradingModeToggle />}
           </div>
         </div>
 
+        {/* Email verification banner */}
+        {user && !isVerified && <EmailVerificationBanner />}
+
         {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          <div className="lg:col-span-3">
+        <div className={`grid grid-cols-1 ${isVerified ? 'lg:grid-cols-4' : ''} gap-4`}>
+          <div className={isVerified ? 'lg:col-span-3' : ''}>
             <AdvancedChart
               symbol={stock.symbol}
               currentPrice={livePrice}
@@ -131,15 +137,17 @@ export default function StockDetail() {
               dayLow={stock.day_low}
             />
           </div>
-          <div>
-            <QuickTradePanel
-              symbol={stock.symbol}
-              stockId={stock.id}
-              currentPrice={livePrice}
-              dayHigh={stock.day_high}
-              dayLow={stock.day_low}
-            />
-          </div>
+          {isVerified && (
+            <div>
+              <QuickTradePanel
+                symbol={stock.symbol}
+                stockId={stock.id}
+                currentPrice={livePrice}
+                dayHigh={stock.day_high}
+                dayLow={stock.day_low}
+              />
+            </div>
+          )}
         </div>
       </main>
     </div>

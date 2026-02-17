@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useEmailVerified } from '@/hooks/useEmailVerified';
+import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import { MainNav } from '@/components/MainNav';
 import { BackButton } from '@/components/BackButton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,6 +42,8 @@ export default function Portfolio() {
   const hasConnectedAccount = brokerageAccounts && brokerageAccounts.length > 0;
   const activeAccount = brokerageAccounts?.find(a => a.is_active);
 
+  const { isVerified } = useEmailVerified();
+
   if (!user) {
     return (
       <div className="min-h-screen bg-background">
@@ -50,6 +54,22 @@ export default function Portfolio() {
             <h2 className="text-2xl font-bold mb-2">Sign in to view your portfolio</h2>
             <p className="text-muted-foreground mb-4">Track your investments and performance</p>
             <Button onClick={() => navigate('/auth')}>Sign In</Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!isVerified) {
+    return (
+      <div className="min-h-screen bg-background">
+        <MainNav />
+        <main className="container py-6">
+          <EmailVerificationBanner />
+          <div className="text-center py-16">
+            <Briefcase className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+            <h2 className="text-2xl font-bold mb-2">Verify your email</h2>
+            <p className="text-muted-foreground mb-4">You need to verify your email before accessing your portfolio.</p>
           </div>
         </main>
       </div>

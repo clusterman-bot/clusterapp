@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useEmailVerified } from '@/hooks/useEmailVerified';
+import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import { MainNav } from '@/components/MainNav';
 import { BackButton } from '@/components/BackButton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -98,6 +100,7 @@ function OrderRow({ order, onCancel }: { order: AlpacaOrder; onCancel: (id: stri
 
 export default function Orders() {
   const { user } = useAuth();
+  const { isVerified } = useEmailVerified();
   const navigate = useNavigate();
   const { isPaper } = useTradingMode();
   const [activeTab, setActiveTab] = useState('all');
@@ -115,6 +118,22 @@ export default function Orders() {
             <h2 className="text-2xl font-bold mb-2">Sign in to view your orders</h2>
             <p className="text-muted-foreground mb-4">Track your trading history and pending orders</p>
             <Button onClick={() => navigate('/auth')}>Sign In</Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!isVerified) {
+    return (
+      <div className="min-h-screen bg-background">
+        <MainNav />
+        <main className="container py-6">
+          <EmailVerificationBanner />
+          <div className="text-center py-16">
+            <Clock className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+            <h2 className="text-2xl font-bold mb-2">Verify your email</h2>
+            <p className="text-muted-foreground mb-4">You need to verify your email before accessing your orders.</p>
           </div>
         </main>
       </div>
