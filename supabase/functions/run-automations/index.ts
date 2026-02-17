@@ -14,6 +14,17 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    // Authenticate: only service role key allowed (cron/internal calls)
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Missing authorization' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const token = authHeader.replace('Bearer ', '');
+    if (token !== supabaseServiceKey) {
+      return new Response(JSON.stringify({ error: 'Unauthorized - service role required' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('[RunAutomations] Starting automation run...');
