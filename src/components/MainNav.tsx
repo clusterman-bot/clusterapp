@@ -4,7 +4,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LineChart, LogOut, Briefcase, ClipboardList, Settings } from 'lucide-react';
+import { LineChart, LogOut, Briefcase, ClipboardList, Settings, Users } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -64,6 +64,14 @@ export function MainNav() {
             >
               <ClipboardList className="mr-2 h-4 w-4" />
               Orders
+            </Button>
+            <Button 
+              variant={isActive('/community') ? 'secondary' : 'ghost'} 
+              size="sm"
+              onClick={() => navigate('/community')}
+            >
+              <Users className="mr-2 h-4 w-4" />
+              Community
             </Button>
             <Button 
               variant={isActive('/settings/brokerage') ? 'secondary' : 'ghost'} 
