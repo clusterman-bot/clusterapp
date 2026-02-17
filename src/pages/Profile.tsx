@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   TrendingUp, Users, BarChart3, Settings, 
   CheckCircle, UserPlus, UserMinus, TrendingDown, Target, Store,
-  User, Calendar, Award, Briefcase, Twitter, Linkedin, Github, Globe,
+  User, Calendar, Award, Twitter, Linkedin, Github, Globe,
   FileText, Heart, Bookmark, Mail, Lock, Eye, EyeOff
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -127,11 +127,11 @@ export default function Profile() {
   
   // Edit profile state
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editTab, setEditTab] = useState('profile');
   const [editForm, setEditForm] = useState({
     display_name: '',
     username: '',
     bio: '',
-    trading_philosophy: '',
     experience_level: '',
     twitter_handle: '',
     linkedin_url: '',
@@ -142,14 +142,11 @@ export default function Profile() {
   // If no userId, show current user's profile
   const profileId = userId || user?.id;
   const isOwnProfile = !userId || userId === user?.id;
-  // Use actual role from user_roles table, not profile.user_type
   const isRetailTrader = userRole?.role === 'retail_trader';
   const canCreateModels = userRole?.role === 'developer';
 
   const { data: ownProfile } = useProfile();
   
-  // Fetch the target profile if viewing someone else's
-  // Use public_profiles view for other users to respect privacy settings
   const { data: targetProfile, isLoading: profileLoading } = useQuery({
     queryKey: ['profile', profileId, 'public'],
     queryFn: async () => {
@@ -167,7 +164,6 @@ export default function Profile() {
 
   const profile = isOwnProfile ? ownProfile : targetProfile;
 
-  // Fetch user's models (only for developers/admins)
   const { data: userModels } = useQuery({
     queryKey: ['user-models', profileId],
     queryFn: async () => {
@@ -188,14 +184,12 @@ export default function Profile() {
   const follow = useFollow();
   const unfollow = useUnfollow();
 
-  // Initialize edit form when profile loads
   const handleOpenEdit = () => {
     if (profile) {
       setEditForm({
         display_name: profile.display_name || '',
         username: profile.username || '',
         bio: profile.bio || '',
-        trading_philosophy: profile.trading_philosophy || '',
         experience_level: profile.experience_level || 'beginner',
         twitter_handle: profile.twitter_handle || '',
         linkedin_url: profile.linkedin_url || '',
@@ -203,6 +197,7 @@ export default function Profile() {
         website_url: profile.website_url || '',
       });
     }
+    setEditTab('profile');
     setIsEditOpen(true);
   };
 
@@ -212,7 +207,6 @@ export default function Profile() {
         display_name: editForm.display_name || null,
         username: editForm.username || null,
         bio: editForm.bio || null,
-        trading_philosophy: editForm.trading_philosophy || null,
         experience_level: editForm.experience_level || 'beginner',
         twitter_handle: editForm.twitter_handle || null,
         linkedin_url: editForm.linkedin_url || null,
@@ -297,9 +291,6 @@ export default function Profile() {
                     {profile.is_verified && (
                       <CheckCircle className="h-5 w-5 text-primary" />
                     )}
-                    <Badge variant="outline" className="capitalize">
-                      {userRole?.role === 'admin' ? 'Admin' : userRole?.role === 'retail_trader' ? 'Trader' : userRole?.role || 'Developer'}
-                    </Badge>
                   </div>
                   <p className="text-muted-foreground mb-2">
                     @{profile.username}
@@ -344,73 +335,69 @@ export default function Profile() {
                           <Settings className="mr-2 h-4 w-4" /> Edit Profile
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="sm:max-w-[500px]">
+                      <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
                         <DialogHeader>
                           <DialogTitle>Edit Profile</DialogTitle>
                           <DialogDescription>
                             Update your profile information
                           </DialogDescription>
                         </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="display_name">Display Name</Label>
-                            <Input
-                              id="display_name"
-                              value={editForm.display_name}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, display_name: e.target.value }))}
-                              placeholder="Your display name"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="username">Username</Label>
-                            <Input
-                              id="username"
-                              value={editForm.username}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, username: e.target.value }))}
-                              placeholder="your_username"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="bio">Bio</Label>
-                            <Textarea
-                              id="bio"
-                              value={editForm.bio}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, bio: e.target.value }))}
-                              placeholder="Tell us about yourself..."
-                              rows={3}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="experience">Experience Level</Label>
-                            <Select 
-                              value={editForm.experience_level} 
-                              onValueChange={(v) => setEditForm(prev => ({ ...prev, experience_level: v }))}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select experience level" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="beginner">Beginner</SelectItem>
-                                <SelectItem value="intermediate">Intermediate</SelectItem>
-                                <SelectItem value="advanced">Advanced</SelectItem>
-                                <SelectItem value="expert">Expert</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="philosophy">Trading Philosophy</Label>
-                            <Textarea
-                              id="philosophy"
-                              value={editForm.trading_philosophy}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, trading_philosophy: e.target.value }))}
-                              placeholder="Describe your trading approach..."
-                              rows={3}
-                            />
-                          </div>
+                        
+                        <Tabs value={editTab} onValueChange={setEditTab}>
+                          <TabsList className="w-full">
+                            <TabsTrigger value="profile" className="flex-1">Profile</TabsTrigger>
+                            <TabsTrigger value="social" className="flex-1">Social Links</TabsTrigger>
+                          </TabsList>
                           
-                          {/* Social Media Section */}
-                          <div className="pt-4 border-t">
-                            <Label className="text-sm font-medium mb-3 block">Social Links</Label>
+                          <TabsContent value="profile" className="space-y-4 mt-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="display_name">Display Name</Label>
+                              <Input
+                                id="display_name"
+                                value={editForm.display_name}
+                                onChange={(e) => setEditForm(prev => ({ ...prev, display_name: e.target.value }))}
+                                placeholder="Your display name"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="username">Username</Label>
+                              <Input
+                                id="username"
+                                value={editForm.username}
+                                onChange={(e) => setEditForm(prev => ({ ...prev, username: e.target.value }))}
+                                placeholder="your_username"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="bio">Bio</Label>
+                              <Textarea
+                                id="bio"
+                                value={editForm.bio}
+                                onChange={(e) => setEditForm(prev => ({ ...prev, bio: e.target.value }))}
+                                placeholder="Tell us about yourself..."
+                                rows={2}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="experience">Experience Level</Label>
+                              <Select 
+                                value={editForm.experience_level} 
+                                onValueChange={(v) => setEditForm(prev => ({ ...prev, experience_level: v }))}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select experience level" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="beginner">Beginner</SelectItem>
+                                  <SelectItem value="intermediate">Intermediate</SelectItem>
+                                  <SelectItem value="advanced">Advanced</SelectItem>
+                                  <SelectItem value="expert">Expert</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </TabsContent>
+                          
+                          <TabsContent value="social" className="mt-4">
                             <div className="grid grid-cols-2 gap-3">
                               <div className="space-y-1">
                                 <Label htmlFor="twitter" className="text-xs flex items-center gap-1">
@@ -457,8 +444,9 @@ export default function Profile() {
                                 />
                               </div>
                             </div>
-                          </div>
-                        </div>
+                          </TabsContent>
+                        </Tabs>
+                        
                         <DialogFooter>
                           <Button variant="outline" onClick={() => setIsEditOpen(false)}>
                             Cancel
@@ -494,8 +482,7 @@ export default function Profile() {
             </CardContent>
           </Card>
 
-          {/* Content Tabs - Different for retail vs developer */}
-          {/* Profile Tabs - Show posts, likes, saved (if own profile), about */}
+          {/* Content Tabs */}
           <Tabs defaultValue="posts">
             <TabsList className="flex-wrap h-auto gap-1">
               <TabsTrigger value="posts">
@@ -530,7 +517,6 @@ export default function Profile() {
               )}
             </TabsList>
 
-            {/* Posts Tab - includes reposts */}
             <TabsContent value="posts">
               <ProfilePostsTab 
                 userId={profileId!} 
@@ -538,19 +524,16 @@ export default function Profile() {
               />
             </TabsContent>
 
-            {/* Likes Tab - visible to everyone */}
             <TabsContent value="likes">
               <ProfileLikesTab userId={profileId!} />
             </TabsContent>
 
-            {/* Saved/Bookmarks Tab - only visible to profile owner */}
             {isOwnProfile && (
               <TabsContent value="saved">
                 <ProfileBookmarksTab />
               </TabsContent>
             )}
 
-            {/* Marketplace Tab - for developers */}
             {!isRetailTrader && (
               <TabsContent value="marketplace">
                 <div className="mb-4">
@@ -672,16 +655,6 @@ export default function Profile() {
                           </p>
                         </div>
                       </div>
-
-                      <div className="flex items-start gap-3">
-                        <Briefcase className="h-5 w-5 text-primary mt-0.5" />
-                        <div>
-                          <h3 className="font-medium">Account Type</h3>
-                          <p className="text-muted-foreground capitalize">
-                            {userRole?.role === 'retail_trader' ? 'Retail Trader' : userRole?.role || 'Developer'}
-                          </p>
-                        </div>
-                      </div>
                     </div>
 
                     <div className="space-y-4">
@@ -715,7 +688,6 @@ export default function Profile() {
               </Card>
             </TabsContent>
 
-            {/* Security Tab - only for own profile */}
             {isOwnProfile && (
               <TabsContent value="security">
                 <div className="space-y-6">
@@ -726,7 +698,6 @@ export default function Profile() {
                     </p>
                   </div>
 
-                  {/* Email Display */}
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-base flex items-center gap-2">
@@ -739,10 +710,7 @@ export default function Profile() {
                     </CardContent>
                   </Card>
 
-                  {/* Change Password */}
                   <ChangePasswordCard />
-
-                  {/* MFA */}
                   <MFASetup />
                 </div>
               </TabsContent>
