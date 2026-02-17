@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useEmailVerified } from '@/hooks/useEmailVerified';
+import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import { usePublicFeed, useLikePost, useUnlikePost, useLikesForPosts, Post as SocialPost } from '@/hooks/useSocial';
 import { MainNav } from '@/components/MainNav';
 import { SocialPostCard } from '@/components/SocialPostCard';
@@ -12,6 +14,7 @@ import { Users, Sparkles, LogIn } from 'lucide-react';
 
 export default function Community() {
   const { user } = useAuth();
+  const { isVerified } = useEmailVerified();
   const navigate = useNavigate();
   const { data: posts, isLoading, refetch } = usePublicFeed();
   const likePost = useLikePost();
@@ -22,8 +25,8 @@ export default function Community() {
   const likedPostIds = new Set(likedPostsData?.map(l => l.post_id) || []);
 
   const handleLike = async (postId: string) => {
-    if (!user) {
-      navigate('/auth');
+    if (!user || !isVerified) {
+      if (!user) navigate('/auth');
       return;
     }
     try {
@@ -51,8 +54,11 @@ export default function Community() {
           </div>
         </div>
 
-        {/* Create post box for logged-in users */}
-        {user && <CreatePostBox onPostCreated={() => refetch()} placeholder="Share with the community..." />}
+        {/* Verification banner for unverified users */}
+        {user && !isVerified && <EmailVerificationBanner />}
+
+        {/* Create post box for verified logged-in users */}
+        {user && isVerified && <CreatePostBox onPostCreated={() => refetch()} placeholder="Share with the community..." />}
 
         {/* Sign in prompt for guests */}
         {!user && (

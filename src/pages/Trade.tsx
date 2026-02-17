@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useEmailVerified } from '@/hooks/useEmailVerified';
 import { useUserRole } from '@/hooks/useUserRole';
 import { MainNav } from '@/components/MainNav';
 import { Input } from '@/components/ui/input';
@@ -16,6 +17,7 @@ import { useStocks, useWatchlist, Stock } from '@/hooks/useTrading';
 import { useAlpacaAccount, useAlpacaPositions, useAlpacaSearch, AlpacaAsset } from '@/hooks/useAlpaca';
 import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
 import { LivePriceUpdates } from '@/components/LivePriceUpdates';
+import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import { TradingModeToggle } from '@/components/TradingModeToggle';
 import { RecentTrades } from '@/components/trade/RecentTrades';
 import { PortfolioHistoryChart } from '@/components/trade/PortfolioHistoryChart';
@@ -97,6 +99,7 @@ function AlpacaAssetRow({ asset, onClick }: { asset: AlpacaAsset; onClick: () =>
 
 export default function Trade() {
   const { user } = useAuth();
+  const { isVerified } = useEmailVerified();
   const { data: userRole, isLoading: roleLoading } = useUserRole();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -147,8 +150,11 @@ export default function Trade() {
       <MainNav />
 
       <main className="container py-6">
+        {/* Email verification banner */}
+        {user && !isVerified && <EmailVerificationBanner />}
+
         {/* AI Bot Builder CTA + Trading Mode Toggle */}
-        {user && (
+        {user && isVerified && (
           <div className="mb-6 flex items-center justify-between">
             <Button onClick={() => navigate('/trade/ai-builder')} variant="outline" className="gap-2">
               <Bot className="h-4 w-4" /> AI Bot Builder

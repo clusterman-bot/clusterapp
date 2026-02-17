@@ -50,7 +50,6 @@ export default function Auth() {
       navigate('/trade', { replace: true });
     };
     checkVerification();
-    navigate('/trade', { replace: true });
   }, [user, authLoading, navigate, justSignedOut]);
 
   if (authLoading) {
