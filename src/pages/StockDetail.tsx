@@ -4,7 +4,7 @@ import { MainNav } from '@/components/MainNav';
 import { BackButton } from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Star, StarOff } from 'lucide-react';
+import { Star, StarOff, Activity } from 'lucide-react';
 import { useStockBySymbol, useIsInWatchlist, useAddToWatchlist, useRemoveFromWatchlist } from '@/hooks/useTrading';
 import { useAlpacaQuote, useAlpacaAssetInfo } from '@/hooks/useAlpaca';
 import { TradingModeToggle } from '@/components/TradingModeToggle';
@@ -106,6 +106,11 @@ export default function StockDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {user && (
+              <Button variant="outline" size="sm" onClick={() => navigate(`/trade/stocks/${stock.symbol}/automate`)}>
+                <Activity className="mr-2 h-4 w-4" /> Automate
+              </Button>
+            )}
             {user && dbStock && (
               <Button variant="outline" size="icon" onClick={toggleWatchlist}>
                 {isInWatchlist ? <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" /> : <StarOff className="h-4 w-4" />}
