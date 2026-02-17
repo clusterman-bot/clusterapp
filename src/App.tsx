@@ -18,6 +18,7 @@ import TermsOfService from "./pages/TermsOfService";
 import FAQ from "./pages/FAQ";
 import SMSConsent from "./pages/SMSConsent";
 import Community from "./pages/Community";
+import AIBotBuilder from "./pages/AIBotBuilder";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
               <Route path="/trade/stocks/:symbol/automate" element={<StockAutomationConfig />} />
               <Route path="/trade/portfolio" element={<Portfolio />} />
               <Route path="/trade/orders" element={<Orders />} />
+              <Route path="/trade/ai-builder" element={<AIBotBuilder />} />
               <Route path="/community" element={<Community />} />
               <Route path="/settings/brokerage" element={<BrokerageSettings />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
