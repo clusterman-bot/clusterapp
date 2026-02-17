@@ -389,7 +389,8 @@ serve(async (req) => {
               return new Response(JSON.stringify({ signal: signalType, traded: false, reason: 'No position held' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
             const posData = await posResponse.json();
-            const heldQty = Math.abs(parseFloat(posData.qty || '0'));
+            const heldQty = parseFloat(posData.qty || '0');
+            // If quantity is zero or negative (short), do NOT sell more
             if (heldQty <= 0) {
               console.log(`[StockMonitor] Zero position in ${symbol}, skipping SELL`);
               signalRecord.error_message = 'Zero position — SELL skipped';
