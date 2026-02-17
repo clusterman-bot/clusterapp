@@ -4,7 +4,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LineChart, LogOut, Briefcase, ClipboardList, Settings, Users } from 'lucide-react';
+import { LineChart, LogOut, Briefcase, ClipboardList, Settings, Users, User } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -104,6 +104,11 @@ export function MainNav() {
                     <p className="text-xs text-muted-foreground">{user.email}</p>
                   </div>
                 </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/profile')}>
+                  <User className="mr-2 h-4 w-4" />
+                  Profile
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
                   <LogOut className="mr-2 h-4 w-4" />

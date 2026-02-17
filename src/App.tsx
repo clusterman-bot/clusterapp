@@ -19,6 +19,7 @@ import FAQ from "./pages/FAQ";
 import SMSConsent from "./pages/SMSConsent";
 import Community from "./pages/Community";
 import AIBotBuilder from "./pages/AIBotBuilder";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,8 @@ const App = () => (
               <Route path="/trade/ai-builder" element={<AIBotBuilder />} />
               <Route path="/community" element={<Community />} />
               <Route path="/settings/brokerage" element={<BrokerageSettings />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/profile/:userId" element={<Profile />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/faq" element={<FAQ />} />

@@ -20,7 +20,7 @@ import {
   TrendingUp, Users, BarChart3, Settings, 
   CheckCircle, UserPlus, UserMinus, TrendingDown, Target, Store,
   User, Calendar, Award, Briefcase, Twitter, Linkedin, Github, Globe,
-  FileText, Heart, Bookmark
+  FileText, Heart, Bookmark, Mail, Lock, Eye, EyeOff
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -30,6 +30,92 @@ import { MFASetup } from '@/components/auth/MFASetup';
 import { ProfilePostsTab } from '@/components/profile/ProfilePostsTab';
 import { ProfileLikesTab } from '@/components/profile/ProfileLikesTab';
 import { ProfileBookmarksTab } from '@/components/profile/ProfileBookmarksTab';
+
+function ChangePasswordCard() {
+  const { toast } = useToast();
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      toast({ title: 'Passwords do not match', variant: 'destructive' });
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast({ title: 'Password must be at least 8 characters', variant: 'destructive' });
+      return;
+    }
+    setIsUpdating(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      toast({ title: 'Password updated successfully' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error: any) {
+      toast({ title: 'Failed to update password', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Lock className="h-4 w-4" />
+          Change Password
+        </CardTitle>
+        <CardDescription>Update your account password</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="new-password">New Password</Label>
+          <div className="relative">
+            <Input
+              id="new-password"
+              type={showNew ? 'text' : 'password'}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Enter new password"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-0 top-0 h-full px-3"
+              onClick={() => setShowNew(!showNew)}
+            >
+              {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="confirm-password">Confirm New Password</Label>
+          <Input
+            id="confirm-password"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Confirm new password"
+          />
+        </div>
+        <Button
+          onClick={handleChangePassword}
+          disabled={isUpdating || !newPassword || !confirmPassword}
+          className="w-full"
+        >
+          {isUpdating ? 'Updating...' : 'Update Password'}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Profile() {
   const { userId } = useParams<{ userId: string }>();
@@ -632,13 +718,31 @@ export default function Profile() {
             {/* Security Tab - only for own profile */}
             {isOwnProfile && (
               <TabsContent value="security">
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div className="mb-4">
                     <h3 className="text-lg font-semibold mb-2">Account Security</h3>
                     <p className="text-sm text-muted-foreground">
-                      Manage your account security settings
+                      Manage your email, password, and security settings
                     </p>
                   </div>
+
+                  {/* Email Display */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Mail className="h-4 w-4" />
+                        Email Address
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">{user?.email}</p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Change Password */}
+                  <ChangePasswordCard />
+
+                  {/* MFA */}
                   <MFASetup />
                 </div>
               </TabsContent>
