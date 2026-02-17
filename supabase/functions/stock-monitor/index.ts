@@ -315,18 +315,12 @@ serve(async (req) => {
     };
 
     // Fetch bars from Alpaca Data API
-    // We need enough bars for the longest indicator window. Max window = 50 for SMA, but we'll fetch 100 bars.
+    // Always use 1-minute bars for maximum granularity. The horizon_minutes parameter
+    // defines how far into the future the signal predicts, not the bar timeframe.
     const maxBars = 100;
     const now = new Date();
-    const start = new Date(now.getTime() - maxBars * horizon_minutes * 60 * 1000);
-    
-    // Map horizon to Alpaca timeframe
-    let timeframe = '5Min';
-    if (horizon_minutes <= 1) timeframe = '1Min';
-    else if (horizon_minutes <= 5) timeframe = '5Min';
-    else if (horizon_minutes <= 15) timeframe = '15Min';
-    else if (horizon_minutes <= 30) timeframe = '30Min';
-    else timeframe = '1Hour';
+    const start = new Date(now.getTime() - maxBars * 60 * 1000); // 100 minutes of 1-min bars
+    const timeframe = '1Min';
 
     const barsUrl = `https://data.alpaca.markets/v2/stocks/${symbol}/bars?timeframe=${timeframe}&start=${start.toISOString()}&limit=${maxBars}&sort=asc`;
     console.log(`[StockMonitor] Fetching bars: ${barsUrl}`);
