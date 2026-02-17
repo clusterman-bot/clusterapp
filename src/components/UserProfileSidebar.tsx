@@ -1,29 +1,18 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
-import { useUserRole } from '@/hooks/useUserRole';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Code, LineChart, Settings, User } from 'lucide-react';
+import { User } from 'lucide-react';
 
 export function UserProfileSidebar() {
   const { user } = useAuth();
   const { data: profile } = useProfile();
-  const { data: userRole } = useUserRole();
   const navigate = useNavigate();
 
   if (!user || !profile) return null;
-
-  const roleDisplay = userRole?.role === 'developer' 
-    ? { label: 'Developer', icon: Code, color: 'bg-blue-500/10 text-blue-500' }
-    : userRole?.role === 'admin'
-    ? { label: 'Admin', icon: Settings, color: 'bg-purple-500/10 text-purple-500' }
-    : { label: 'Trader', icon: LineChart, color: 'bg-green-500/10 text-green-500' };
-
-  const RoleIcon = roleDisplay.icon;
 
   return (
     <Card className="sticky top-20">
@@ -40,14 +29,9 @@ export function UserProfileSidebar() {
             {profile.display_name || profile.username}
           </h3>
           
-          <p className="text-sm text-muted-foreground mb-2">
+          <p className="text-sm text-muted-foreground mb-4">
             @{profile.username}
           </p>
-          
-          <Badge variant="secondary" className={`${roleDisplay.color} mb-4`}>
-            <RoleIcon className="h-3 w-3 mr-1" />
-            {roleDisplay.label}
-          </Badge>
 
           {profile.bio && (
             <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
