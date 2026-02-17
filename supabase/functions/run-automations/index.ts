@@ -15,14 +15,16 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    // Authenticate: only service role key allowed (cron/internal calls)
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+
+    // Authenticate: service role key or anon key (for pg_cron calls)
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Missing authorization' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     const token = authHeader.replace('Bearer ', '');
-    if (token !== supabaseServiceKey) {
-      return new Response(JSON.stringify({ error: 'Unauthorized - service role required' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    if (token !== supabaseServiceKey && token !== supabaseAnonKey) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
