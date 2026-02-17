@@ -8,6 +8,7 @@ export interface StockAutomation {
   user_id: string;
   symbol: string;
   is_active: boolean;
+  allow_shorting: boolean;
   indicators: {
     rsi: { enabled: boolean; periods: number[] };
     sma: { enabled: boolean; windows: number[] };

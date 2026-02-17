@@ -52,6 +52,7 @@ export default function StockAutomationConfig() {
   const [maxQuantity, setMaxQuantity] = useState(10);
   const [stopLossPercent, setStopLossPercent] = useState(5);
   const [takeProfitPercent, setTakeProfitPercent] = useState(15);
+  const [allowShorting, setAllowShorting] = useState(false);
 
   // Load existing config
   useEffect(() => {
@@ -65,6 +66,7 @@ export default function StockAutomationConfig() {
       setMaxQuantity(automation.max_quantity);
       setStopLossPercent(automation.stop_loss_percent);
       setTakeProfitPercent(automation.take_profit_percent);
+      setAllowShorting(automation.allow_shorting ?? false);
     }
   }, [automation]);
 
@@ -92,6 +94,7 @@ export default function StockAutomationConfig() {
       max_quantity: maxQuantity,
       stop_loss_percent: stopLossPercent,
       take_profit_percent: takeProfitPercent,
+      allow_shorting: allowShorting,
       is_active: true,
     });
   };
@@ -369,6 +372,17 @@ export default function StockAutomationConfig() {
                       <span className="text-sm font-mono w-10">{takeProfitPercent}%</span>
                     </div>
                   </div>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/30 bg-destructive/5">
+                  <div>
+                    <Label className="text-base font-semibold">Allow Short Selling</Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      When enabled, SELL signals will execute even if you don't hold the stock, creating a short position. 
+                      <span className="text-destructive font-medium"> This carries significant risk.</span>
+                    </p>
+                  </div>
+                  <Switch checked={allowShorting} onCheckedChange={setAllowShorting} />
                 </div>
               </CardContent>
             </Card>

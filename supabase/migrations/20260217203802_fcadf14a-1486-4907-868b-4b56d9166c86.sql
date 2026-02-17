@@ -1,0 +1,1 @@
+ALTER TABLE public.stock_automations ADD COLUMN allow_shorting boolean NOT NULL DEFAULT false;
