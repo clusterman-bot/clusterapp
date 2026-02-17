@@ -3,6 +3,29 @@ import * as SwitchPrimitives from "@radix-ui/react-switch";
 
 import { cn } from "@/lib/utils";
 
+const SwitchThumbContent = () => {
+  const ref = React.useRef<HTMLSpanElement>(null);
+  const [isChecked, setIsChecked] = React.useState(false);
+
+  React.useEffect(() => {
+    const thumb = ref.current?.parentElement;
+    if (!thumb) return;
+
+    const observer = new MutationObserver(() => {
+      setIsChecked(thumb.getAttribute("data-state") === "checked");
+    });
+    setIsChecked(thumb.getAttribute("data-state") === "checked");
+    observer.observe(thumb, { attributes: true, attributeFilter: ["data-state"] });
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <span ref={ref} className="text-[7px] font-bold uppercase leading-none text-foreground select-none">
+      {isChecked ? "ON" : "OFF"}
+    </span>
+  );
+};
+
 const Switch = React.forwardRef<
   React.ElementRef<typeof SwitchPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root>
@@ -17,9 +40,11 @@ const Switch = React.forwardRef<
   >
     <SwitchPrimitives.Thumb
       className={cn(
-        "pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0",
+        "pointer-events-none flex h-5 w-5 items-center justify-center rounded-full bg-background shadow-lg ring-0 transition-transform data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0",
       )}
-    />
+    >
+      <SwitchThumbContent />
+    </SwitchPrimitives.Thumb>
   </SwitchPrimitives.Root>
 ));
 Switch.displayName = SwitchPrimitives.Root.displayName;
