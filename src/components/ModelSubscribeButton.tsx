@@ -177,10 +177,23 @@ export function ModelSubscribeButton({
               You're about to subscribe to this trading model.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
+          <div className="py-4 space-y-3">
             <p className="text-sm text-muted-foreground">
               By subscribing, you'll receive trading signals from this model and your connected Alpaca account will automatically mirror its trades.
             </p>
+            <div className="rounded-lg border bg-muted/40 p-3 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Initial allocation</span>
+                <span className="font-medium">${minAllocation.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Max allocation</span>
+                <span className="font-medium">${maxAllocation.toLocaleString()}</span>
+              </div>
+              <p className="text-xs text-muted-foreground pt-1">
+                Your allocation controls how much capital is committed to trade-mirroring. You can adjust it after subscribing.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
