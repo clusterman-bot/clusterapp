@@ -92,6 +92,36 @@ export function useFreezeTrading() {
   });
 }
 
+export function useSetRoleForUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
+      const { data: existing } = await supabase
+        .from('user_roles' as any)
+        .select('id')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('user_roles' as any)
+          .update({ role })
+          .eq('user_id', userId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('user_roles' as any)
+          .insert({ user_id: userId, role });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alpha', 'all-users'] });
+    },
+  });
+}
+
 export function useAllUsersForAlpha() {
   const { data: isAlpha } = useIsAlpha();
 
