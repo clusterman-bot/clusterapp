@@ -158,21 +158,25 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
     return generateOHLCData(currentPrice, previousClose, days);
   }, [alpacaBars, isLive, currentPrice, previousClose, timeframe]);
 
-  // Compute period change from first bar's open vs current price (real period performance)
-  const periodStartPrice = isLive && chartData.length > 0 ? chartData[0].open : previousClose;
-  const priceChange = currentPrice - periodStartPrice;
+  const minPrice = Math.min(...chartData.map(d => d.low)) * 0.995;
+  const maxPrice = Math.max(...chartData.map(d => d.high)) * 1.005;
+  const latestData = chartData[chartData.length - 1];
+
+  // For 1D: compare last bar's close vs previousClose (avoids pre-market open skew).
+  // For other periods: compare last bar's close vs first bar's open.
+  const periodEndPrice = (isLive && latestData) ? latestData.close : currentPrice;
+  const periodStartPrice = timeframe === '1D'
+    ? (previousClose || currentPrice)
+    : (isLive && chartData.length > 0 ? chartData[0].open : previousClose);
+  const priceChange = periodEndPrice - periodStartPrice;
   const priceChangePercent = periodStartPrice > 0 ? (priceChange / periodStartPrice) * 100 : 0;
   const isPositive = priceChange >= 0;
-  
+
   const toggleIndicator = (ind: string) => {
     setActiveIndicators(prev => 
       prev.includes(ind) ? prev.filter(i => i !== ind) : [...prev, ind]
     );
   };
-  
-  const minPrice = Math.min(...chartData.map(d => d.low)) * 0.995;
-  const maxPrice = Math.max(...chartData.map(d => d.high)) * 1.005;
-  const latestData = chartData[chartData.length - 1];
   
   return (
     <Card className="border-0 bg-card/50 backdrop-blur-sm">
