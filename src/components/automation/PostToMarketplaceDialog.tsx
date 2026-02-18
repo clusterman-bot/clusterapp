@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, DollarSign, ShieldAlert } from 'lucide-react';
+import { Loader2, Store, DollarSign, ShieldAlert, Sparkles, Code2, CheckCircle2 } from 'lucide-react';
 
 interface PostToMarketplaceDialogProps {
   open: boolean;
@@ -39,6 +39,13 @@ export function PostToMarketplaceDialog({
   const [riskLevel, setRiskLevel] = useState<'low' | 'medium' | 'high'>('medium');
   const [isPublic, setIsPublic] = useState(true);
 
+  // Derive custom indicators at component level so JSX can access them
+  const indicatorsSource = automationConfig.indicators ?? automationConfig;
+  const customArr: any[] =
+    (indicatorsSource.custom && Array.isArray(indicatorsSource.custom) ? indicatorsSource.custom : null) ??
+    (Array.isArray(automationConfig.custom_indicators) ? automationConfig.custom_indicators : null) ??
+    [];
+
   const handleSubmit = async () => {
     if (!name.trim()) {
       toast({ title: 'Model name is required', variant: 'destructive' });
@@ -49,16 +56,9 @@ export function PostToMarketplaceDialog({
       return;
     }
     // Check that at least one indicator is active (built-in OR custom AI-generated)
-    // automationConfig may have indicators nested (from AIBotBuilder) or flat (from StockAutomationConfig)
-    const indicatorsSource = automationConfig.indicators ?? automationConfig;
     const builtInEnabled = Object.entries(indicatorsSource)
       .filter(([k]) => ['rsi', 'sma', 'ema', 'bollinger', 'sma_deviation'].includes(k))
       .some(([, v]: [string, any]) => v?.enabled);
-    // custom indicators can live under indicators.custom or automationConfig.custom_indicators
-    const customArr =
-      (indicatorsSource.custom && Array.isArray(indicatorsSource.custom) ? indicatorsSource.custom : null) ??
-      (Array.isArray(automationConfig.custom_indicators) ? automationConfig.custom_indicators : null) ??
-      [];
     const customEnabled = customArr.some((c: any) => c.enabled !== false);
     if (!builtInEnabled && !customEnabled) {
       toast({ title: 'At least one indicator must be enabled', description: 'Enable a built-in or AI-generated indicator in your strategy config.', variant: 'destructive' });
@@ -127,6 +127,37 @@ export function PostToMarketplaceDialog({
         </DialogHeader>
 
         <div className="space-y-5 pt-2">
+          {/* AI-Generated Indicators Preview */}
+          {customArr.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm">AI-Generated Indicators ({customArr.length})</span>
+              </div>
+              <div className="space-y-2">
+                {customArr.map((indicator: any, i: number) => (
+                  <div key={i} className="rounded-lg border bg-muted/30 p-3 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Code2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="font-medium text-sm">{indicator.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-profit" />
+                        <span className="text-xs text-muted-foreground">Weight: {indicator.weight ?? 1}</span>
+                      </div>
+                    </div>
+                    {indicator.description && (
+                      <p className="text-xs text-muted-foreground pl-5">{indicator.description}</p>
+                    )}
+                    {indicator.signal_logic && (
+                      <p className="text-xs text-muted-foreground pl-5 italic">Logic: {indicator.signal_logic}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {/* Name */}
           <div className="space-y-1.5">
             <Label htmlFor="model-name">Model Name <span className="text-destructive">*</span></Label>
