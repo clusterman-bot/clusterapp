@@ -103,7 +103,7 @@ export function useCreateModel() {
   const { user } = useAuth();
   
   return useMutation({
-    mutationFn: async (model: { name: string; description?: string; model_type?: string; strategy_overview?: string; is_public?: boolean; performance_fee_percent?: number; configuration?: Json; user_id: string }) => {
+    mutationFn: async (model: { name: string; description?: string; model_type?: string; strategy_overview?: string; is_public?: boolean; status?: string; performance_fee_percent?: number; configuration?: Json; user_id: string }) => {
       if (!user?.id) throw new Error('Not authenticated');
       
       const { data, error } = await supabase
@@ -114,6 +114,7 @@ export function useCreateModel() {
           model_type: model.model_type,
           strategy_overview: model.strategy_overview,
           is_public: model.is_public,
+          status: model.status,
           performance_fee_percent: model.performance_fee_percent,
           configuration: model.configuration,
           user_id: user.id,

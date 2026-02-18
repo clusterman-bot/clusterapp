@@ -80,11 +80,6 @@ export default function StockAutomationConfig() {
   };
 
   const handleSave = () => {
-    const anyEnabled = Object.values(indicators).some((v: any) => v.enabled);
-    if (!anyEnabled) {
-      toast({ title: 'Enable at least one indicator', variant: 'destructive' });
-      return;
-    }
     upsertMutation.mutate({
       symbol: upperSymbol,
       indicators: indicators as any,
