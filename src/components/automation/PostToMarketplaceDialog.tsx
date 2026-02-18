@@ -74,6 +74,11 @@ export function PostToMarketplaceDialog({
         is_public: isPublic,
         status: isPublic ? 'published' : 'draft',
         performance_fee_percent: 0,
+        ticker: symbol,
+        indicators_config: {
+          ...indicatorsSource,
+          custom: customArr,
+        },
         configuration: {
           // Normalise: always store indicators + custom_indicators at top level
           indicators: automationConfig.indicators ?? {

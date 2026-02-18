@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useModel, useUpdateModel, useDeleteModel } from '@/hooks/useModels';
-import { useModelSignals } from '@/hooks/useDeployedModels';
+import { useModelSignals, useDeployedModel, useDeployModel, useStopModel } from '@/hooks/useDeployedModels';
 import { useIsSubscribed } from '@/hooks/useSubscriptions';
 import { useBacktests } from '@/hooks/useBacktests';
 import { MainNav } from '@/components/MainNav';
@@ -17,12 +18,14 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import {
   TrendingUp, TrendingDown, Users, Shield, Wallet,
   BarChart3, Target, Zap, Activity, AlertTriangle,
   CheckCircle, Clock, ArrowUpRight, ArrowDownRight,
-  Sparkles, Code2, Pause, Play, Trash2, Settings2
+  Sparkles, Code2, Pause, Play, Trash2, Settings2,
+  Rocket, Square, RefreshCw, Radio
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -65,8 +68,36 @@ export default function ModelDetail() {
   const { data: signals } = useModelSignals(id!);
   const { data: subscription } = useIsSubscribed(id);
   const { data: backtests } = useBacktests(id!, false);
+  const { data: deployedModel, isLoading: deployLoading } = useDeployedModel(id);
   const updateModel = useUpdateModel();
   const deleteModel = useDeleteModel();
+  const deployModel = useDeployModel();
+  const stopModel = useStopModel();
+  const [runningSignal, setRunningSignal] = useState(false);
+
+  const handleDeploy = async () => {
+    if (!model) return;
+    await deployModel.mutateAsync(model.id);
+  };
+
+  const handleStop = async () => {
+    if (!model) return;
+    await stopModel.mutateAsync(model.id);
+  };
+
+  const handleRunNow = async () => {
+    if (!model) return;
+    setRunningSignal(true);
+    try {
+      const response = await supabase.functions.invoke('run-automations', { body: { modelId: model.id } });
+      if (response.error) throw new Error(response.error.message);
+      toast({ title: 'Signal cycle triggered', description: 'Check the signals list below in a moment.' });
+    } catch (err: any) {
+      toast({ title: 'Failed to trigger signal', description: err.message, variant: 'destructive' });
+    } finally {
+      setRunningSignal(false);
+    }
+  };
 
   const handlePauseResume = async () => {
     if (!model) return;
@@ -241,11 +272,20 @@ export default function ModelDetail() {
           {/* Owner controls */}
           {isOwner && (
             <div className="flex flex-col items-end gap-2 shrink-0">
+              {/* Marketplace visibility badge */}
               <Badge variant={model.status === 'published' ? 'default' : 'secondary'} className="text-xs">
                 <Settings2 className="h-3 w-3 mr-1" />
-                {model.status === 'published' ? 'Live' : model.status === 'draft' ? 'Paused' : model.status}
+                {model.status === 'published' ? 'Published' : model.status === 'draft' ? 'Draft' : model.status}
               </Badge>
-              <div className="flex gap-2">
+              {/* Trading deployment status */}
+              <Badge
+                variant={deployedModel?.status === 'running' ? 'default' : 'secondary'}
+                className={`text-xs ${deployedModel?.status === 'running' ? 'bg-profit text-profit-foreground' : ''}`}
+              >
+                <Radio className="h-3 w-3 mr-1" />
+                {deployedModel?.status === 'running' ? 'Trading Live' : deployedModel?.status === 'stopped' ? 'Trading Stopped' : 'Not Deployed'}
+              </Badge>
+              <div className="flex gap-2 flex-wrap justify-end">
                 <Button
                   size="sm"
                   variant="outline"
@@ -259,6 +299,39 @@ export default function ModelDetail() {
                     <><Play className="h-3.5 w-3.5" /> Resume</>
                   )}
                 </Button>
+                {/* Deploy / Stop trading */}
+                {deployedModel?.status === 'running' ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleStop}
+                    disabled={stopModel.isPending}
+                    className="gap-1.5 border-loss/40 text-loss hover:bg-loss/10"
+                  >
+                    <Square className="h-3.5 w-3.5" /> Stop Trading
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={handleDeploy}
+                    disabled={deployModel.isPending || deployLoading}
+                    className="gap-1.5"
+                  >
+                    <Rocket className="h-3.5 w-3.5" /> Deploy
+                  </Button>
+                )}
+                {/* Run Now (only when deployed) */}
+                {deployedModel?.status === 'running' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRunNow}
+                    disabled={runningSignal}
+                    className="gap-1.5"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${runningSignal ? 'animate-spin' : ''}`} /> Run Now
+                  </Button>
+                )}
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button size="sm" variant="destructive" className="gap-1.5">
@@ -281,6 +354,11 @@ export default function ModelDetail() {
                   </AlertDialogContent>
                 </AlertDialog>
               </div>
+              {deployedModel?.last_signal_at && (
+                <p className="text-xs text-muted-foreground text-right">
+                  Last signal: {new Date(deployedModel.last_signal_at).toLocaleString()}
+                </p>
+              )}
               <p className="text-xs text-muted-foreground text-right">
                 {model.total_subscribers ?? 0} subscriber{model.total_subscribers !== 1 ? 's' : ''}
               </p>
@@ -540,7 +618,15 @@ export default function ModelDetail() {
               <CardContent className="py-10 text-center">
                 <Zap className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">No signals generated yet.</p>
-                <p className="text-xs text-muted-foreground mt-1">Signals appear here once the model is live.</p>
+                {isOwner ? (
+                  deployedModel?.status === 'running' ? (
+                    <p className="text-xs text-muted-foreground mt-1">Your model is deployed. Click "Run Now" to trigger a signal cycle manually, or wait for the next automatic cycle.</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-1">Click <strong>Deploy</strong> above to start live trading — signals will appear here once the model is running.</p>
+                  )
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">Signals appear here once the model owner deploys it for live trading.</p>
+                )}
               </CardContent>
             </Card>
           )}
