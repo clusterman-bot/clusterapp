@@ -14,7 +14,7 @@ export function TradingModeToggle() {
   const { mode, setMode, isPaper, isLive } = useTradingMode();
 
   return (
-    <div className="flex items-center gap-2 p-2 sm:p-3 rounded-lg border bg-card shrink-0">
+    <div data-tour="trading-mode-toggle" className="flex items-center gap-2 p-2 sm:p-3 rounded-lg border bg-card shrink-0">
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>

@@ -212,7 +212,7 @@ export function BrokerageAccountsManager() {
             Connect and manage your trading accounts
           </p>
         </div>
-        <Button onClick={() => setConnectModalOpen(true)}>
+        <Button data-tour="connect-account-btn" onClick={() => setConnectModalOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Connect Account
         </Button>
