@@ -133,12 +133,14 @@ export default function ModelDetail() {
   const latestBacktest = backtests?.[0];
   const equityCurve = (latestBacktest?.equity_curve as Array<{ date: string; value: number }> | null) || [];
 
-  // Recent signals (last 10)
-  const recentSignals = signals?.slice(0, 10) ?? [];
+  // All signals for accurate counts, most recent 10 displayed
+  const allSignals = signals ?? [];
+  const recentSignals = allSignals.slice(0, 10);
 
-  // Signal counts from recent signals
-  const buyCount = recentSignals.filter(s => s.signal_type === 'BUY').length;
-  const sellCount = recentSignals.filter(s => s.signal_type === 'SELL').length;
+  // Signal counts from ALL signals (not just recent 10)
+  const buyCount = allSignals.filter(s => s.signal_type === 'BUY').length;
+  const sellCount = allSignals.filter(s => s.signal_type === 'SELL').length;
+  const executedCount = allSignals.filter(s => s.status === 'executed').length;
 
   // Risk tier
   const riskLevel = (model as any).risk_level ?? 'medium';
@@ -291,37 +293,68 @@ export default function ModelDetail() {
 
         {/* ── Key Metrics ── */}
         <div>
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Performance</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard
-              label="Total Return"
-              value={`${isPositiveReturn ? '+' : ''}${(totalReturn * 100).toFixed(2)}%`}
-              icon={isPositiveReturn ? TrendingUp : TrendingDown}
-              colorClass={isPositiveReturn ? 'text-profit' : 'text-loss'}
-              sub="Since inception"
-            />
-            <StatCard
-              label="Sharpe Ratio"
-              value={sharpe != null ? sharpe.toFixed(2) : '—'}
-              icon={BarChart3}
-              colorClass={sharpe != null && sharpe >= 1 ? 'text-profit' : undefined}
-              sub="Risk-adjusted return"
-            />
-            <StatCard
-              label="Win Rate"
-              value={winRate != null ? `${(winRate * 100).toFixed(1)}%` : '—'}
-              icon={Target}
-              colorClass={winRate != null && winRate >= 0.5 ? 'text-profit' : 'text-loss'}
-              sub="Winning trades"
-            />
-            <StatCard
-              label="Max Drawdown"
-              value={maxDrawdown != null ? `-${(maxDrawdown * 100).toFixed(2)}%` : '—'}
-              icon={AlertTriangle}
-              colorClass="text-loss"
-              sub="Worst peak-to-trough"
-            />
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Performance</h2>
+            {latestBacktest?.status === 'completed' && (model.total_return != null || model.win_rate != null) && (
+              <span className="text-xs text-muted-foreground">
+                Based on backtest: {latestBacktest.start_date} → {latestBacktest.end_date}
+              </span>
+            )}
+            {allSignals.length > 0 && model.win_rate != null && !latestBacktest && (
+              <span className="text-xs text-muted-foreground">Based on live signals</span>
+            )}
           </div>
+
+          {/* No metrics yet callout */}
+          {model.total_return == null && model.win_rate == null && model.sharpe_ratio == null ? (
+            <Card className="border-dashed">
+              <CardContent className="py-6 text-center">
+                <BarChart3 className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                {isOwner ? (
+                  <>
+                    <p className="text-sm font-medium">No performance data yet</p>
+                    <p className="text-xs text-muted-foreground mt-1">Run a backtest to populate metrics — they'll appear here and on the marketplace automatically.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium">Performance data not yet available</p>
+                    <p className="text-xs text-muted-foreground mt-1">The model creator hasn't run a backtest yet.</p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard
+                label="Total Return"
+                value={model.total_return != null ? `${isPositiveReturn ? '+' : ''}${(totalReturn * 100).toFixed(2)}%` : '—'}
+                icon={isPositiveReturn ? TrendingUp : TrendingDown}
+                colorClass={model.total_return != null ? (isPositiveReturn ? 'text-profit' : 'text-loss') : undefined}
+                sub="Since inception"
+              />
+              <StatCard
+                label="Sharpe Ratio"
+                value={sharpe != null ? sharpe.toFixed(2) : '—'}
+                icon={BarChart3}
+                colorClass={sharpe != null && sharpe >= 1 ? 'text-profit' : undefined}
+                sub="Risk-adjusted return"
+              />
+              <StatCard
+                label="Win Rate"
+                value={winRate != null ? `${(winRate * 100).toFixed(1)}%` : '—'}
+                icon={Target}
+                colorClass={winRate != null && winRate >= 0.5 ? 'text-profit' : 'text-loss'}
+                sub="Winning trades"
+              />
+              <StatCard
+                label="Max Drawdown"
+                value={maxDrawdown != null ? `-${(maxDrawdown * 100).toFixed(2)}%` : '—'}
+                icon={AlertTriangle}
+                colorClass="text-loss"
+                sub="Worst peak-to-trough"
+              />
+            </div>
+          )}
         </div>
 
         {/* ── Capital Requirements ── */}
@@ -367,6 +400,18 @@ export default function ModelDetail() {
         </div>
 
         {/* ── Equity Curve ── */}
+        {equityCurve.length <= 1 && isOwner && (
+          <div>
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Equity Curve</h2>
+            <Card className="border-dashed">
+              <CardContent className="py-6 text-center">
+                <BarChart3 className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm font-medium">No backtest run yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Go to the Model Builder and run a backtest — the equity curve and performance metrics will appear here automatically.</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
         {equityCurve.length > 1 && (
           <div>
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
@@ -419,9 +464,16 @@ export default function ModelDetail() {
         {/* ── Recent Signals ── */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-              Recent Signals
-            </h2>
+            <div>
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                Recent Signals
+              </h2>
+              {allSignals.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {allSignals.length} total · {executedCount} executed · {buyCount} buy / {sellCount} sell
+                </p>
+              )}
+            </div>
             {recentSignals.length > 0 && (
               <div className="flex gap-3 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
