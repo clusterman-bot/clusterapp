@@ -7,12 +7,22 @@ const corsHeaders = {
 
 const SYSTEM_PROMPT = `You are a trading strategy configuration assistant. Users describe trading strategies in plain English, and you generate structured configuration for an automated trading system.
 
-The system supports these technical indicators:
+The system has 5 BUILT-IN indicators (use these when the user requests them):
 - RSI (Relative Strength Index): periods array (e.g. [14]), with oversold (10-50, default 30) and overbought (50-90, default 70) thresholds
 - SMA (Simple Moving Average): windows array (e.g. [5, 20])
 - EMA (Exponential Moving Average): windows array (e.g. [5, 20])
 - Bollinger Bands: window (5-50, default 20), std deviations (1-4, default 2)
 - SMA Deviation: window (5-50, default 20)
+
+For ANY indicator NOT in the built-in list (e.g. MACD, VWAP, Stochastic, ATR, Williams %R, CCI, Ichimoku, Donchian, Keltner, MFI, OBV, etc.), you MUST generate a custom_indicators entry with executable JavaScript code.
+
+CUSTOM INDICATOR RULES:
+- The code field must be a complete self-contained JavaScript function: (bars) => number
+- bars is an array of objects with fields: { o: number, h: number, l: number, c: number, v: number, t: string }
+- The function must return: +1 (BUY signal), -1 (SELL signal), or 0 (NEUTRAL)
+- No imports, no fetch, no external calls — pure computation only
+- Return 0 if there is not enough data
+- The code will be executed as: new Function('bars', code)(bars) — make sure code is the function BODY, not the full arrow function
 
 Risk management parameters:
 - stop_loss_percent: 1-50 (default 5)
@@ -23,7 +33,19 @@ Risk management parameters:
 - horizon_minutes: 1-60, bar timeframe for indicator calculation (default 5)
 - allow_shorting: true/false (default false)
 
-Always enable at least one indicator. Extract the ticker symbol from the user's prompt. If no ticker is mentioned, ask for one. Use the generate_strategy tool to return the configuration.`;
+Always enable at least one indicator (built-in or custom). Extract the ticker symbol from the user's prompt. If no ticker is mentioned, ask for one. Use the generate_strategy tool to return the configuration.
+
+IMPORTANT: For custom indicators, the code field must be the FUNCTION BODY (what goes inside the function), NOT the arrow function syntax. For example, for MACD:
+const closes = bars.map(b => b.c);
+if (closes.length < 35) return 0;
+const ema = (data, p) => { const k = 2/(p+1); let e = data.slice(0,p).reduce((a,b)=>a+b,0)/p; for(let i=p;i<data.length;i++) e=data[i]*k+e*(1-k); return e; };
+const fast = ema(closes, 12); const slow = ema(closes, 26);
+const prevFast = ema(closes.slice(0,-1), 12); const prevSlow = ema(closes.slice(0,-1), 26);
+const macd = fast - slow; const prevMacd = prevFast - prevSlow;
+const signal = ema([prevMacd, macd], 9);
+if (macd > signal && prevMacd <= signal) return 1;
+if (macd < signal && prevMacd >= signal) return -1;
+return 0;`;
 
 const STRATEGY_TOOL = {
   type: "function",
@@ -81,6 +103,22 @@ const STRATEGY_TOOL = {
             },
           },
           required: ["rsi", "sma", "ema", "bollinger", "sma_deviation"],
+        },
+        custom_indicators: {
+          type: "array",
+          description: "AI-generated custom indicators for indicators not in the built-in list",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string", description: "Display name of the indicator (e.g. MACD, VWAP)" },
+              description: { type: "string", description: "What this indicator measures" },
+              signal_logic: { type: "string", description: "Plain-English explanation of buy/sell logic" },
+              code: { type: "string", description: "JavaScript function BODY (not arrow function). Receives 'bars' array. Must return +1, -1, or 0." },
+              weight: { type: "number", description: "Relative weight in composite score (default 1.0)" },
+              enabled: { type: "boolean" },
+            },
+            required: ["name", "description", "signal_logic", "code", "weight", "enabled"],
+          },
         },
         rsi_oversold: { type: "number" },
         rsi_overbought: { type: "number" },
@@ -147,7 +185,6 @@ serve(async (req) => {
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
 
     if (!toolCall || toolCall.function.name !== "generate_strategy") {
-      // AI responded with text instead of tool call - return the message
       const textContent = data.choices?.[0]?.message?.content || "I couldn't generate a strategy from that. Please describe your trading strategy including the stock ticker.";
       return new Response(JSON.stringify({ type: "message", content: textContent }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -173,6 +210,17 @@ serve(async (req) => {
     config.max_quantity = Math.max(1, Math.min(1000, config.max_quantity ?? 10));
     config.stop_loss_percent = Math.max(1, Math.min(50, config.stop_loss_percent ?? 5));
     config.take_profit_percent = Math.max(1, Math.min(100, config.take_profit_percent ?? 15));
+
+    // Normalize custom indicators
+    if (config.custom_indicators && Array.isArray(config.custom_indicators)) {
+      config.custom_indicators = config.custom_indicators.map((ci: any) => ({
+        ...ci,
+        weight: Math.max(0.1, Math.min(5.0, ci.weight ?? 1.0)),
+        enabled: ci.enabled !== false,
+      }));
+    } else {
+      config.custom_indicators = [];
+    }
 
     return new Response(JSON.stringify({ type: "strategy", config }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
