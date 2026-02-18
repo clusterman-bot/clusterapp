@@ -16,7 +16,7 @@ import {
 import { useStocks, useWatchlist, Stock } from '@/hooks/useTrading';
 import { useAlpacaAccount, useAlpacaPositions, useAlpacaSearch, AlpacaAsset } from '@/hooks/useAlpaca';
 import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
-import { LivePriceUpdates } from '@/components/LivePriceUpdates';
+
 import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import { TradingModeToggle } from '@/components/TradingModeToggle';
 import { RecentTrades } from '@/components/trade/RecentTrades';
@@ -37,7 +37,7 @@ function formatLargeNumber(num: number): string {
   return num.toLocaleString();
 }
 
-function StockRow({ stock, onClick }: { stock: Stock; onClick: () => void }) {
+function StockRow({ stock, onClick, showChange = false }: { stock: Stock; onClick: () => void; showChange?: boolean }) {
   const priceChange = stock.previous_close 
     ? stock.current_price - stock.previous_close 
     : 0;
@@ -45,6 +45,8 @@ function StockRow({ stock, onClick }: { stock: Stock; onClick: () => void }) {
     ? (priceChange / stock.previous_close) * 100 
     : 0;
   const isPositive = priceChange >= 0;
+  // Only show % change if it's within a plausible range (DB data may be stale)
+  const isPlausible = Math.abs(priceChangePercent) < 20;
 
   return (
     <div 
@@ -62,10 +64,14 @@ function StockRow({ stock, onClick }: { stock: Stock; onClick: () => void }) {
       </div>
       <div className="text-right">
         <p className="font-semibold">{formatPrice(stock.current_price)}</p>
-        <div className={`flex items-center justify-end gap-1 text-sm ${isPositive ? 'text-profit' : 'text-loss'}`}>
-          {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-          <span>{isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%</span>
-        </div>
+        {showChange && stock.previous_close && isPlausible ? (
+          <div className={`flex items-center justify-end gap-1 text-sm ${isPositive ? 'text-profit' : 'text-loss'}`}>
+            {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            <span>{isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%</span>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">Click for live price</p>
+        )}
       </div>
     </div>
   );
@@ -314,17 +320,16 @@ export default function Trade() {
               </Card>
             ) : (
               <>
-                {/* Portfolio Chart and Recent Trades - Only show for logged in users */}
+                {/* Portfolio Chart - full width, only for logged in users */}
                 {user && (
-                  <div className="grid gap-6 md:grid-cols-2 mb-6">
+                  <div className="mb-6">
                     <PortfolioHistoryChart />
-                    <RecentTrades />
                   </div>
                 )}
-                
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {/* All Stocks */}
-                  <Card className="lg:col-span-2">
+
+                {/* All Stocks + Recent Trades side by side */}
+                <div className="grid gap-6 md:grid-cols-2">
+                  <Card>
                     <CardHeader>
                       <CardTitle>All Stocks</CardTitle>
                     </CardHeader>
@@ -332,56 +337,35 @@ export default function Trade() {
                       {stocksLoading ? (
                         <div className="p-8 text-center text-muted-foreground">Loading...</div>
                       ) : stocks?.map(stock => (
-                        <StockRow 
-                          key={stock.id} 
-                          stock={stock} 
+                        <StockRow
+                          key={stock.id}
+                          stock={stock}
                           onClick={() => navigate(`/trade/stocks/${stock.symbol}`)}
                         />
                       ))}
                     </CardContent>
                   </Card>
 
-                  {/* Live Prices & Quick Stats */}
-                  <div className="space-y-6">
-                    <LivePriceUpdates />
-                    
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-sm font-medium">Market Stats</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Total Stocks</span>
-                          <span className="font-semibold">{stocks?.length || 0}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Gainers</span>
-                          <span className="font-semibold text-profit">{topGainers.length}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Losers</span>
-                          <span className="font-semibold text-loss">{topLosers.length}</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    
-                    {user && watchlist && watchlist.length > 0 && (
+                  {user ? (
+                    <RecentTrades />
+                  ) : (
+                    watchlist && watchlist.length > 0 ? (
                       <Card>
                         <CardHeader>
                           <CardTitle className="text-sm font-medium">Your Watchlist</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
-                          {watchlist.slice(0, 3).map(item => item.stocks && (
-                            <StockRow 
-                              key={item.id} 
-                              stock={item.stocks} 
+                          {watchlist.slice(0, 5).map(item => item.stocks && (
+                            <StockRow
+                              key={item.id}
+                              stock={item.stocks}
                               onClick={() => navigate(`/trade/stocks/${item.stocks?.symbol}`)}
                             />
                           ))}
-                          {watchlist.length > 3 && (
-                            <Button 
-                              variant="ghost" 
-                              className="w-full" 
+                          {watchlist.length > 5 && (
+                            <Button
+                              variant="ghost"
+                              className="w-full"
                               onClick={() => setActiveTab('watchlist')}
                             >
                               View all {watchlist.length} items
@@ -389,8 +373,8 @@ export default function Trade() {
                           )}
                         </CardContent>
                       </Card>
-                    )}
-                  </div>
+                    ) : null
+                  )}
                 </div>
               </>
             )}
@@ -440,6 +424,7 @@ export default function Trade() {
                       <StockRow 
                         key={stock.id} 
                         stock={stock} 
+                        showChange
                         onClick={() => navigate(`/trade/stocks/${stock.symbol}`)}
                       />
                     ))
@@ -461,6 +446,7 @@ export default function Trade() {
                       <StockRow 
                         key={stock.id} 
                         stock={stock} 
+                        showChange
                         onClick={() => navigate(`/trade/stocks/${stock.symbol}`)}
                       />
                     ))
