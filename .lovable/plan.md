@@ -1,88 +1,72 @@
 
-# Implement AAL2 Session Step-Up for Sensitive Actions
+## Root Cause Analysis
 
-## What is AAL2 and Why It Matters
+There are two separate problems here, both stemming from how the email change flow was architected.
 
-Authentication Assurance Level 2 (AAL2) is Supabase's way of saying "the user has proven their identity a second time this session." It is only required when a user has MFA enabled. A normal password login gives you AAL1. Once you complete an MFA challenge, your session is upgraded to AAL2.
+### Problem 1: The auth email (login credentials) never actually changes
 
-Supabase enforces AAL2 server-side for sensitive actions like changing your email or password, and removing MFA. This cannot be bypassed — it is a security guarantee from the server.
+`supabase.auth.updateUser({ email: newEmail })` is what changes the actual login email in Supabase Auth. However, this function requires Supabase to send its own confirmation email to the **new address** before the change takes effect. Supabase uses its own email hook for this — but the app has its own **custom email hook** registered (visible in the auth logs: `"hook": "https://api.lovable.dev/projects/.../backend/email-hook"`).
 
-The correct, user-friendly solution is a **"step-up" flow**: when the user clicks "Update Email" (or removes MFA), the app checks if AAL2 is needed, prompts the user for their MFA code in a small inline dialog, and then proceeds once they verify. The user only sees this if they have MFA enabled.
+This means when `updateUser` is called, Supabase fires the email hook to send a "confirm your new email" message. Since the domain (`clusterapp.space`) has DNS issues, **that confirmation email also never arrives**. Until the user clicks that link, Supabase Auth keeps the old email as the login credential.
 
-## Flow Diagram
+**The current custom verification flow only marks `email_verified: true` in the `profiles` table — it does NOT tell Supabase Auth to actually swap the email.** These are two completely separate systems.
+
+### Problem 2: The profile UI shows the old email
+
+The `ChangeEmailCard` shows `user?.email` from `useAuth`. After `updateUser` is called, Supabase Auth does not immediately update `user.email` in the session — it only updates after the new email confirmation link is clicked. Since that never happens, the UI keeps showing the old email.
+
+Additionally, the `verify-email-token` edge function only updates `profiles.email_verified = true` — it never calls `supabase.auth.admin.updateUserById()` to sync the new email into the auth system.
+
+## The Real Fix
+
+The cleanest approach is to **completely bypass `supabase.auth.updateUser` for the email change** and instead handle everything through the custom verification flow and the admin API in the edge function. Here is the updated architecture:
 
 ```text
-User clicks "Update Email"
+User enters new email → clicks "Update Email"
         |
         v
-Check current AAL level
+Store pending_email in profiles table (not auth)
+Mark email_verified = false
+Send custom verification email to NEW address
+Show toast: "Check your new email to confirm the change"
         |
-   AAL2 already?         AAL2 not required?
-      |                        |
-      v                        v
-Proceed directly          Check for enrolled MFA factor
-                                |
-                    Factor found?      No factor?
-                         |                  |
-                         v                  v
-              Show MFA challenge       Proceed directly
-              dialog (step-up)
-                         |
-                   User enters code
-                         |
-                   Session upgraded
-                         |
-                         v
-                   Proceed with action
+        v
+User clicks link in email → /verify-email?token=...&uid=...
+        |
+        v
+verify-email-token edge function:
+  1. Validates token (existing logic)
+  2. Calls supabase.auth.admin.updateUserById(uid, { email: newEmail })
+     to swap the auth email (uses service role key - no confirmation needed)
+  3. Sets email_verified = true, clears pending_email
+        |
+        v
+Session is refreshed → user.email updates → profile shows new email
 ```
 
-## Implementation Plan
+## Files to Change
 
-### 1. Create a reusable `MFAStepUpDialog` component (`src/components/auth/MFAStepUpDialog.tsx`)
+### 1. Database migration — add `pending_email` column to `profiles`
 
-A small, focused dialog that:
-- Takes a title, description, and `onVerified` callback as props
-- Calls `supabase.auth.mfa.challenge()` + `supabase.auth.mfa.verify()` to upgrade the session to AAL2
-- On success, calls `onVerified()` so the parent can proceed
-- Has a "Cancel" button that closes without doing anything
+Add a nullable `pending_email text` column to store the new email address between the time the user requests the change and the time they verify it. This is needed so the `verify-email-token` function knows what email to switch to.
 
-### 2. Create a helper hook `useAAL2StepUp` (`src/components/auth/useAAL2StepUp.ts`)
+### 2. `supabase/functions/send-verification-email/index.ts`
 
-A small utility that:
-- Checks `supabase.auth.mfa.getAuthenticatorAssuranceLevel()` to see the current and next AAL
-- Returns: `{ needsStepUp: boolean, factorId: string | null }`
-- Used by both `ChangeEmailCard` and `MFASetup` (for the "Remove" button) before executing sensitive actions
+Update to also store the `pending_email` in the profiles table alongside the token.
 
-### 3. Update `ChangeEmailCard` (`src/components/auth/ChangeEmailCard.tsx`)
+### 3. `supabase/functions/verify-email-token/index.ts`
 
-- On "Update Email" click, first call `useAAL2StepUp`
-- If step-up is needed: show the `MFAStepUpDialog`
-- The `onVerified` callback of the dialog calls the actual `supabase.auth.updateUser({ email })` to proceed
-- If no step-up needed: proceed directly as before
+After validating the token, add a call to `supabase.auth.admin.updateUserById(uid, { email: profile.pending_email })` using the service role key. This actually swaps the auth credential. Then clear `pending_email` and set `email_verified = true`.
 
-### 4. Update `MFASetup` (`src/components/auth/MFASetup.tsx`)
+### 4. `src/components/auth/ChangeEmailCard.tsx`
 
-- The "Remove" button for a verified MFA factor also requires AAL2
-- Wrap the remove button click with the same step-up check
-- Show `MFAStepUpDialog` before calling `supabase.auth.mfa.unenroll()`
-- This also fixes the 422 error that was appearing in logs when trying to remove MFA
+Remove the call to `supabase.auth.updateUser({ email: newEmail })` entirely. Instead, just call `send-verification-email` (which now also stores `pending_email`). This avoids the need for Supabase's own email confirmation and the domain DNS issue with it.
 
-### 5. Update `ChangePasswordCard` in `Profile.tsx`
+### 5. `src/pages/VerifyEmail.tsx`
 
-- Password changes also require AAL2 when MFA is enabled
-- Apply the same step-up pattern to the "Update Password" action
+After a successful verification, call `supabase.auth.refreshSession()` so the auth context (`useAuth`) picks up the new email immediately without requiring a sign-out/sign-in.
 
-## Files to Create/Modify
+## Summary
 
-- **New**: `src/components/auth/MFAStepUpDialog.tsx`
-- **New**: `src/hooks/useAAL2StepUp.ts`
-- **Modified**: `src/components/auth/ChangeEmailCard.tsx`
-- **Modified**: `src/components/auth/MFASetup.tsx`
-- **Modified**: `src/pages/Profile.tsx` (the `ChangePasswordCard` function)
-
-## User Experience
-
-- Users **without MFA** see no change — everything works exactly as before
-- Users **with MFA** see a small dialog asking for their 6-digit code when they try to change their email, change their password, or remove MFA
-- The dialog is clearly labeled ("Confirm your identity") so users understand why it appears
-- After verifying once, they can take multiple sensitive actions without re-verifying (the AAL2 session persists until they sign out)
+- The old flow: `updateUser` (triggers Supabase email, which fails) → custom email (marks profile only) → **auth email never changes**
+- The new flow: skip `updateUser` entirely → store `pending_email` → custom email → edge function uses admin API to swap both auth AND profile email atomically → `refreshSession` updates the UI instantly
