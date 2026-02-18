@@ -190,36 +190,37 @@ export default function Trade() {
           hasConnectedAccount ? (
             <Card className="mb-6 bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
               <CardContent className="pt-6 space-y-4">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Portfolio Value</p>
-                    <p className="text-3xl font-bold">{formatPrice(totalValue)}</p>
-                  </div>
-                  <div className="flex gap-6">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Cash Available</p>
-                      <p className="text-xl font-semibold">{formatPrice(cashAvailable)}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Invested</p>
-                      <p className="text-xl font-semibold">{formatPrice(investedValue)}</p>
-                    </div>
-                    {alpacaAccount && !('needsReconnect' in alpacaAccount) && (
-                      <div>
-                        <p className="text-sm text-muted-foreground">Buying Power</p>
-                        <p className="text-xl font-semibold">{formatPrice(alpacaAccount.buying_power)}</p>
-                      </div>
-                    )}
-                  </div>
+                {/* Main value */}
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Portfolio Value</p>
+                  <p className="text-3xl font-bold">{formatPrice(totalValue)}</p>
                 </div>
-                <div className="flex gap-2 bg-muted/50 rounded-lg p-1 w-fit">
-                  <Button onClick={() => navigate('/trade/portfolio')} size="sm">
+                {/* Stats grid — 2 cols on mobile, 3 on md+ */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Cash Available</p>
+                    <p className="text-base font-semibold">{formatPrice(cashAvailable)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Invested</p>
+                    <p className="text-base font-semibold">{formatPrice(investedValue)}</p>
+                  </div>
+                  {alpacaAccount && !('needsReconnect' in alpacaAccount) && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Buying Power</p>
+                      <p className="text-base font-semibold">{formatPrice(alpacaAccount.buying_power)}</p>
+                    </div>
+                  )}
+                </div>
+                {/* Nav buttons — scrollable row on mobile */}
+                <div className="flex gap-2 bg-muted/50 rounded-lg p-1 overflow-x-auto">
+                  <Button onClick={() => navigate('/trade/portfolio')} size="sm" className="shrink-0">
                     <Briefcase className="mr-2 h-4 w-4" /> Portfolio
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => navigate('/trade/orders')}>
+                  <Button variant="ghost" size="sm" onClick={() => navigate('/trade/orders')} className="shrink-0">
                     <Clock className="mr-2 h-4 w-4" /> Orders
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => navigate('/settings/brokerage')}>
+                  <Button variant="ghost" size="sm" onClick={() => navigate('/settings/brokerage')} className="shrink-0">
                     <Settings className="mr-2 h-4 w-4" /> Accounts
                   </Button>
                 </div>
