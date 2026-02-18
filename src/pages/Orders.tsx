@@ -17,7 +17,7 @@ import { useAlpacaOrders, useAlpacaCancelOrder, AlpacaOrder } from '@/hooks/useA
 import { useTradingMode } from '@/hooks/useTradingMode';
 import { TradingModeIndicator } from '@/components/TradingModeToggle';
 import { formatDistanceToNow } from 'date-fns';
-import { useMySubscriberTrades } from '@/hooks/useDeployedModels';
+import { useMySubscriberTrades, useTradeRealtimeUpdates } from '@/hooks/useDeployedModels';
 
 function getStatusIcon(status: string) {
   switch (status) {
@@ -109,6 +109,7 @@ export default function Orders() {
   const { data: orders, isLoading } = useAlpacaOrders(activeTab === 'all' ? 'all' : activeTab === 'open' ? 'open' : 'closed');
   const cancelOrder = useAlpacaCancelOrder();
   const { data: botTrades, isLoading: botLoading } = useMySubscriberTrades();
+  useTradeRealtimeUpdates();
 
   if (!user) {
     return (

@@ -81,6 +81,14 @@ export function useSubscribeToModel() {
     mutationFn: async ({ modelId, performanceFee }: { modelId: string; performanceFee: number }) => {
       if (!user?.id) throw new Error('Not authenticated');
 
+      // Fetch model's min_allocation for the allocation row
+      const { data: model } = await supabase
+        .from('models')
+        .select('min_allocation')
+        .eq('id', modelId)
+        .maybeSingle();
+      const minAllocation = model?.min_allocation ?? 100;
+
       // Check if any subscription row already exists (active or cancelled)
       const { data: existing } = await supabase
         .from('subscriptions')
@@ -88,6 +96,8 @@ export function useSubscribeToModel() {
         .eq('subscriber_id', user.id)
         .eq('model_id', modelId)
         .maybeSingle();
+
+      let subscriptionId: string;
 
       if (existing) {
         if (existing.status === 'active') throw new Error('Already subscribed to this model');
@@ -106,6 +116,14 @@ export function useSubscribeToModel() {
           .single();
 
         if (error) throw error;
+        subscriptionId = data.id;
+
+        // Reactivate the allocation row
+        await supabase
+          .from('allocations')
+          .update({ is_active: true })
+          .eq('subscription_id', subscriptionId);
+
         return data;
       }
 
@@ -122,11 +140,26 @@ export function useSubscribeToModel() {
         .single();
 
       if (error) throw error;
+      subscriptionId = data.id;
+
+      // Auto-create allocation row so the trade-mirroring engine can size trades
+      await supabase
+        .from('allocations')
+        .upsert({
+          user_id: user.id,
+          subscription_id: subscriptionId,
+          model_id: modelId,
+          allocated_amount: minAllocation,
+          current_value: minAllocation,
+          is_active: true,
+        }, { onConflict: 'subscription_id' });
+
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['models'] });
+      queryClient.invalidateQueries({ queryKey: ['allocations'] });
     },
   });
 }

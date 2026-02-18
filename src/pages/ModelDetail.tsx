@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useModel, useUpdateModel, useDeleteModel } from '@/hooks/useModels';
-import { useModelSignals, useDeployedModel, useDeployModel, useStopModel } from '@/hooks/useDeployedModels';
+import { useModelSignals, useDeployedModel, useDeployModel, useStopModel, useSignalRealtimeUpdates } from '@/hooks/useDeployedModels';
 import { useIsSubscribed } from '@/hooks/useSubscriptions';
 import { useBacktests } from '@/hooks/useBacktests';
 import { MainNav } from '@/components/MainNav';
@@ -66,6 +66,7 @@ export default function ModelDetail() {
 
   const { data: model, isLoading } = useModel(id!);
   const { data: signals } = useModelSignals(id!);
+  useSignalRealtimeUpdates(id);
   const { data: subscription } = useIsSubscribed(id);
   const { data: backtests } = useBacktests(id!, false);
   const { data: deployedModel, isLoading: deployLoading } = useDeployedModel(id);
