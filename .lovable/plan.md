@@ -1,101 +1,94 @@
 
-# Fix MFA: Bypass on Refresh, Remember Me Auto-Login, and UI Clarity
+# Setting the First Alpha Account + Role Management in the Alpha Dashboard
 
-## What's Wrong Right Now
+## Part 1: How to Set the First Alpha Account (Bootstrap Problem)
 
-### Bug 1: MFA is bypassed on refresh or re-visiting /auth
+Since Alpha is the top-level role and no one has it yet, the first Alpha must be assigned directly via the database SQL editor. There is no circular dependency — `has_alpha_role()` simply checks `user_roles`, and inserting directly via SQL bypasses RLS entirely (service role has no RLS restrictions).
 
-The current `useEffect` (lines 55-79 in `Auth.tsx`) fires whenever `user` is non-null — including when a session is restored from localStorage on page refresh. It calls `checkVerification()` which only checks `email_verified`, and then goes straight to `navigate('/trade')`. The MFA check (`checkMFAAndProceed`) only runs inside `handleLogin` — so any login path that doesn't go through the form button skips MFA entirely.
+### Steps to assign Alpha to your account:
 
-### Bug 2: Remember Me doesn't auto-login, it still asks for MFA
+1. Open the backend via **Lovable Cloud → Cloud View → Run SQL**
+2. First, find your user ID by running:
+   ```sql
+   SELECT id, username FROM profiles WHERE username = 'your_username_here';
+   ```
+3. Then insert the Alpha role (replace the UUID):
+   ```sql
+   INSERT INTO public.user_roles (user_id, role)
+   VALUES ('your-user-uuid-here', 'alpha')
+   ON CONFLICT (user_id, role) DO NOTHING;
+   ```
+   If the user already has a different role (e.g. `developer`), update it instead:
+   ```sql
+   UPDATE public.user_roles
+   SET role = 'alpha'
+   WHERE user_id = 'your-user-uuid-here';
+   ```
 
-`isRemembered()` is checked inside `checkMFAAndProceed()` which is called from `handleLogin`. But `handleLogin` only runs on a fresh form submit — not on session restore. So even if "Remember me" was checked and the timestamp is still valid, the user still sees the login form on their next visit instead of being auto-redirected.
+This is a one-time bootstrap operation. After that, any Alpha account can manage all other roles directly from the Alpha Dashboard UI (the new feature below).
 
-### Bug 3: handleMFASuccess flips mode to 'login' which re-triggers the useEffect
+---
 
-When MFA is successfully completed, `handleMFASuccess` sets `mode` back to `'login'`. This causes the `useEffect` to re-fire (since `mode` is in the dependency array at line 79 and the guard `if (mode === 'mfa-challenge') return` no longer applies). That re-run calls `navigate('/trade')` correctly — but this is fragile and causes an unnecessary double render cycle.
+## Part 2: Role Management UI in the Alpha Dashboard
 
-## The Fix
+The Alpha Dashboard currently shows each user's role as a read-only badge. We need to add a role change dropdown per user so Alpha accounts can promote/demote anyone (including assigning the `alpha` role to others).
 
-Move ALL redirect and MFA logic into the single `useEffect`, making it the gatekeeper for every path that could lead to `/trade`. `handleLogin` simply calls `signIn` and exits — the `useEffect` reacts to the user being set and does the rest.
+### What changes:
 
-### Revised flow for the useEffect:
+**`src/hooks/useAlpha.tsx`** — Add a `useSetRoleForUser` mutation hook:
+- Calls upsert on `user_roles` with the target `userId` and new `role`
+- On success, invalidates `['alpha', 'all-users']` so the user list refreshes
+- The RLS policies already allow Alpha to insert/update/delete any role
 
-```text
-user becomes non-null (from ANY source: form login, session restore, OAuth)
-    |
-    v
-Is mode already 'mfa-challenge'? → return (don't interfere)
-    |
-    v
-Check email_verified in profiles
-    → not verified → show verify-email screen
-    |
-    v
-isRemembered()? → YES → navigate('/trade') immediately (1-hour auto-login)
-    |
-    v
-List MFA factors → verified TOTP factor found?
-    → YES → setMfaFactorId + setMode('mfa-challenge')
-    → NO  → navigate('/trade')
-```
+**`src/pages/AlphaDashboard.tsx`** — Add a role selector to each user row in the User Moderation tab:
+- A `<Select>` dropdown showing `developer`, `retail_trader`, `admin`, `alpha` options
+- Current role is pre-selected
+- On change, shows a confirmation `<AlertDialog>` before applying ("Change @username's role to Alpha?")
+- After confirmation, calls `useSetRoleForUser`
+- The Alpha user's own row shows the selector as disabled (can't demote yourself)
+- A small `UserCog` icon next to each role badge opens the selector clearly
 
-### handleLogin becomes minimal:
+### Behavior details:
+
+| Action | Result |
+|---|---|
+| Alpha sets a user to `alpha` | User gets full Alpha access immediately after next login/refresh |
+| Alpha sets a user to `admin` | User gets admin dashboard access |
+| Alpha tries to change their own role | Selector is disabled with a tooltip: "Cannot change your own role" |
+| User has no role yet | Selector shows placeholder "Assign role..." and on change performs an INSERT |
+| User already has a role | On change performs an UPDATE |
+
+### Technical implementation:
+
+The `useSetRoleForUser` hook will:
 ```typescript
-const handleLogin = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setLoading(true);
-  try {
-    const { error } = await signIn(email, password);
+mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
+  // Check if user already has a role
+  const { data: existing } = await supabase
+    .from('user_roles')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (existing) {
+    // UPDATE existing role
+    const { error } = await supabase
+      .from('user_roles')
+      .update({ role })
+      .eq('user_id', userId);
     if (error) throw error;
-    // useEffect takes over from here
-  } catch (error: any) {
-    toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    setLoading(false);
+  } else {
+    // INSERT new role
+    const { error } = await supabase
+      .from('user_roles')
+      .insert({ user_id: userId, role });
+    if (error) throw error;
   }
-  // NOTE: do NOT call setLoading(false) on success — component unmounts on navigation
-};
+}
 ```
 
-### handleMFASuccess navigates directly:
-```typescript
-const handleMFASuccess = () => {
-  if (rememberMe) setRemembered();
-  navigate('/trade', { replace: true }); // Direct — no mode flip needed
-};
-```
+The Alpha Dashboard user row will add a role selector next to the existing mute/freeze buttons, with an `AlertDialog` confirming any role change — especially promoting to `alpha` which shows a stronger warning.
 
-This removes the fragile "flip to login to re-trigger useEffect" pattern.
-
-## Files to Change
-
-### 1. `src/pages/Auth.tsx`
-
-- **useEffect**: Expand `checkVerification` to also run the `isRemembered()` check and MFA factor check before navigating to `/trade`
-- **handleLogin**: Remove `await checkMFAAndProceed()` — just call `signIn` and handle errors
-- **handleMFASuccess**: Change from `setMode('login')` to `navigate('/trade', { replace: true })`
-- **Remove `checkMFAAndProceed`**: This function is no longer needed as a standalone — its logic moves into the `useEffect`
-- **Update label**: "Remember me for 1 hour" — clarify it means auto-login after completing MFA once
-
-### 2. `src/components/auth/MFAChallenge.tsx`
-
-- Update the `CardDescription` text to: "Open your authenticator app (e.g. Google Authenticator or Authy) and enter the 6-digit code shown for this account."
-- Add a small helper note below the input: "Codes refresh every 30 seconds — if it fails, wait for the next one."
-- Change the cancel button label from "Use a different method" to "Cancel sign in" since TOTP is the only MFA method
-
-## Technical Detail: Why the useEffect Guard Still Works
-
-The guard `if (mode === 'mfa-challenge') return` at line 62 stays in place. This prevents the effect from firing again while the challenge screen is showing. Once `handleMFASuccess` calls `navigate('/trade')`, the component unmounts entirely — so there's no risk of the effect re-running after MFA succeeds.
-
-The dependency array stays as `[user, authLoading, navigate, justSignedOut, mode]` — no changes needed there.
-
-## Summary of Behavior After the Fix
-
-| Scenario | Before | After |
-|---|---|---|
-| Fresh login with MFA enabled | MFA shown | MFA shown |
-| Page refresh while logged in | MFA skipped | MFA shown |
-| Revisit /auth while session active | MFA skipped | MFA shown |
-| Remember Me checked, within 1 hour | MFA still shown | Auto-navigates to /trade |
-| Remember Me expired (>1 hour) | MFA still shown | MFA shown |
-| No MFA factor enrolled | No challenge | No challenge |
+### Files to change:
+- `src/hooks/useAlpha.tsx` — Add `useSetRoleForUser` mutation
+- `src/pages/AlphaDashboard.tsx` — Add role selector dropdown with confirmation dialog per user row
