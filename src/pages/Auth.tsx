@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { MFAChallenge } from '@/components/auth/MFAChallenge';
 import { useTour } from '@/contexts/TourContext';
 
-type AuthMode = 'signup' | 'login' | 'verify-email' | 'mfa-challenge' | 'forgot-password' | 'forgot-sent' | 'redirecting';
+type AuthMode = 'signup' | 'login' | 'verify-email' | 'mfa-challenge' | 'forgot-password' | 'forgot-sent';
 
 const REMEMBER_ME_KEY = 'cluster_remember_me';
 const REMEMBER_ME_DURATION = 60 * 60 * 1000; // 1 hour in ms
@@ -49,6 +49,8 @@ export default function Auth() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { startTour } = useTour();
+  // Ref to prevent proceed() from running more than once per login
+  const proceedingRef = useRef(false);
 
   const justSignedOut = searchParams.get('signout') === 'true';
 
@@ -58,65 +60,67 @@ export default function Auth() {
       return;
     }
     if (authLoading) return;
-    if (!user) return;
-    if (mode === 'mfa-challenge') return;
-    if (mode === 'verify-email') return;
-    if (mode === 'redirecting') return;
+    if (!user) {
+      // Reset the guard when user logs out
+      proceedingRef.current = false;
+      return;
+    }
+    // Prevent multiple simultaneous or repeated executions
+    if (proceedingRef.current) return;
+
+    proceedingRef.current = true;
 
     const proceed = async () => {
-      // 1. Check email verification first
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('email_verified')
-        .eq('id', user.id)
-        .single();
+      try {
+        // 1. Check email verification first
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('email_verified')
+          .eq('id', user.id)
+          .single();
 
-      if (!profile?.email_verified) {
-        setPendingEmail(user.email || '');
-        setMode('verify-email');
-        return;
-      }
+        if (!profile?.email_verified) {
+          setPendingEmail(user.email || '');
+          setMode('verify-email');
+          proceedingRef.current = false;
+          return;
+        }
 
-      // 2. If remembered within 1 hour, skip MFA and auto-login
-      if (isRemembered()) {
-        setMode('redirecting');
+        // 2. If remembered within 1 hour, skip MFA and auto-login
+        if (isRemembered()) {
+          navigate('/trade', { replace: true });
+          return;
+        }
+
+        // 3. Check if user has a verified MFA factor
+        const { data: factors } = await supabase.auth.mfa.listFactors();
+        const verifiedFactor = factors?.totp?.find(f => f.status === 'verified');
+
+        if (verifiedFactor) {
+          setMfaFactorId(verifiedFactor.id);
+          setMode('mfa-challenge');
+          proceedingRef.current = false;
+          return;
+        }
+
+        // 4. No MFA enrolled — proceed to app immediately
         navigate('/trade', { replace: true });
-        return;
-      }
-
-      // 3. Check if user has a verified MFA factor
-      const { data: factors } = await supabase.auth.mfa.listFactors();
-      const verifiedFactor = factors?.totp?.find(f => f.status === 'verified');
-
-      if (verifiedFactor) {
-        setMfaFactorId(verifiedFactor.id);
-        setMode('mfa-challenge');
-        return;
-      }
-
-      // 4. No MFA enrolled — proceed to app immediately
-      setMode('redirecting');
-      navigate('/trade', { replace: true });
-      if (showTutorial) {
-        setTimeout(() => startTour(), 600);
+        if (showTutorial) {
+          setTimeout(() => startTour(), 600);
+        }
+      } catch (e) {
+        console.error('Auth proceed error:', e);
+        proceedingRef.current = false;
       }
     };
 
     proceed();
-  }, [user, authLoading, navigate, justSignedOut, mode, showTutorial, startTour]);
+  }, [user, authLoading, navigate, justSignedOut, showTutorial, startTour]);
 
   if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Loading...</p>
-      </div>
-    );
-  }
-
-  if (mode === 'redirecting') {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Redirecting...</p>
       </div>
     );
   }
@@ -143,6 +147,7 @@ export default function Auth() {
     await supabase.auth.signOut({ scope: 'global' });
     setMode('login');
     setMfaFactorId(null);
+    proceedingRef.current = false;
     setLoading(false);
     toast({ title: 'MFA required', description: 'You must complete MFA verification to sign in.', variant: 'destructive' });
   };
@@ -252,7 +257,7 @@ export default function Auth() {
             </div>
             <div className="pt-4 border-t">
               <p className="text-sm text-muted-foreground mb-4">Already verified your email?</p>
-              <Button onClick={() => setMode('login')} className="w-full">Sign In</Button>
+              <Button onClick={() => { setMode('login'); proceedingRef.current = false; }} className="w-full">Sign In</Button>
             </div>
           </CardContent>
         </Card>
@@ -260,7 +265,6 @@ export default function Auth() {
     );
   }
 
-  // Signup form
   // Forgot password form
   if (mode === 'forgot-password') {
     return (
