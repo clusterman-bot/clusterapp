@@ -1,72 +1,101 @@
 
-## Root Cause Analysis
+# Fix MFA: Bypass on Refresh, Remember Me Auto-Login, and UI Clarity
 
-There are two separate problems here, both stemming from how the email change flow was architected.
+## What's Wrong Right Now
 
-### Problem 1: The auth email (login credentials) never actually changes
+### Bug 1: MFA is bypassed on refresh or re-visiting /auth
 
-`supabase.auth.updateUser({ email: newEmail })` is what changes the actual login email in Supabase Auth. However, this function requires Supabase to send its own confirmation email to the **new address** before the change takes effect. Supabase uses its own email hook for this — but the app has its own **custom email hook** registered (visible in the auth logs: `"hook": "https://api.lovable.dev/projects/.../backend/email-hook"`).
+The current `useEffect` (lines 55-79 in `Auth.tsx`) fires whenever `user` is non-null — including when a session is restored from localStorage on page refresh. It calls `checkVerification()` which only checks `email_verified`, and then goes straight to `navigate('/trade')`. The MFA check (`checkMFAAndProceed`) only runs inside `handleLogin` — so any login path that doesn't go through the form button skips MFA entirely.
 
-This means when `updateUser` is called, Supabase fires the email hook to send a "confirm your new email" message. Since the domain (`clusterapp.space`) has DNS issues, **that confirmation email also never arrives**. Until the user clicks that link, Supabase Auth keeps the old email as the login credential.
+### Bug 2: Remember Me doesn't auto-login, it still asks for MFA
 
-**The current custom verification flow only marks `email_verified: true` in the `profiles` table — it does NOT tell Supabase Auth to actually swap the email.** These are two completely separate systems.
+`isRemembered()` is checked inside `checkMFAAndProceed()` which is called from `handleLogin`. But `handleLogin` only runs on a fresh form submit — not on session restore. So even if "Remember me" was checked and the timestamp is still valid, the user still sees the login form on their next visit instead of being auto-redirected.
 
-### Problem 2: The profile UI shows the old email
+### Bug 3: handleMFASuccess flips mode to 'login' which re-triggers the useEffect
 
-The `ChangeEmailCard` shows `user?.email` from `useAuth`. After `updateUser` is called, Supabase Auth does not immediately update `user.email` in the session — it only updates after the new email confirmation link is clicked. Since that never happens, the UI keeps showing the old email.
+When MFA is successfully completed, `handleMFASuccess` sets `mode` back to `'login'`. This causes the `useEffect` to re-fire (since `mode` is in the dependency array at line 79 and the guard `if (mode === 'mfa-challenge') return` no longer applies). That re-run calls `navigate('/trade')` correctly — but this is fragile and causes an unnecessary double render cycle.
 
-Additionally, the `verify-email-token` edge function only updates `profiles.email_verified = true` — it never calls `supabase.auth.admin.updateUserById()` to sync the new email into the auth system.
+## The Fix
 
-## The Real Fix
+Move ALL redirect and MFA logic into the single `useEffect`, making it the gatekeeper for every path that could lead to `/trade`. `handleLogin` simply calls `signIn` and exits — the `useEffect` reacts to the user being set and does the rest.
 
-The cleanest approach is to **completely bypass `supabase.auth.updateUser` for the email change** and instead handle everything through the custom verification flow and the admin API in the edge function. Here is the updated architecture:
+### Revised flow for the useEffect:
 
 ```text
-User enters new email → clicks "Update Email"
-        |
-        v
-Store pending_email in profiles table (not auth)
-Mark email_verified = false
-Send custom verification email to NEW address
-Show toast: "Check your new email to confirm the change"
-        |
-        v
-User clicks link in email → /verify-email?token=...&uid=...
-        |
-        v
-verify-email-token edge function:
-  1. Validates token (existing logic)
-  2. Calls supabase.auth.admin.updateUserById(uid, { email: newEmail })
-     to swap the auth email (uses service role key - no confirmation needed)
-  3. Sets email_verified = true, clears pending_email
-        |
-        v
-Session is refreshed → user.email updates → profile shows new email
+user becomes non-null (from ANY source: form login, session restore, OAuth)
+    |
+    v
+Is mode already 'mfa-challenge'? → return (don't interfere)
+    |
+    v
+Check email_verified in profiles
+    → not verified → show verify-email screen
+    |
+    v
+isRemembered()? → YES → navigate('/trade') immediately (1-hour auto-login)
+    |
+    v
+List MFA factors → verified TOTP factor found?
+    → YES → setMfaFactorId + setMode('mfa-challenge')
+    → NO  → navigate('/trade')
 ```
+
+### handleLogin becomes minimal:
+```typescript
+const handleLogin = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+  try {
+    const { error } = await signIn(email, password);
+    if (error) throw error;
+    // useEffect takes over from here
+  } catch (error: any) {
+    toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    setLoading(false);
+  }
+  // NOTE: do NOT call setLoading(false) on success — component unmounts on navigation
+};
+```
+
+### handleMFASuccess navigates directly:
+```typescript
+const handleMFASuccess = () => {
+  if (rememberMe) setRemembered();
+  navigate('/trade', { replace: true }); // Direct — no mode flip needed
+};
+```
+
+This removes the fragile "flip to login to re-trigger useEffect" pattern.
 
 ## Files to Change
 
-### 1. Database migration — add `pending_email` column to `profiles`
+### 1. `src/pages/Auth.tsx`
 
-Add a nullable `pending_email text` column to store the new email address between the time the user requests the change and the time they verify it. This is needed so the `verify-email-token` function knows what email to switch to.
+- **useEffect**: Expand `checkVerification` to also run the `isRemembered()` check and MFA factor check before navigating to `/trade`
+- **handleLogin**: Remove `await checkMFAAndProceed()` — just call `signIn` and handle errors
+- **handleMFASuccess**: Change from `setMode('login')` to `navigate('/trade', { replace: true })`
+- **Remove `checkMFAAndProceed`**: This function is no longer needed as a standalone — its logic moves into the `useEffect`
+- **Update label**: "Remember me for 1 hour" — clarify it means auto-login after completing MFA once
 
-### 2. `supabase/functions/send-verification-email/index.ts`
+### 2. `src/components/auth/MFAChallenge.tsx`
 
-Update to also store the `pending_email` in the profiles table alongside the token.
+- Update the `CardDescription` text to: "Open your authenticator app (e.g. Google Authenticator or Authy) and enter the 6-digit code shown for this account."
+- Add a small helper note below the input: "Codes refresh every 30 seconds — if it fails, wait for the next one."
+- Change the cancel button label from "Use a different method" to "Cancel sign in" since TOTP is the only MFA method
 
-### 3. `supabase/functions/verify-email-token/index.ts`
+## Technical Detail: Why the useEffect Guard Still Works
 
-After validating the token, add a call to `supabase.auth.admin.updateUserById(uid, { email: profile.pending_email })` using the service role key. This actually swaps the auth credential. Then clear `pending_email` and set `email_verified = true`.
+The guard `if (mode === 'mfa-challenge') return` at line 62 stays in place. This prevents the effect from firing again while the challenge screen is showing. Once `handleMFASuccess` calls `navigate('/trade')`, the component unmounts entirely — so there's no risk of the effect re-running after MFA succeeds.
 
-### 4. `src/components/auth/ChangeEmailCard.tsx`
+The dependency array stays as `[user, authLoading, navigate, justSignedOut, mode]` — no changes needed there.
 
-Remove the call to `supabase.auth.updateUser({ email: newEmail })` entirely. Instead, just call `send-verification-email` (which now also stores `pending_email`). This avoids the need for Supabase's own email confirmation and the domain DNS issue with it.
+## Summary of Behavior After the Fix
 
-### 5. `src/pages/VerifyEmail.tsx`
-
-After a successful verification, call `supabase.auth.refreshSession()` so the auth context (`useAuth`) picks up the new email immediately without requiring a sign-out/sign-in.
-
-## Summary
-
-- The old flow: `updateUser` (triggers Supabase email, which fails) → custom email (marks profile only) → **auth email never changes**
-- The new flow: skip `updateUser` entirely → store `pending_email` → custom email → edge function uses admin API to swap both auth AND profile email atomically → `refreshSession` updates the UI instantly
+| Scenario | Before | After |
+|---|---|---|
+| Fresh login with MFA enabled | MFA shown | MFA shown |
+| Page refresh while logged in | MFA skipped | MFA shown |
+| Revisit /auth while session active | MFA skipped | MFA shown |
+| Remember Me checked, within 1 hour | MFA still shown | Auto-navigates to /trade |
+| Remember Me expired (>1 hour) | MFA still shown | MFA shown |
+| No MFA factor enrolled | No challenge | No challenge |
