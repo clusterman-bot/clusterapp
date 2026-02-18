@@ -381,8 +381,8 @@ async function executeTradeForOwnerAndSubscribers(
   signal: any
 ) {
   const encryptionSecret = Deno.env.get('ENCRYPTION_SECRET');
+  const resendApiKey = Deno.env.get('RESEND_API_KEY');
   
-  // SECURITY: Fail if encryption secret is not configured
   if (!encryptionSecret) {
     console.error('[TradingBot] CRITICAL: ENCRYPTION_SECRET not configured');
     return;
@@ -391,10 +391,19 @@ async function executeTradeForOwnerAndSubscribers(
   
   console.log(`[TradingBot] Executing ${side} trade for signal ${signal.id}`);
 
+  // Get model details (for allocation constraints and name)
+  const { data: modelDetails } = await supabase
+    .from('models')
+    .select('name, max_exposure_percent')
+    .eq('id', deployment.model_id)
+    .single();
+
+  const maxExposurePct = modelDetails?.max_exposure_percent ?? 20;
+
   // Get all active subscribers with their allocations
   const { data: subscriptions, error: subError } = await supabase
     .from('subscriptions')
-    .select('*, profiles:subscriber_id(id), allocations(*)')
+    .select('*, allocations(*)')
     .eq('model_id', deployment.model_id)
     .eq('status', 'active');
 
@@ -410,6 +419,7 @@ async function executeTradeForOwnerAndSubscribers(
       subscriptionId: sub.id,
       isOwner: false,
       allocation: sub.allocations?.[0] || null,
+      fundWarningAlreadySent: sub.funds_warning_sent ?? false,
     })),
   ];
 
@@ -421,14 +431,11 @@ async function executeTradeForOwnerAndSubscribers(
         .select('*')
         .eq('user_id', trader.userId)
         .eq('broker_name', 'alpaca')
-        .eq('account_type', 'paper')
         .eq('is_active', true)
         .single();
 
       if (accError || !brokerageAccount) {
         console.log(`[TradingBot] No brokerage for user ${trader.userId}, skipping`);
-        
-        // Log failed trade for subscribers
         if (!trader.isOwner && trader.subscriptionId) {
           await supabase.from('subscriber_trades').insert({
             subscription_id: trader.subscriptionId,
@@ -444,15 +451,108 @@ async function executeTradeForOwnerAndSubscribers(
         continue;
       }
 
-      // Decrypt credentials (AES-256-GCM)
+      // Decrypt credentials
       const alpacaApiKey = await decryptKey(brokerageAccount.api_key_encrypted, encryptionSecret);
       const alpacaApiSecret = await decryptKey(brokerageAccount.api_secret_encrypted, encryptionSecret);
+      const isLive = brokerageAccount.account_type === 'live';
+      const alpacaBase = isLive
+        ? 'https://api.alpaca.markets'
+        : 'https://paper-api.alpaca.markets';
+
+      // ── For subscribers: check buying power against allocation budget ──
+      let tradeQty = signal.quantity;
+      if (!trader.isOwner && trader.allocation) {
+        const allocationBudget = trader.allocation.current_value ?? 0;
+        const maxTradeValue = (maxExposurePct / 100) * allocationBudget;
+
+        // Fetch real-time buying power from Alpaca
+        const acctResp = await fetch(`${alpacaBase}/v2/account`, {
+          headers: {
+            'APCA-API-KEY-ID': alpacaApiKey,
+            'APCA-API-SECRET-KEY': alpacaApiSecret,
+          },
+        });
+
+        if (acctResp.ok) {
+          const acctData = await acctResp.json();
+          const buyingPower = parseFloat(acctData.buying_power ?? '0');
+
+          if (side === 'buy' && buyingPower < maxTradeValue) {
+            console.log(`[TradingBot] Insufficient funds for subscriber ${trader.userId}: BP=$${buyingPower}, needed=$${maxTradeValue}`);
+
+            // Log the blocked trade
+            await supabase.from('subscriber_trades').insert({
+              subscription_id: trader.subscriptionId,
+              signal_id: signal.id,
+              user_id: trader.userId,
+              ticker: signal.ticker,
+              side,
+              quantity: tradeQty,
+              status: 'blocked_insufficient_funds',
+              error_message: `Insufficient funds. Buying power: $${buyingPower.toFixed(2)}, required: $${maxTradeValue.toFixed(2)}`,
+              allocation_id: trader.allocation?.id || null,
+            });
+
+            // Send ONE-TIME email notification
+            if (!trader.fundWarningAlreadySent && resendApiKey) {
+              // Get subscriber email
+              const { data: userResp } = await supabase.auth.admin.getUserById(trader.userId);
+              const email = userResp?.user?.email;
+
+              if (email) {
+                const modelName = modelDetails?.name ?? 'a subscribed model';
+                await fetch('https://api.resend.com/emails', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${resendApiKey}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    from: 'Cluster <noreply@clusterapp.lovable.app>',
+                    to: [email],
+                    subject: `Action needed: Insufficient funds to mirror ${modelName}`,
+                    html: `
+                      <div style="font-family: sans-serif; max-width: 560px; margin: 0 auto;">
+                        <h2 style="color: #dc2626;">Trade Blocked — Insufficient Funds</h2>
+                        <p>Hi there,</p>
+                        <p>A trade signal was generated by <strong>${modelName}</strong> that you're subscribed to, but your Alpaca account does not have enough buying power to execute it.</p>
+                        <ul>
+                          <li><strong>Signal:</strong> ${side.toUpperCase()} ${signal.ticker}</li>
+                          <li><strong>Buying power available:</strong> $${buyingPower.toFixed(2)}</li>
+                          <li><strong>Required:</strong> $${maxTradeValue.toFixed(2)}</li>
+                        </ul>
+                        <p>To continue mirroring this model's trades, please add more funds to your Alpaca account and ensure your allocation is active.</p>
+                        <p style="color: #6b7280; font-size: 12px;">This is a one-time notification. We will not send further emails for this subscription unless you re-enable it.</p>
+                      </div>
+                    `,
+                  }),
+                });
+
+                // Mark warning as sent so we don't spam
+                await supabase
+                  .from('subscriptions')
+                  .update({ funds_warning_sent: true })
+                  .eq('id', trader.subscriptionId);
+
+                console.log(`[TradingBot] Insufficient funds email sent to ${email}`);
+              }
+            }
+            continue; // Skip executing this trade
+          }
+
+          // Calculate proportional qty based on allocation exposure limit
+          if (signal.price_at_signal && signal.price_at_signal > 0) {
+            const maxAffordableQty = Math.floor(Math.min(maxTradeValue, buyingPower) / signal.price_at_signal);
+            tradeQty = Math.max(1, Math.min(signal.quantity, maxAffordableQty));
+          }
+        }
+      }
 
       // Place order via Alpaca
-      const alpacaUrl = 'https://paper-api.alpaca.markets/v2/orders';
+      const alpacaUrl = `${alpacaBase}/v2/orders`;
       const orderPayload = {
         symbol: signal.ticker,
-        qty: signal.quantity,
+        qty: tradeQty,
         side,
         type: 'market',
         time_in_force: 'day',
@@ -471,7 +571,15 @@ async function executeTradeForOwnerAndSubscribers(
       const orderResult = await response.json();
       console.log(`[TradingBot] Order result for ${trader.userId}:`, orderResult);
 
-      // Log subscriber trade with allocation
+      // Reset funds_warning_sent on a successful trade (funds topped up)
+      if (response.ok && !trader.isOwner && trader.subscriptionId && (trader as any).fundWarningAlreadySent) {
+        await supabase
+          .from('subscriptions')
+          .update({ funds_warning_sent: false })
+          .eq('id', trader.subscriptionId);
+      }
+
+      // Log subscriber trade
       if (!trader.isOwner && trader.subscriptionId) {
         await supabase.from('subscriber_trades').insert({
           subscription_id: trader.subscriptionId,
@@ -479,7 +587,7 @@ async function executeTradeForOwnerAndSubscribers(
           user_id: trader.userId,
           ticker: signal.ticker,
           side,
-          quantity: signal.quantity,
+          quantity: tradeQty,
           status: response.ok ? 'executed' : 'failed',
           alpaca_order_id: orderResult.id,
           executed_price: orderResult.filled_avg_price ? parseFloat(orderResult.filled_avg_price) : null,
@@ -495,7 +603,7 @@ async function executeTradeForOwnerAndSubscribers(
         brokerage_account_id: brokerageAccount.id,
         action_type: trader.isOwner ? 'bot_trade' : 'copy_trade',
         symbol: signal.ticker,
-        quantity: signal.quantity,
+        quantity: tradeQty,
         side,
         order_type: 'market',
         status: response.ok ? 'executed' : 'failed',
@@ -523,3 +631,4 @@ async function executeTradeForOwnerAndSubscribers(
     .update({ total_trades: (deployment.total_trades || 0) + 1 })
     .eq('id', deployment.id);
 }
+

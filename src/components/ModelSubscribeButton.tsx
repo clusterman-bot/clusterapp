@@ -22,6 +22,8 @@ interface ModelSubscribeButtonProps {
   modelId: string;
   modelName: string;
   performanceFee: number;
+  minAllocation?: number;
+  maxAllocation?: number;
   className?: string;
   size?: 'default' | 'sm' | 'lg';
 }
@@ -29,7 +31,9 @@ interface ModelSubscribeButtonProps {
 export function ModelSubscribeButton({ 
   modelId, 
   modelName, 
-  performanceFee, 
+  performanceFee,
+  minAllocation = 100,
+  maxAllocation = 10000,
   className = '',
   size = 'default'
 }: ModelSubscribeButtonProps) {
@@ -211,6 +215,8 @@ export function ModelSubscribeButton({
           subscriptionId={subscription.id}
           modelId={modelId}
           modelName={modelName}
+          minAllocation={minAllocation}
+          maxAllocation={maxAllocation}
         />
       )}
 

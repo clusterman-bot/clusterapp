@@ -668,8 +668,11 @@ export type Database = {
           id: string
           indicators_config: Json | null
           is_public: boolean | null
+          max_allocation: number | null
           max_drawdown: number | null
+          max_exposure_percent: number | null
           max_positions: number | null
+          min_allocation: number | null
           ml_model_uuid: string | null
           model_type: string | null
           name: string
@@ -700,8 +703,11 @@ export type Database = {
           id?: string
           indicators_config?: Json | null
           is_public?: boolean | null
+          max_allocation?: number | null
           max_drawdown?: number | null
+          max_exposure_percent?: number | null
           max_positions?: number | null
+          min_allocation?: number | null
           ml_model_uuid?: string | null
           model_type?: string | null
           name: string
@@ -732,8 +738,11 @@ export type Database = {
           id?: string
           indicators_config?: Json | null
           is_public?: boolean | null
+          max_allocation?: number | null
           max_drawdown?: number | null
+          max_exposure_percent?: number | null
           max_positions?: number | null
+          min_allocation?: number | null
           ml_model_uuid?: string | null
           model_type?: string | null
           name?: string
@@ -1353,6 +1362,7 @@ export type Database = {
       subscriptions: {
         Row: {
           cancelled_at: string | null
+          funds_warning_sent: boolean | null
           id: string
           model_id: string
           performance_fee_percent: number
@@ -1364,6 +1374,7 @@ export type Database = {
         }
         Insert: {
           cancelled_at?: string | null
+          funds_warning_sent?: boolean | null
           id?: string
           model_id: string
           performance_fee_percent: number
@@ -1375,6 +1386,7 @@ export type Database = {
         }
         Update: {
           cancelled_at?: string | null
+          funds_warning_sent?: boolean | null
           id?: string
           model_id?: string
           performance_fee_percent?: number
