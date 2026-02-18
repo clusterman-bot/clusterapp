@@ -57,7 +57,7 @@ export default function ModelDetail() {
   const { data: model, isLoading } = useModel(id!);
   const { data: signals } = useModelSignals(id!);
   const { data: subscription } = useIsSubscribed(id);
-  const { data: backtests } = useBacktests(id!);
+  const { data: backtests } = useBacktests(id!, false);
 
   if (isLoading) {
     return (
