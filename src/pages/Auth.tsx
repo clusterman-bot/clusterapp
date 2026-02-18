@@ -12,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { MFAChallenge } from '@/components/auth/MFAChallenge';
 import { useTour } from '@/contexts/TourContext';
 
-type AuthMode = 'signup' | 'login' | 'verify-email' | 'mfa-challenge' | 'forgot-password' | 'forgot-sent';
+type AuthMode = 'signup' | 'login' | 'verify-email' | 'mfa-challenge' | 'forgot-password' | 'forgot-sent' | 'redirecting';
 
 const REMEMBER_ME_KEY = 'cluster_remember_me';
 const REMEMBER_ME_DURATION = 60 * 60 * 1000; // 1 hour in ms
@@ -78,6 +78,7 @@ export default function Auth() {
 
       // 2. If remembered within 1 hour, skip MFA and auto-login
       if (isRemembered()) {
+        setMode('redirecting');
         navigate('/trade', { replace: true });
         return;
       }
@@ -92,7 +93,8 @@ export default function Auth() {
         return;
       }
 
-      // 4. No MFA enrolled — proceed to app, start tour if tutorial=true
+      // 4. No MFA enrolled — proceed to app immediately
+      setMode('redirecting');
       navigate('/trade', { replace: true });
       if (showTutorial) {
         setTimeout(() => startTour(), 600);
@@ -110,7 +112,7 @@ export default function Auth() {
     );
   }
 
-  if (user && !justSignedOut && mode !== 'verify-email' && mode !== 'mfa-challenge') {
+  if (mode === 'redirecting') {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Redirecting...</p>
