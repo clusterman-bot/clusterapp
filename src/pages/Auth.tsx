@@ -99,6 +99,8 @@ export default function Auth() {
         if (verifiedFactor) {
           setMfaFactorId(verifiedFactor.id);
           setMode('mfa-challenge');
+          // Reset loading so the UI doesn't freeze on the login button spinner
+          setLoading(false);
           proceedingRef.current = false;
           return;
         }

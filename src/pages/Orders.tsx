@@ -11,12 +11,13 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Clock, CheckCircle, XCircle, AlertCircle,
-  ArrowRight, Calendar, ArrowUpRight, ArrowDownRight
+  ArrowRight, Calendar, Bot
 } from 'lucide-react';
 import { useAlpacaOrders, useAlpacaCancelOrder, AlpacaOrder } from '@/hooks/useAlpaca';
 import { useTradingMode } from '@/hooks/useTradingMode';
 import { TradingModeIndicator } from '@/components/TradingModeToggle';
 import { formatDistanceToNow } from 'date-fns';
+import { useMySubscriberTrades } from '@/hooks/useDeployedModels';
 
 function getStatusIcon(status: string) {
   switch (status) {
@@ -105,8 +106,9 @@ export default function Orders() {
   const { isPaper } = useTradingMode();
   const [activeTab, setActiveTab] = useState('all');
   
-  const { data: orders, isLoading } = useAlpacaOrders(activeTab === 'all' ? 'all' : activeTab);
+  const { data: orders, isLoading } = useAlpacaOrders(activeTab === 'all' ? 'all' : activeTab === 'open' ? 'open' : 'closed');
   const cancelOrder = useAlpacaCancelOrder();
+  const { data: botTrades, isLoading: botLoading } = useMySubscriberTrades();
 
   if (!user) {
     return (
@@ -212,11 +214,90 @@ export default function Orders() {
                   )}
                 </TabsTrigger>
                 <TabsTrigger value="closed">Filled</TabsTrigger>
+                <TabsTrigger value="bot">
+                  <Bot className="h-3.5 w-3.5 mr-1" />
+                  Bot Trades
+                  {(botTrades?.length ?? 0) > 0 && (
+                    <Badge variant="secondary" className="ml-2">{botTrades!.length}</Badge>
+                  )}
+                </TabsTrigger>
               </TabsList>
             </Tabs>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {activeTab === 'bot' ? (
+              botLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="animate-pulse flex items-center justify-between p-4 bg-muted rounded-lg">
+                      <div className="flex items-center gap-4">
+                        <div className="w-4 h-4 rounded-full bg-muted-foreground/20" />
+                        <div>
+                          <div className="h-4 bg-muted-foreground/20 rounded w-16 mb-2" />
+                          <div className="h-3 bg-muted-foreground/20 rounded w-32" />
+                        </div>
+                      </div>
+                      <div className="h-6 bg-muted-foreground/20 rounded w-20" />
+                    </div>
+                  ))}
+                </div>
+              ) : (botTrades?.length ?? 0) > 0 ? (
+                <div className="space-y-1">
+                  {botTrades!.map((trade) => (
+                    <div key={trade.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 hover:bg-muted/50 rounded-lg transition-colors border-b last:border-b-0">
+                      <div className="flex items-start gap-4">
+                        <Bot className="h-4 w-4 text-primary mt-1" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{trade.ticker}</span>
+                            <Badge variant={trade.side === 'buy' ? 'default' : 'secondary'} className={trade.side === 'buy' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'}>
+                              {trade.side.toUpperCase()}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">Bot</Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {trade.quantity} shares{trade.executed_price ? ` @ $${Number(trade.executed_price).toFixed(2)}` : ''}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {formatDistanceToNow(new Date(trade.created_at), { addSuffix: true })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 ml-8 md:ml-0">
+                        <div className="text-right">
+                          <p className="font-semibold">
+                            {trade.executed_price ? `$${(Number(trade.executed_price) * trade.quantity).toFixed(2)}` : '—'}
+                          </p>
+                          <Badge
+                            className={
+                              trade.status === 'executed'
+                                ? 'bg-profit/20 text-profit border-profit/30 capitalize'
+                                : trade.status === 'failed'
+                                ? 'bg-destructive/20 text-destructive border-destructive/30 capitalize'
+                                : 'capitalize'
+                            }
+                            variant={trade.status === 'executed' ? 'outline' : 'secondary'}
+                          >
+                            {trade.status}
+                          </Badge>
+                          {trade.pnl !== null && (
+                            <p className={`text-xs mt-1 ${trade.pnl >= 0 ? 'text-profit' : 'text-loss'}`}>
+                              P&L: {trade.pnl >= 0 ? '+' : ''}${Number(trade.pnl).toFixed(2)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Bot className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground mb-4">No bot trades yet</p>
+                  <p className="text-sm text-muted-foreground">Deploy a model or subscribe to one to start automated trading</p>
+                </div>
+              )
+            ) : isLoading ? (
               <div className="space-y-4">
                 {[1, 2, 3].map(i => (
                   <div key={i} className="animate-pulse flex items-center justify-between p-4 bg-muted rounded-lg">

@@ -386,7 +386,7 @@ async function executeModelTrades(
         await supabaseAdmin.from('subscriptions').update({ funds_warning_sent: false }).eq('id', trader.subscriptionId);
       }
 
-      // Log subscriber trade
+      // Log subscriber trade (or owner's own trade so it appears in their history)
       if (!trader.isOwner && trader.subscriptionId) {
         await supabaseAdmin.from('subscriber_trades').insert({
           subscription_id: trader.subscriptionId,
