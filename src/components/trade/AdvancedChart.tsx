@@ -162,12 +162,27 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
   const maxPrice = Math.max(...chartData.map(d => d.high)) * 1.005;
   const latestData = chartData[chartData.length - 1];
 
-  // For 1D: compare last bar's close vs previousClose (avoids pre-market open skew).
-  // For other periods: compare last bar's close vs first bar's open.
+  // End price: last bar's close (4 PM bar when market closed, or latest live bar)
   const periodEndPrice = (isLive && latestData) ? latestData.close : currentPrice;
-  const periodStartPrice = timeframe === '1D'
-    ? (previousClose || currentPrice)
-    : (isLive && chartData.length > 0 ? chartData[0].open : previousClose);
+
+  // Start price logic:
+  // 1D → first bar at/after 9:30 AM ET (14:30 UTC) = regular market open
+  // All other periods → first bar's open price
+  const periodStartPrice = (() => {
+    if (!isLive || chartData.length === 0) return previousClose || currentPrice;
+    if (timeframe === '1D' && alpacaBars && alpacaBars.length > 0) {
+      // Find the first bar at or after 9:30 AM ET (14:30 UTC) = regular market open
+      const regularOpenBar = alpacaBars.find(b => {
+        const d = new Date(b.date);
+        const utcHour = d.getUTCHours();
+        const utcMin = d.getUTCMinutes();
+        return utcHour > 14 || (utcHour === 14 && utcMin >= 30);
+      });
+      if (regularOpenBar) return regularOpenBar.open;
+    }
+    return chartData[0].open;
+  })();
+
   const priceChange = periodEndPrice - periodStartPrice;
   const priceChangePercent = periodStartPrice > 0 ? (priceChange / periodStartPrice) * 100 : 0;
   const isPositive = priceChange >= 0;
