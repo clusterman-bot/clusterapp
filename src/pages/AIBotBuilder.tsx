@@ -17,11 +17,12 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { 
   Bot, Send, Loader2, Rocket, RefreshCw, BarChart3, Settings2, 
   Sparkles, MessageSquare, Code2, ChevronDown, ChevronRight,
-  Upload, FileJson, AlertTriangle, CheckCircle2, X
+  Upload, FileJson, AlertTriangle, CheckCircle2, X, Store
 } from 'lucide-react';
 import { useUpsertAutomation } from '@/hooks/useStockAutomations';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { PostToMarketplaceDialog } from '@/components/automation/PostToMarketplaceDialog';
 
 interface CustomIndicator {
   name: string;
@@ -93,6 +94,7 @@ export default function AIBotBuilder() {
   const [uploadedConfig, setUploadedConfig] = useState<StrategyConfig | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'config' | 'upload'>('config');
+  const [showMarketplaceDialog, setShowMarketplaceDialog] = useState(false);
 
   const sendPrompt = async (text: string) => {
     if (!text.trim() || isLoading) return;
@@ -537,6 +539,9 @@ export default function AIBotBuilder() {
                         {isDeploying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
                         Deploy Bot
                       </Button>
+                      <Button variant="outline" onClick={() => setShowMarketplaceDialog(true)} size="lg">
+                        <Store className="h-4 w-4 mr-2" /> Marketplace
+                      </Button>
                       <Button variant="outline" onClick={handleExportConfig} size="lg">
                         <FileJson className="h-4 w-4 mr-2" /> Export
                       </Button>
@@ -552,6 +557,16 @@ export default function AIBotBuilder() {
                         <RefreshCw className="h-4 w-4" />
                       </Button>
                     </div>
+
+                    {/* Marketplace Dialog */}
+                    {config && (
+                      <PostToMarketplaceDialog
+                        open={showMarketplaceDialog}
+                        onOpenChange={setShowMarketplaceDialog}
+                        symbol={config.symbol}
+                        automationConfig={buildIndicatorsPayload(config) as any}
+                      />
+                    )}
                   </>
                 ) : (
                   <Card className="h-[560px] flex items-center justify-center">

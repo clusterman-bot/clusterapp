@@ -48,6 +48,17 @@ export function PostToMarketplaceDialog({
       toast({ title: 'Min allocation must be less than max allocation', variant: 'destructive' });
       return;
     }
+    // Check that at least one indicator is active (built-in OR custom AI-generated)
+    const builtInEnabled = Object.entries(automationConfig)
+      .filter(([k]) => ['rsi', 'sma', 'ema', 'bollinger', 'sma_deviation'].includes(k))
+      .some(([, v]: [string, any]) => v?.enabled);
+    const customEnabled = Array.isArray(automationConfig.custom)
+      ? automationConfig.custom.some((c: any) => c.enabled)
+      : false;
+    if (!builtInEnabled && !customEnabled) {
+      toast({ title: 'At least one indicator must be enabled', description: 'Enable a built-in or AI-generated indicator in your strategy config.', variant: 'destructive' });
+      return;
+    }
 
     try {
       await createModel.mutateAsync({
@@ -56,6 +67,7 @@ export function PostToMarketplaceDialog({
         strategy_overview: strategyOverview.trim() || undefined,
         model_type: 'no-code',
         is_public: isPublic,
+        status: isPublic ? 'published' : 'draft',
         performance_fee_percent: 0,
         configuration: {
           ...automationConfig,
