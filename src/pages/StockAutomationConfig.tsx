@@ -16,11 +16,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PostToMarketplaceDialog } from '@/components/automation/PostToMarketplaceDialog';
 import { 
   Activity, BarChart3, Settings2, History, Save, Power, PowerOff, 
-  TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle2, XCircle, Loader2, Store
+  TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle2, XCircle, Loader2, Store, RotateCcw, DollarSign
 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { 
   useStockAutomation, useUpsertAutomation, useToggleAutomation, 
-  useAutomationSignals, type StockAutomation 
+  useAutomationSignals, useResetInvestedAmount, type StockAutomation 
 } from '@/hooks/useStockAutomations';
 import { toast } from '@/hooks/use-toast';
 
@@ -42,6 +43,7 @@ export default function StockAutomationConfig() {
   const { data: signals } = useAutomationSignals(automation?.id);
   const upsertMutation = useUpsertAutomation();
   const toggleMutation = useToggleAutomation();
+  const resetInvestedMutation = useResetInvestedAmount();
 
   // Form state
   const [indicators, setIndicators] = useState(DEFAULT_INDICATORS);
@@ -55,6 +57,7 @@ export default function StockAutomationConfig() {
   const [takeProfitPercent, setTakeProfitPercent] = useState(15);
   const [allowShorting, setAllowShorting] = useState(false);
   const [showMarketplaceDialog, setShowMarketplaceDialog] = useState(false);
+  const [maxInvestmentAmount, setMaxInvestmentAmount] = useState<string>('');
 
   // Load existing config
   useEffect(() => {
@@ -69,6 +72,7 @@ export default function StockAutomationConfig() {
       setStopLossPercent(automation.stop_loss_percent);
       setTakeProfitPercent(automation.take_profit_percent);
       setAllowShorting(automation.allow_shorting ?? false);
+      setMaxInvestmentAmount(automation.max_investment_amount != null ? String(automation.max_investment_amount) : '');
     }
   }, [automation]);
 
@@ -80,6 +84,7 @@ export default function StockAutomationConfig() {
   };
 
   const handleSave = () => {
+    const parsedMax = maxInvestmentAmount !== '' ? parseFloat(maxInvestmentAmount) : null;
     upsertMutation.mutate({
       symbol: upperSymbol,
       indicators: indicators as any,
@@ -92,8 +97,9 @@ export default function StockAutomationConfig() {
       stop_loss_percent: stopLossPercent,
       take_profit_percent: takeProfitPercent,
       allow_shorting: allowShorting,
+      max_investment_amount: (parsedMax && parsedMax > 0) ? parsedMax : null,
       is_active: true,
-    });
+    } as any);
   };
 
   if (!user) {
@@ -347,6 +353,50 @@ export default function StockAutomationConfig() {
                   <div>
                     <Label>Max Quantity (shares)</Label>
                     <Input type="number" min={1} max={1000} value={maxQuantity} onChange={e => setMaxQuantity(parseInt(e.target.value) || 10)} />
+                  </div>
+                  <div>
+                    <Label className="flex items-center gap-1.5">
+                      <DollarSign className="h-4 w-4 text-primary" />
+                      Max Investment Amount ($)
+                    </Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={100}
+                      value={maxInvestmentAmount}
+                      onChange={e => setMaxInvestmentAmount(e.target.value)}
+                      placeholder="No limit"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Dollar cap per automation. Leave blank for no limit.</p>
+                    {automation && automation.max_investment_amount != null && automation.max_investment_amount > 0 && (
+                      <div className="mt-3 space-y-2 p-3 rounded-lg border border-border bg-muted/30">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Current Invested</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold font-mono">
+                              ${(automation.current_invested_amount ?? 0).toFixed(2)} / ${automation.max_investment_amount.toFixed(2)}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => resetInvestedMutation.mutate(automation.id)}
+                              disabled={resetInvestedMutation.isPending}
+                            >
+                              {resetInvestedMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                              Reset
+                            </Button>
+                          </div>
+                        </div>
+                        <Progress
+                          value={Math.min(100, ((automation.current_invested_amount ?? 0) / automation.max_investment_amount) * 100)}
+                          className="h-2"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          {Math.min(100, ((automation.current_invested_amount ?? 0) / automation.max_investment_amount) * 100).toFixed(0)}% of budget used
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <Label>Position Size (%)</Label>
