@@ -28,18 +28,35 @@ import { AvatarUpload } from '@/components/profile/AvatarUpload';
 import { SocialLinks } from '@/components/profile/SocialLinks';
 import { MFASetup } from '@/components/auth/MFASetup';
 import { ChangeEmailCard } from '@/components/auth/ChangeEmailCard';
+import { MFAStepUpDialog } from '@/components/auth/MFAStepUpDialog';
+import { checkAAL2StepUp } from '@/hooks/useAAL2StepUp';
 import { ProfilePostsTab } from '@/components/profile/ProfilePostsTab';
 import { ProfileLikesTab } from '@/components/profile/ProfileLikesTab';
 import { ProfileBookmarksTab } from '@/components/profile/ProfileBookmarksTab';
 
 function ChangePasswordCard() {
   const { toast } = useToast();
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [stepUpOpen, setStepUpOpen] = useState(false);
+  const [stepUpFactorId, setStepUpFactorId] = useState<string | null>(null);
+
+  const performPasswordChange = async () => {
+    setIsUpdating(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      toast({ title: 'Password updated successfully' });
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error: any) {
+      toast({ title: 'Failed to update password', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const handleChangePassword = async () => {
     if (newPassword !== confirmPassword) {
@@ -50,73 +67,83 @@ function ChangePasswordCard() {
       toast({ title: 'Password must be at least 8 characters', variant: 'destructive' });
       return;
     }
-    setIsUpdating(true);
-    try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) throw error;
-      toast({ title: 'Password updated successfully' });
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (error: any) {
-      toast({ title: 'Failed to update password', description: error.message, variant: 'destructive' });
-    } finally {
-      setIsUpdating(false);
+
+    const { needsStepUp, factorId } = await checkAAL2StepUp();
+    if (needsStepUp && factorId) {
+      setStepUpFactorId(factorId);
+      setStepUpOpen(true);
+      return;
     }
+
+    await performPasswordChange();
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <Lock className="h-4 w-4" />
-          Change Password
-        </CardTitle>
-        <CardDescription>Update your account password</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="new-password">New Password</Label>
-          <div className="relative">
-            <Input
-              id="new-password"
-              type={showNew ? 'text' : 'password'}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="absolute right-0 top-0 h-full px-3"
-              onClick={() => setShowNew(!showNew)}
-            >
-              {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </Button>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Lock className="h-4 w-4" />
+            Change Password
+          </CardTitle>
+          <CardDescription>Update your account password</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="new-password">New Password</Label>
+            <div className="relative">
+              <Input
+                id="new-password"
+                type={showNew ? 'text' : 'password'}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 top-0 h-full px-3"
+                onClick={() => setShowNew(!showNew)}
+              >
+                {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </div>
           </div>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="confirm-password">Confirm New Password</Label>
-          <Input
-            id="confirm-password"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Confirm new password"
-          />
-        </div>
-        <Button
-          onClick={handleChangePassword}
-          disabled={isUpdating || !newPassword || !confirmPassword}
-          className="w-full"
-        >
-          {isUpdating ? 'Updating...' : 'Update Password'}
-        </Button>
-      </CardContent>
-    </Card>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password">Confirm New Password</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirm new password"
+            />
+          </div>
+          <Button
+            onClick={handleChangePassword}
+            disabled={isUpdating || !newPassword || !confirmPassword}
+            className="w-full"
+          >
+            {isUpdating ? 'Updating...' : 'Update Password'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {stepUpFactorId && (
+        <MFAStepUpDialog
+          open={stepUpOpen}
+          onOpenChange={setStepUpOpen}
+          factorId={stepUpFactorId}
+          title="Confirm your identity"
+          description="Enter your authenticator code to change your password."
+          onVerified={performPasswordChange}
+        />
+      )}
+    </>
   );
 }
+
 
 export default function Profile() {
   const { userId } = useParams<{ userId: string }>();
