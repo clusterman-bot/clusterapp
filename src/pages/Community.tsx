@@ -13,7 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Sparkles, LogIn, MessageSquareOff, Bot, MessageSquare } from 'lucide-react';
+import { Users, Sparkles, LogIn, MessageSquareOff, Bot, MessageSquare, Plus } from 'lucide-react';
 
 export default function Community() {
   const { user } = useAuth();
@@ -90,6 +90,20 @@ export default function Community() {
 
           {/* ===== MODELS TAB ===== */}
           <TabsContent value="models">
+            {/* Tab header row */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Bot className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Community trading models</span>
+              </div>
+              {user && isVerified && (
+                <Button size="sm" onClick={() => navigate('/models/new')}>
+                  <Plus className="h-4 w-4" />
+                  Create Model
+                </Button>
+              )}
+            </div>
+
             {!user && (
               <Card className="mb-4">
                 <CardContent className="py-4 flex items-center justify-between">
