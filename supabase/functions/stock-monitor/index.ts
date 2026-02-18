@@ -74,6 +74,7 @@ interface IndicatorVote {
 
 function generateSignals(
   closes: number[],
+  bars: any[],
   indicators: any,
   rsiOversold: number,
   rsiOverbought: number
@@ -151,6 +152,44 @@ function generateSignals(
       if (dev < -2) { signal = 1; reason = `SMA Deviation = ${dev.toFixed(3)}% (significantly below SMA → BUY)`; }
       else if (dev > 2) { signal = -1; reason = `SMA Deviation = ${dev.toFixed(3)}% (significantly above SMA → SELL)`; }
       votes.push({ indicator: `SMA_DEV_${window}`, signal, value: dev, reason });
+    }
+  }
+
+  // Custom AI-generated indicators
+  const customIndicators = (indicators.custom || []) as Array<{
+    name: string;
+    description: string;
+    signal_logic: string;
+    code: string;
+    weight: number;
+    enabled: boolean;
+  }>;
+
+  for (const ci of customIndicators) {
+    if (!ci.enabled || !ci.code) continue;
+    try {
+      // Execute the custom indicator code in a sandboxed Function
+      // The code is the function body, bars are passed as argument
+      const fn = new Function('bars', ci.code);
+      const rawResult = fn(bars);
+      // Clamp to -1, 0, 1
+      let signal = 0;
+      if (typeof rawResult === 'number' && isFinite(rawResult)) {
+        signal = rawResult > 0 ? 1 : rawResult < 0 ? -1 : 0;
+      }
+      const weight = Math.max(0.1, Math.min(5.0, ci.weight ?? 1.0));
+      // Push weighted votes (a weight > 1 means it contributes more)
+      const weightedSignal = signal * weight;
+      const reason = signal === 1
+        ? `${ci.name}: BUY — ${ci.signal_logic}`
+        : signal === -1
+          ? `${ci.name}: SELL — ${ci.signal_logic}`
+          : `${ci.name}: NEUTRAL`;
+      votes.push({ indicator: `CUSTOM_${ci.name.toUpperCase().replace(/\s+/g, '_')}`, signal: weightedSignal, value: signal, reason });
+      console.log(`[StockMonitor] Custom indicator ${ci.name}: signal=${signal}, weighted=${weightedSignal}`);
+    } catch (ciErr) {
+      console.error(`[StockMonitor] Custom indicator "${ci.name}" threw an error:`, ciErr);
+      // Skip this indicator — don't let one bad function block the rest
     }
   }
 
@@ -346,7 +385,7 @@ serve(async (req) => {
     const currentPrice = closes[closes.length - 1];
 
     // Generate signals
-    const { votes, compositeScore } = generateSignals(closes, indicators, rsi_oversold, rsi_overbought);
+    const { votes, compositeScore } = generateSignals(closes, bars, indicators, rsi_oversold, rsi_overbought);
 
     let signalType = 'HOLD';
     if (compositeScore > theta) signalType = 'BUY';
