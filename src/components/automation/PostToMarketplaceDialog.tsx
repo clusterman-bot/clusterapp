@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Store, DollarSign, ShieldAlert, Users } from 'lucide-react';
+import { Loader2, Store, DollarSign, ShieldAlert } from 'lucide-react';
 
 interface PostToMarketplaceDialogProps {
   open: boolean;
@@ -33,7 +33,6 @@ export function PostToMarketplaceDialog({
   const [name, setName] = useState(`${symbol} Automation Strategy`);
   const [description, setDescription] = useState('');
   const [strategyOverview, setStrategyOverview] = useState('');
-  const [performanceFee, setPerformanceFee] = useState(10);
   const [minAllocation, setMinAllocation] = useState(500);
   const [maxAllocation, setMaxAllocation] = useState(10000);
   const [maxExposurePercent, setMaxExposurePercent] = useState(20);
@@ -51,13 +50,13 @@ export function PostToMarketplaceDialog({
     }
 
     try {
-      const newModel = await createModel.mutateAsync({
+      await createModel.mutateAsync({
         name: name.trim(),
         description: description.trim() || undefined,
         strategy_overview: strategyOverview.trim() || undefined,
         model_type: 'no-code',
         is_public: isPublic,
-        performance_fee_percent: performanceFee,
+        performance_fee_percent: 0,
         configuration: {
           ...automationConfig,
           min_allocation: minAllocation,
@@ -74,7 +73,7 @@ export function PostToMarketplaceDialog({
         description: isPublic ? 'Your model is now live in the community.' : 'Your model is saved as draft.',
       });
       onOpenChange(false);
-      navigate(`/community`);
+      navigate('/community');
     } catch (err: any) {
       toast({ title: 'Failed to post model', description: err.message, variant: 'destructive' });
     }
@@ -178,34 +177,14 @@ export function PostToMarketplaceDialog({
                 max={100}
                 step={5}
               />
-              <p className="text-xs text-muted-foreground">Max % of subscriber's allocated capital that can be used in a single trade</p>
+              <p className="text-xs text-muted-foreground">Max % of subscriber's allocated capital per trade</p>
             </div>
           </div>
 
           <Separator />
 
-          {/* Performance Fee & Risk */}
+          {/* Risk Level & Visibility */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              <span className="font-semibold text-sm">Subscription Settings</span>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Performance Fee</Label>
-                <span className="text-sm font-mono font-semibold">{performanceFee}%</span>
-              </div>
-              <Slider
-                value={[performanceFee]}
-                onValueChange={v => setPerformanceFee(v[0])}
-                min={0}
-                max={50}
-                step={1}
-              />
-              <p className="text-xs text-muted-foreground">% of subscriber profits you earn</p>
-            </div>
-
             {/* Risk Level */}
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">

@@ -120,9 +120,6 @@ export function ModelMarketplaceCard({ model }: ModelMarketplaceCardProps) {
                   Max {model.max_exposure_percent}% exposure
                 </Badge>
               )}
-              <Badge variant="secondary" className="text-xs">
-                {model.performance_fee_percent ?? 0}% perf. fee
-              </Badge>
             </div>
           </div>
 

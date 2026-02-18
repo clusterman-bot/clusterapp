@@ -3,12 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
-import { useSubscribeToModel, useIsSubscribed, useUnsubscribeFromModel, useMySubscriptions } from '@/hooks/useSubscriptions';
+import { useSubscribeToModel, useIsSubscribed, useUnsubscribeFromModel } from '@/hooks/useSubscriptions';
 import { useAllocationForSubscription } from '@/hooks/useAllocations';
 import { AllocationDialog } from '@/components/model/AllocationDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Check, Plus, Loader2, Wallet } from 'lucide-react';
+
 import {
   Dialog,
   DialogContent,
@@ -140,16 +141,9 @@ export function ModelSubscribeButton({
               You're about to subscribe to this trading model.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-              <span className="text-sm font-medium">Performance Fee</span>
-              <Badge variant="secondary" className="text-base">
-                {performanceFee}%
-              </Badge>
-            </div>
+          <div className="py-4">
             <p className="text-sm text-muted-foreground">
-              By subscribing, you'll receive trading signals from this model. 
-              A {performanceFee}% performance fee will be charged on profitable trades.
+              By subscribing, you'll receive trading signals from this model and your connected Alpaca account will automatically mirror its trades.
             </p>
           </div>
           <DialogFooter>
