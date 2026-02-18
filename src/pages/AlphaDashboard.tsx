@@ -1,0 +1,494 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { useIsAlpha, useAllUsersForAlpha, useMuteUser, useFreezeTrading, usePlatformSettings, useUpdatePlatformSetting } from '@/hooks/useAlpha';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
+  Shield, Search, VolumeX, Volume2, TrendingUp, TrendingDown,
+  Lock, Unlock, UserX, Users, MessageSquareOff, MessageSquare,
+  ArrowLeft, AlertTriangle, CheckCircle
+} from 'lucide-react';
+
+export default function AlphaDashboard() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { data: isAlpha, isLoading: alphaLoading } = useIsAlpha();
+  const { data: users, isLoading: usersLoading } = useAllUsersForAlpha();
+  const { data: settings, isLoading: settingsLoading } = usePlatformSettings();
+  const muteUser = useMuteUser();
+  const freezeTrading = useFreezeTrading();
+  const updateSetting = useUpdatePlatformSetting();
+  const [searchQuery, setSearchQuery] = useState('');
+
+  if (alphaLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user || !isAlpha) {
+    navigate('/trade');
+    return null;
+  }
+
+  const handleMuteUser = async (userId: string, currentlyMuted: boolean) => {
+    try {
+      await muteUser.mutateAsync({ userId, muted: !currentlyMuted });
+      toast({
+        title: currentlyMuted ? 'User unmuted' : 'User muted',
+        description: currentlyMuted ? 'User can now post in the community.' : 'User is now muted from the community.',
+      });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleFreezeTrading = async (userId: string, currentlyFrozen: boolean) => {
+    try {
+      await freezeTrading.mutateAsync({ userId, frozen: !currentlyFrozen });
+      toast({
+        title: currentlyFrozen ? 'Trading unfrozen' : 'Trading frozen',
+        description: currentlyFrozen ? 'User can now trade.' : 'User trading capabilities are frozen.',
+      });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleUpdateSetting = async (key: string, value: boolean) => {
+    try {
+      await updateSetting.mutateAsync({ key, value });
+      toast({
+        title: 'Platform setting updated',
+        description: `${key === 'community_muted' ? 'Community chat' : 'Onboarding'} is now ${value ? 'disabled' : 'enabled'}.`,
+      });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const filteredUsers = (users as any[] | undefined)?.filter((u) =>
+    u.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.display_name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const mutedCount = (users as any[] | undefined)?.filter((u) => u.is_muted).length || 0;
+  const frozenCount = (users as any[] | undefined)?.filter((u) => u.trading_frozen).length || 0;
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border sticky top-0 bg-background z-50">
+        <div className="container flex items-center justify-between h-16">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" onClick={() => navigate('/trade')}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+            <div className="flex items-center gap-2">
+              <Shield className="h-6 w-6 text-primary" />
+              <span className="text-xl font-bold">Alpha Control</span>
+              <Badge className="ml-1 bg-primary/20 text-primary border border-primary/30">
+                Alpha
+              </Badge>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="container py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">Alpha Dashboard</h1>
+          <p className="text-muted-foreground">Platform-wide moderation and control</p>
+        </div>
+
+        {/* Stats row */}
+        <div className="grid gap-4 md:grid-cols-4 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{usersLoading ? '...' : (users as any[])?.length || 0}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Muted Users</CardTitle>
+              <VolumeX className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{usersLoading ? '...' : mutedCount}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Trading Frozen</CardTitle>
+              <Lock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{usersLoading ? '...' : frozenCount}</div>
+            </CardContent>
+          </Card>
+          <Card className={settings?.community_muted || settings?.onboarding_frozen ? 'border-destructive/50' : ''}>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Platform Status</CardTitle>
+              {settings?.community_muted || settings?.onboarding_frozen
+                ? <AlertTriangle className="h-4 w-4 text-destructive" />
+                : <CheckCircle className="h-4 w-4 text-primary" />
+              }
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm font-medium">
+                {settings?.community_muted && settings?.onboarding_frozen
+                  ? 'Chat + Onboard locked'
+                  : settings?.community_muted
+                  ? 'Community muted'
+                  : settings?.onboarding_frozen
+                  ? 'Onboarding frozen'
+                  : 'All systems normal'}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="users">
+          <TabsList>
+            <TabsTrigger value="users">User Moderation</TabsTrigger>
+            <TabsTrigger value="platform">Platform Controls</TabsTrigger>
+          </TabsList>
+
+          {/* User Moderation */}
+          <TabsContent value="users">
+            <Card>
+              <CardHeader>
+                <CardTitle>User Moderation</CardTitle>
+                <CardDescription>
+                  Mute users from posting, or freeze their trading capabilities
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search users..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+
+                {usersLoading ? (
+                  <div className="space-y-3">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="flex items-center gap-4 p-4 border rounded-lg">
+                        <Skeleton className="h-10 w-10 rounded-full" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3 w-24" />
+                        </div>
+                        <Skeleton className="h-9 w-24" />
+                        <Skeleton className="h-9 w-28" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredUsers?.map((u: any) => (
+                      <div
+                        key={u.id}
+                        className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${
+                          u.is_muted || u.trading_frozen ? 'bg-muted/30 border-muted' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={u.avatar_url || undefined} />
+                            <AvatarFallback>
+                              {u.display_name?.[0] || u.username?.[0] || '?'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm">
+                                {u.display_name || u.username || 'Unknown'}
+                              </p>
+                              {u.role && (
+                                <Badge variant="outline" className="text-xs py-0">
+                                  {u.role.replace('_', ' ')}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">@{u.username}</p>
+                          </div>
+                          <div className="flex gap-1 ml-2">
+                            {u.is_muted && (
+                              <Badge variant="secondary" className="text-xs gap-1">
+                                <VolumeX className="h-3 w-3" />
+                                Muted
+                              </Badge>
+                            )}
+                            {u.trading_frozen && (
+                              <Badge variant="destructive" className="text-xs gap-1 bg-destructive/20 text-destructive border-destructive/30">
+                                <Lock className="h-3 w-3" />
+                                Frozen
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {/* Mute toggle */}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant={u.is_muted ? 'default' : 'outline'}
+                                size="sm"
+                                className="gap-1.5"
+                                disabled={muteUser.isPending}
+                              >
+                                {u.is_muted ? (
+                                  <><Volume2 className="h-3.5 w-3.5" /> Unmute</>
+                                ) : (
+                                  <><VolumeX className="h-3.5 w-3.5" /> Mute</>
+                                )}
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  {u.is_muted ? 'Unmute' : 'Mute'} @{u.username}?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  {u.is_muted
+                                    ? 'This will restore their ability to post in the community.'
+                                    : 'This will prevent them from posting or commenting in the community.'}
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleMuteUser(u.id, u.is_muted)}>
+                                  Confirm
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+
+                          {/* Freeze trading toggle */}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant={u.trading_frozen ? 'default' : 'outline'}
+                                size="sm"
+                                className={`gap-1.5 ${u.trading_frozen ? '' : 'border-destructive/40 text-destructive hover:bg-destructive/10'}`}
+                                disabled={freezeTrading.isPending}
+                              >
+                                {u.trading_frozen ? (
+                                  <><Unlock className="h-3.5 w-3.5" /> Unfreeze</>
+                                ) : (
+                                  <><TrendingDown className="h-3.5 w-3.5" /> Freeze Trading</>
+                                )}
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  {u.trading_frozen ? 'Unfreeze' : 'Freeze'} trading for @{u.username}?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  {u.trading_frozen
+                                    ? 'This will restore their ability to place trades on the platform.'
+                                    : 'This will block them from placing any buy or sell orders.'}
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleFreezeTrading(u.id, u.trading_frozen)}>
+                                  Confirm
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </div>
+                    ))}
+
+                    {filteredUsers?.length === 0 && (
+                      <div className="text-center py-10 text-muted-foreground">
+                        <UserX className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                        <p>No users found</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Platform Controls */}
+          <TabsContent value="platform">
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Global Platform Controls</CardTitle>
+                  <CardDescription>
+                    These controls affect all users on the platform except Alpha accounts
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {settingsLoading ? (
+                    <div className="space-y-4">
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                    </div>
+                  ) : (
+                    <>
+                      {/* Community mute */}
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            {settings?.community_muted
+                              ? <MessageSquareOff className="h-4 w-4 text-destructive" />
+                              : <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                            }
+                            <Label className="font-medium">Mute Community Chat</Label>
+                            {settings?.community_muted && (
+                              <Badge variant="destructive" className="text-xs">Active</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            Prevents all non-Alpha users from posting or commenting in the community feed.
+                            Alpha accounts can still post.
+                          </p>
+                        </div>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Switch
+                              checked={!!settings?.community_muted}
+                              className="ml-6"
+                            />
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                {settings?.community_muted ? 'Re-enable' : 'Mute'} Community Chat?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                {settings?.community_muted
+                                  ? 'All users will be able to post and comment in the community again.'
+                                  : 'This will immediately prevent all non-Alpha users from posting or commenting. This affects the entire platform.'}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleUpdateSetting('community_muted', !settings?.community_muted)}
+                                className={!settings?.community_muted ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground' : 'bg-primary text-primary-foreground'}
+                              >
+                                Confirm
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+
+                      <Separator />
+
+                      {/* Freeze onboarding */}
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            {settings?.onboarding_frozen
+                              ? <Lock className="h-4 w-4 text-destructive" />
+                              : <Unlock className="h-4 w-4 text-muted-foreground" />
+                            }
+                            <Label className="font-medium">Freeze New Account Onboarding</Label>
+                            {settings?.onboarding_frozen && (
+                              <Badge variant="destructive" className="text-xs opacity-80">Active</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            Blocks new users from completing account setup. Users who sign up will be
+                            stuck at the onboarding screen until this is disabled.
+                          </p>
+                        </div>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Switch
+                              checked={!!settings?.onboarding_frozen}
+                              className="ml-6"
+                            />
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                {settings?.onboarding_frozen ? 'Resume' : 'Freeze'} Onboarding?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                {settings?.onboarding_frozen
+                                  ? 'New users will be able to complete account setup again.'
+                                  : 'New users who sign up will not be able to complete onboarding and join the platform. Existing users are unaffected.'}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleUpdateSetting('onboarding_frozen', !settings?.onboarding_frozen)}
+                                className={!settings?.onboarding_frozen ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground' : 'bg-primary text-primary-foreground'}
+                              >
+                                Confirm
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              <div className="p-4 bg-muted/50 rounded-lg border">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium mb-1">Alpha accounts are always exempt</p>
+                    <p className="text-sm text-muted-foreground">
+                      All restrictions (community mute, frozen trading, frozen onboarding) do not apply
+                      to users with the Alpha role. Alpha accounts retain full platform access at all times.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </main>
+    </div>
+  );
+}
