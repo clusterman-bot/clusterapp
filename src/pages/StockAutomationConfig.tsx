@@ -13,9 +13,10 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PostToMarketplaceDialog } from '@/components/automation/PostToMarketplaceDialog';
 import { 
   Activity, BarChart3, Settings2, History, Save, Power, PowerOff, 
-  TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle2, XCircle, Loader2
+  TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle2, XCircle, Loader2, Store
 } from 'lucide-react';
 import { 
   useStockAutomation, useUpsertAutomation, useToggleAutomation, 
@@ -53,6 +54,7 @@ export default function StockAutomationConfig() {
   const [stopLossPercent, setStopLossPercent] = useState(5);
   const [takeProfitPercent, setTakeProfitPercent] = useState(15);
   const [allowShorting, setAllowShorting] = useState(false);
+  const [showMarketplaceDialog, setShowMarketplaceDialog] = useState(false);
 
   // Load existing config
   useEffect(() => {
@@ -387,13 +389,40 @@ export default function StockAutomationConfig() {
               </CardContent>
             </Card>
 
-            {/* Save Button */}
-            <div className="flex justify-end">
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-3 justify-end">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setShowMarketplaceDialog(true)}
+                disabled={upsertMutation.isPending}
+              >
+                <Store className="mr-2 h-4 w-4" />
+                Post to Marketplace
+              </Button>
               <Button size="lg" onClick={handleSave} disabled={upsertMutation.isPending}>
                 {upsertMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 Save & Activate
               </Button>
             </div>
+
+            <PostToMarketplaceDialog
+              open={showMarketplaceDialog}
+              onOpenChange={setShowMarketplaceDialog}
+              symbol={upperSymbol}
+              automationConfig={{
+                indicators,
+                rsi_oversold: rsiOversold,
+                rsi_overbought: rsiOverbought,
+                horizon_minutes: horizonMinutes,
+                theta,
+                position_size_percent: positionSizePercent,
+                max_quantity: maxQuantity,
+                stop_loss_percent: stopLossPercent,
+                take_profit_percent: takeProfitPercent,
+                allow_shorting: allowShorting,
+              }}
+            />
           </TabsContent>
 
           <TabsContent value="signals">
