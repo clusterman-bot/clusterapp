@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useIsAlpha, useAllUsersForAlpha, useMuteUser, useFreezeTrading, usePlatformSettings, useUpdatePlatformSetting } from '@/hooks/useAlpha';
+import { useIsAlpha, useAllUsersForAlpha, useMuteUser, useFreezeTrading, usePlatformSettings, useUpdatePlatformSetting, useSetRoleForUser } from '@/hooks/useAlpha';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,10 +25,18 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  Shield, Search, VolumeX, Volume2, TrendingUp, TrendingDown,
+  Shield, Search, VolumeX, Volume2, TrendingDown,
   Lock, Unlock, UserX, Users, MessageSquareOff, MessageSquare,
-  ArrowLeft, AlertTriangle, CheckCircle
+  ArrowLeft, AlertTriangle, CheckCircle, UserCog
 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function AlphaDashboard() {
   const { user } = useAuth();
@@ -40,7 +48,9 @@ export default function AlphaDashboard() {
   const muteUser = useMuteUser();
   const freezeTrading = useFreezeTrading();
   const updateSetting = useUpdatePlatformSetting();
+  const setRoleForUser = useSetRoleForUser();
   const [searchQuery, setSearchQuery] = useState('');
+  const [pendingRoleChange, setPendingRoleChange] = useState<{ userId: string; username: string; newRole: string } | null>(null);
 
   if (alphaLoading) {
     return (
@@ -88,6 +98,21 @@ export default function AlphaDashboard() {
       });
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleConfirmRoleChange = async () => {
+    if (!pendingRoleChange) return;
+    try {
+      await setRoleForUser.mutateAsync({ userId: pendingRoleChange.userId, role: pendingRoleChange.newRole });
+      toast({
+        title: 'Role updated',
+        description: `@${pendingRoleChange.username} is now ${pendingRoleChange.newRole.replace('_', ' ')}.`,
+      });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setPendingRoleChange(null);
     }
   };
 
@@ -263,7 +288,39 @@ export default function AlphaDashboard() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                          {/* Role selector */}
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1">
+                                  <UserCog className="h-4 w-4 text-muted-foreground shrink-0" />
+                                  <Select
+                                    value={u.role || ''}
+                                    onValueChange={(newRole) => {
+                                      if (u.id === user.id) return;
+                                      setPendingRoleChange({ userId: u.id, username: u.username, newRole });
+                                    }}
+                                    disabled={u.id === user.id || setRoleForUser.isPending}
+                                  >
+                                    <SelectTrigger className="w-36 h-8 text-xs">
+                                      <SelectValue placeholder="Assign role..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="retail_trader">Retail Trader</SelectItem>
+                                      <SelectItem value="developer">Developer</SelectItem>
+                                      <SelectItem value="admin">Admin</SelectItem>
+                                      <SelectItem value="alpha">Alpha</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </TooltipTrigger>
+                              {u.id === user.id && (
+                                <TooltipContent>Cannot change your own role</TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
+
                           {/* Mute toggle */}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -338,6 +395,32 @@ export default function AlphaDashboard() {
                         </div>
                       </div>
                     ))}
+
+                    {/* Global role change confirmation dialog */}
+                    <AlertDialog open={!!pendingRoleChange} onOpenChange={(open) => { if (!open) setPendingRoleChange(null); }}>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="flex items-center gap-2">
+                            {pendingRoleChange?.newRole === 'alpha' && <AlertTriangle className="h-5 w-5 text-destructive" />}
+                            Change role for @{pendingRoleChange?.username}?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {pendingRoleChange?.newRole === 'alpha'
+                              ? `⚠️ You are about to grant full Alpha access to @${pendingRoleChange?.username}. Alpha accounts have unrestricted platform control including the ability to mute users, freeze trading, and change any role.`
+                              : `This will change @${pendingRoleChange?.username}'s role to "${pendingRoleChange?.newRole?.replace('_', ' ')}". This takes effect on their next login or page refresh.`}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={handleConfirmRoleChange}
+                            className={pendingRoleChange?.newRole === 'alpha' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+                          >
+                            {pendingRoleChange?.newRole === 'alpha' ? 'Grant Alpha Access' : 'Confirm'}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
 
                     {filteredUsers?.length === 0 && (
                       <div className="text-center py-10 text-muted-foreground">
