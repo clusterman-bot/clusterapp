@@ -523,7 +523,7 @@ serve(async (req) => {
     const { data: deployedModels, error: depErr } = await supabaseAdmin
       .from('deployed_models')
       .select(`
-        id, model_id, user_id, status, total_signals, total_trades,
+        id, model_id, user_id, status, total_signals, total_trades, config,
         models(id, name, ticker, horizon, theta, position_size_percent, max_exposure_percent, indicators_config)
       `)
       .eq('status', 'running');
