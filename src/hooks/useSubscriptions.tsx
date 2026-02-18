@@ -81,17 +81,35 @@ export function useSubscribeToModel() {
     mutationFn: async ({ modelId, performanceFee }: { modelId: string; performanceFee: number }) => {
       if (!user?.id) throw new Error('Not authenticated');
 
-      // Check if already subscribed
+      // Check if any subscription row already exists (active or cancelled)
       const { data: existing } = await supabase
         .from('subscriptions')
-        .select('id')
+        .select('id, status')
         .eq('subscriber_id', user.id)
         .eq('model_id', modelId)
-        .eq('status', 'active')
         .maybeSingle();
 
-      if (existing) throw new Error('Already subscribed to this model');
+      if (existing) {
+        if (existing.status === 'active') throw new Error('Already subscribed to this model');
 
+        // Reactivate a previously cancelled subscription
+        const { data, error } = await supabase
+          .from('subscriptions')
+          .update({
+            status: 'active',
+            cancelled_at: null,
+            performance_fee_percent: performanceFee,
+            subscribed_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data;
+      }
+
+      // No existing row — insert fresh
       const { data, error } = await supabase
         .from('subscriptions')
         .insert({
