@@ -1,49 +1,23 @@
 
 
-# Redesign Profile Edit Dialog and Remove Account Type
+# Reverse AAL2 Bypass and Fix Email Verification
 
-## Problem
-1. The profile edit dialog is too tall for the screen -- it has too many fields stacked vertically in a single scrollable column.
-2. The "Account Type" concept (Developer / Trader badge) should be removed from the profile header, the About tab, and the onboarding role selection step.
+## 1. Reverse the AAL2 bypass in ChangeEmailCard
 
-## Changes
+The recent change wrapped `supabase.auth.updateUser()` in a try-catch that silently ignores AAL2 errors. This weakens security by allowing email changes without MFA verification.
 
-### 1. Redesign the Edit Profile Dialog (`src/pages/Profile.tsx`)
+**Fix**: Revert `ChangeEmailCard.tsx` so that `updateUser` errors are not silently swallowed. Since MFA will be disabled, the AAL2 error will no longer occur, and the straightforward error handling is sufficient.
 
-Replace the current tall single-column form with a more compact layout:
-- Use a **tabbed layout inside the dialog** with two tabs: "Profile" and "Social Links"
-- **Profile tab**: Display Name, Username, Bio (reduced to 2 rows), Experience Level -- all compact
-- **Social Links tab**: Twitter, GitHub, LinkedIn, Website in a clean 2-column grid
-- Remove Trading Philosophy from the edit dialog (it's rarely used and adds height)
-- Add `max-h-[80vh] overflow-y-auto` to the dialog content as a safety net
-- This cuts the dialog height roughly in half
+**File**: `src/components/auth/ChangeEmailCard.tsx`
+- Remove the nested try-catch that catches "aal2" errors
+- Restore the simple pattern: call `updateUser`, throw on any error
+- Keep the rest of the flow (mark unverified, send verification email) intact
 
-### 2. Remove Account Type Badge from Profile Header (lines 300-302)
+## 2. Email delivery
 
-Remove the `<Badge>` that shows "Admin", "Trader", or "Developer" next to the user's name in the profile header.
+The edge function is working correctly -- Resend returned `{"success": true}`. The emails are not arriving because the sending domain (`clusterapp.space`) needs to be verified in the Resend dashboard. No code changes are needed for this; it is a DNS configuration task on your end.
 
-### 3. Remove Account Type from About Tab (lines 676-684)
+## Summary of code changes
 
-Remove the "Account Type" section with the Briefcase icon from the About tab.
-
-### 4. Remove Role Badge from UserProfileSidebar (`src/components/UserProfileSidebar.tsx`)
-
-Remove the role badge (Developer/Trader/Admin) and the related imports (`useUserRole`, role display logic, `Code`, `LineChart`, `Settings` icons).
-
-### 5. Remove Role Selection from Onboarding (`src/pages/Onboarding.tsx`)
-
-- Remove the "Role" step entirely from the 3-step onboarding flow (Username -> Role -> Social becomes Username -> Social)
-- Default all new users to the `retail_trader` role automatically (set during username submission)
-- Update the progress indicator from 3 dots to 2
-- Remove the role selection cards UI
-
-### Files Modified
-- `src/pages/Profile.tsx` -- Redesign edit dialog, remove role badge from header and About tab
-- `src/components/UserProfileSidebar.tsx` -- Remove role badge
-- `src/pages/Onboarding.tsx` -- Remove role step, auto-assign retail_trader
-
-### Technical Notes
-- The `user_roles` table and hooks remain intact for existing users and admin functionality
-- New users will silently get `retail_trader` role during onboarding
-- No database changes needed
+Only one file is modified: `src/components/auth/ChangeEmailCard.tsx` -- revert the AAL2 bypass back to simple error propagation.
 
