@@ -136,6 +136,32 @@ export function useMySubscriberTrades() {
   });
 }
 
+export function useUpdateDeploymentConfig() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, config }: { id: string; config: Record<string, any> }) => {
+      const { error } = await supabase
+        .from('deployed_models')
+        .update({ config })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deployed-model'] });
+      queryClient.invalidateQueries({ queryKey: ['deployed-models'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Update Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
 export function useDeployModel() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
