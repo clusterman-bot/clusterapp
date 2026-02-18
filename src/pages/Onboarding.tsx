@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSetUserRole, useUserRole } from '@/hooks/useUserRole';
 import { useProfile, useUpdateProfile } from '@/hooks/useProfile';
+import { usePlatformSettings } from '@/hooks/useAlpha';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { TrendingUp, CheckCircle, ArrowRight, Twitter, Linkedin, Github, Globe } from 'lucide-react';
+import { TrendingUp, CheckCircle, ArrowRight, Twitter, Linkedin, Github, Globe, Lock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 type OnboardingStep = 'username' | 'social';
@@ -17,6 +18,7 @@ export default function Onboarding() {
   const { user, loading: authLoading } = useAuth();
   const { data: existingRole, isLoading: roleLoading } = useUserRole();
   const { data: profile, isLoading: profileLoading } = useProfile();
+  const { data: settings } = usePlatformSettings();
   const setUserRole = useSetUserRole();
   const updateProfile = useUpdateProfile();
   const navigate = useNavigate();
@@ -153,6 +155,21 @@ export default function Onboarding() {
     return null;
   }
 
+  // Onboarding frozen by Alpha — block new users from completing setup
+  if (settings?.onboarding_frozen) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-md text-center space-y-4">
+          <Lock className="h-12 w-12 mx-auto text-destructive" />
+          <h1 className="text-2xl font-bold">Onboarding Paused</h1>
+          <p className="text-muted-foreground">
+            New account setup is temporarily unavailable. Please check back later.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border">
@@ -220,7 +237,7 @@ export default function Onboarding() {
                     <p className="text-sm text-destructive">{usernameError}</p>
                   )}
                   {!usernameError && username.length >= 3 && !isCheckingUsername && (
-                    <p className="text-sm text-green-600">Username is available!</p>
+                    <p className="text-sm text-primary">Username is available!</p>
                   )}
                 </div>
 

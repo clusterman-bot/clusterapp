@@ -1,20 +1,22 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmailVerified } from '@/hooks/useEmailVerified';
+import { useIsAlpha, usePlatformSettings } from '@/hooks/useAlpha';
 import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
-import { usePublicFeed, useLikePost, useUnlikePost, useLikesForPosts, Post as SocialPost } from '@/hooks/useSocial';
+import { usePublicFeed, useLikePost, useUnlikePost, useLikesForPosts } from '@/hooks/useSocial';
 import { MainNav } from '@/components/MainNav';
 import { SocialPostCard } from '@/components/SocialPostCard';
 import { CreatePostBox } from '@/components/CreatePostBox';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Users, Sparkles, LogIn } from 'lucide-react';
+import { Users, Sparkles, LogIn, MessageSquareOff } from 'lucide-react';
 
 export default function Community() {
   const { user } = useAuth();
   const { isVerified } = useEmailVerified();
+  const { data: isAlpha } = useIsAlpha();
+  const { data: settings } = usePlatformSettings();
   const navigate = useNavigate();
   const { data: posts, isLoading, refetch } = usePublicFeed();
   const likePost = useLikePost();
@@ -23,6 +25,9 @@ export default function Community() {
   const postIds = posts?.map(p => p.id) || [];
   const { data: likedPostsData } = useLikesForPosts(postIds);
   const likedPostIds = new Set(likedPostsData?.map(l => l.post_id) || []);
+
+  // Community muted globally for non-Alpha users
+  const isCommunityMuted = !!settings?.community_muted && !isAlpha;
 
   const handleLike = async (postId: string) => {
     if (!user || !isVerified) {
@@ -57,8 +62,20 @@ export default function Community() {
         {/* Verification banner for unverified users */}
         {user && !isVerified && <EmailVerificationBanner />}
 
-        {/* Create post box for verified logged-in users */}
-        {user && isVerified && <CreatePostBox onPostCreated={() => refetch()} placeholder="Share with the community..." />}
+        {/* Community muted banner — shown to all non-Alpha users when muted */}
+        {isCommunityMuted && (
+          <Card className="mb-4 border-destructive/30 bg-destructive/5">
+            <CardContent className="py-4 flex items-center gap-3">
+              <MessageSquareOff className="h-5 w-5 text-destructive shrink-0" />
+              <p className="text-sm text-destructive">Community posting has been temporarily paused by an administrator.</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Create post box — blocked when community is muted (Alpha users bypass) */}
+        {user && isVerified && !isCommunityMuted && (
+          <CreatePostBox onPostCreated={() => refetch()} placeholder="Share with the community..." />
+        )}
 
         {/* Sign in prompt for guests */}
         {!user && (

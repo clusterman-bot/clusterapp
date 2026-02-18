@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useProfile } from '@/hooks/useProfile';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useIsAlpha } from '@/hooks/useAlpha';
 import { useCreatePost } from '@/hooks/useSocial';
 import { useToast } from '@/hooks/use-toast';
 

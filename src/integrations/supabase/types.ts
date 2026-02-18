@@ -864,6 +864,30 @@ export type Database = {
           },
         ]
       }
+      platform_settings: {
+        Row: {
+          id: string
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: string
+        }
+        Insert: {
+          id?: string
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string
+        }
+        Update: {
+          id?: string
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
       post_likes: {
         Row: {
           created_at: string | null
@@ -1000,6 +1024,7 @@ export type Database = {
           experience_level: string | null
           github_handle: string | null
           id: string
+          is_muted: boolean
           is_verified: boolean | null
           linkedin_url: string | null
           paper_balance: number | null
@@ -1008,6 +1033,7 @@ export type Database = {
           total_earnings: number | null
           total_followers: number | null
           total_following: number | null
+          trading_frozen: boolean
           trading_philosophy: string | null
           twitter_handle: string | null
           updated_at: string | null
@@ -1027,6 +1053,7 @@ export type Database = {
           experience_level?: string | null
           github_handle?: string | null
           id: string
+          is_muted?: boolean
           is_verified?: boolean | null
           linkedin_url?: string | null
           paper_balance?: number | null
@@ -1035,6 +1062,7 @@ export type Database = {
           total_earnings?: number | null
           total_followers?: number | null
           total_following?: number | null
+          trading_frozen?: boolean
           trading_philosophy?: string | null
           twitter_handle?: string | null
           updated_at?: string | null
@@ -1054,6 +1082,7 @@ export type Database = {
           experience_level?: string | null
           github_handle?: string | null
           id?: string
+          is_muted?: boolean
           is_verified?: boolean | null
           linkedin_url?: string | null
           paper_balance?: number | null
@@ -1062,6 +1091,7 @@ export type Database = {
           total_earnings?: number | null
           total_followers?: number | null
           total_following?: number | null
+          trading_frozen?: boolean
           trading_philosophy?: string | null
           twitter_handle?: string | null
           updated_at?: string | null
@@ -2185,6 +2215,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      has_alpha_role: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2194,7 +2225,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "developer" | "retail_trader"
+      app_role: "admin" | "developer" | "retail_trader" | "alpha"
       order_side: "buy" | "sell"
       order_status: "pending" | "executed" | "cancelled" | "failed"
       order_type: "market" | "limit" | "stop_loss" | "recurring"
@@ -2325,7 +2356,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "developer", "retail_trader"],
+      app_role: ["admin", "developer", "retail_trader", "alpha"],
       order_side: ["buy", "sell"],
       order_status: ["pending", "executed", "cancelled", "failed"],
       order_type: ["market", "limit", "stop_loss", "recurring"],
