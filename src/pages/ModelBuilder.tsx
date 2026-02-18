@@ -51,9 +51,6 @@ export default function ModelBuilder() {
   const sandboxExecute = useSandboxExecute();
   const validateCode = useValidateSandboxCode();
   
-  // Only developers can create models (not admins)
-  const canCreateModels = userRole?.role === 'developer';
-  
   // Redirect admins away from model creation
   useEffect(() => {
     if (!roleLoading && userRole?.role === 'admin') {
@@ -168,24 +165,11 @@ def generate_signals(data: pd.DataFrame) -> pd.DataFrame:
     }
   }, [user, navigate]);
 
-  useEffect(() => {
-    if (!roleLoading && userRole && !canCreateModels) {
-      toast({ 
-        title: 'Access Denied', 
-        description: 'Only developers can create models.', 
-        variant: 'destructive' 
-      });
-      navigate('/dashboard');
-    }
-  }, [userRole, roleLoading, canCreateModels, navigate, toast]);
 
   if (!user || roleLoading) {
     return null;
   }
 
-  if (!canCreateModels) {
-    return null;
-  }
 
   const handleStartTraining = async () => {
     if (!ticker.trim()) {

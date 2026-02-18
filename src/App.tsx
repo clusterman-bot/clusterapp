@@ -26,6 +26,7 @@ import NotFound from "./pages/NotFound";
 import VerifyEmail from "./pages/VerifyEmail";
 import ResetPassword from "./pages/ResetPassword";
 import AlphaDashboard from "./pages/AlphaDashboard";
+import ModelBuilder from "./pages/ModelBuilder";
 
 const queryClient = new QueryClient();
 
@@ -59,6 +60,7 @@ const App = () => (
                 <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/alpha" element={<AlphaDashboard />} />
+                <Route path="/models/new" element={<ModelBuilder />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </TourProvider>
