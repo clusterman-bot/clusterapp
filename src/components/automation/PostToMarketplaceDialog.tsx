@@ -49,12 +49,17 @@ export function PostToMarketplaceDialog({
       return;
     }
     // Check that at least one indicator is active (built-in OR custom AI-generated)
-    const builtInEnabled = Object.entries(automationConfig)
+    // automationConfig may have indicators nested (from AIBotBuilder) or flat (from StockAutomationConfig)
+    const indicatorsSource = automationConfig.indicators ?? automationConfig;
+    const builtInEnabled = Object.entries(indicatorsSource)
       .filter(([k]) => ['rsi', 'sma', 'ema', 'bollinger', 'sma_deviation'].includes(k))
       .some(([, v]: [string, any]) => v?.enabled);
-    const customEnabled = Array.isArray(automationConfig.custom)
-      ? automationConfig.custom.some((c: any) => c.enabled)
-      : false;
+    // custom indicators can live under indicators.custom or automationConfig.custom_indicators
+    const customArr =
+      (indicatorsSource.custom && Array.isArray(indicatorsSource.custom) ? indicatorsSource.custom : null) ??
+      (Array.isArray(automationConfig.custom_indicators) ? automationConfig.custom_indicators : null) ??
+      [];
+    const customEnabled = customArr.some((c: any) => c.enabled !== false);
     if (!builtInEnabled && !customEnabled) {
       toast({ title: 'At least one indicator must be enabled', description: 'Enable a built-in or AI-generated indicator in your strategy config.', variant: 'destructive' });
       return;
@@ -70,7 +75,24 @@ export function PostToMarketplaceDialog({
         status: isPublic ? 'published' : 'draft',
         performance_fee_percent: 0,
         configuration: {
-          ...automationConfig,
+          // Normalise: always store indicators + custom_indicators at top level
+          indicators: automationConfig.indicators ?? {
+            rsi: automationConfig.rsi,
+            sma: automationConfig.sma,
+            ema: automationConfig.ema,
+            bollinger: automationConfig.bollinger,
+            sma_deviation: automationConfig.sma_deviation,
+          },
+          custom_indicators: customArr,
+          rsi_oversold: automationConfig.rsi_oversold,
+          rsi_overbought: automationConfig.rsi_overbought,
+          horizon_minutes: automationConfig.horizon_minutes,
+          theta: automationConfig.theta,
+          position_size_percent: automationConfig.position_size_percent,
+          max_quantity: automationConfig.max_quantity,
+          stop_loss_percent: automationConfig.stop_loss_percent,
+          take_profit_percent: automationConfig.take_profit_percent,
+          allow_shorting: automationConfig.allow_shorting,
           min_allocation: minAllocation,
           max_allocation: maxAllocation,
           max_exposure_percent: maxExposurePercent,
