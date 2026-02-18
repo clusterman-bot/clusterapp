@@ -141,8 +141,7 @@ export default function Auth() {
       const { error } = await signIn(email, password);
       if (error) throw error;
       
-      // MFA disabled for now
-      if (rememberMe) setRemembered();
+      await checkMFAAndProceed();
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
       setLoading(false);
