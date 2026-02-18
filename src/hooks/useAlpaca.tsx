@@ -315,13 +315,21 @@ export interface AlpacaBar {
 }
 
 const TIMEFRAME_MAP: Record<string, { barSize: string; daysBack: number }> = {
-  '1D': { barSize: '1Min', daysBack: 1 },
-  '1W': { barSize: '15Min', daysBack: 7 },
+  '1D': { barSize: '5Min', daysBack: 1 },
+  '1W': { barSize: '1Hour', daysBack: 7 },
   '1M': { barSize: '1Day', daysBack: 30 },
   '3M': { barSize: '1Day', daysBack: 90 },
   '1Y': { barSize: '1Day', daysBack: 365 },
   'ALL': { barSize: '1Day', daysBack: 730 },
 };
+
+// Format a local date as YYYY-MM-DD without UTC conversion
+function localDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 export function useAlpacaBars(symbol: string | undefined, uiTimeframe: string = '1M') {
   const { user } = useAuth();
@@ -335,12 +343,15 @@ export function useAlpacaBars(symbol: string | undefined, uiTimeframe: string = 
       const start = new Date();
       start.setDate(start.getDate() - mapping.daysBack);
 
+      // Use local date string to avoid UTC boundary shifts
+      const startStr = localDateString(start);
+
       const { data, error } = await supabase.functions.invoke('alpaca-trading/get-bars', {
         body: {
           isPaper,
           symbol,
           timeframe: mapping.barSize,
-          start: start.toISOString(),
+          start: startStr,
           limit: 1000,
         },
       });

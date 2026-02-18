@@ -149,10 +149,6 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
 
   const isLive = !!alpacaBars && alpacaBars.length > 0;
 
-  const priceChange = currentPrice - previousClose;
-  const priceChangePercent = previousClose > 0 ? (priceChange / previousClose) * 100 : 0;
-  const isPositive = priceChange >= 0;
-  
   const chartData = useMemo(() => {
     if (isLive) {
       return barsToChartData(alpacaBars!, timeframe);
@@ -161,6 +157,12 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
     const days = timeframe === '1D' ? 1 : timeframe === '1W' ? 7 : timeframe === '1M' ? 30 : timeframe === '3M' ? 90 : timeframe === '1Y' ? 365 : 365;
     return generateOHLCData(currentPrice, previousClose, days);
   }, [alpacaBars, isLive, currentPrice, previousClose, timeframe]);
+
+  // Compute period change from first bar's open vs current price (real period performance)
+  const periodStartPrice = isLive && chartData.length > 0 ? chartData[0].open : previousClose;
+  const priceChange = currentPrice - periodStartPrice;
+  const priceChangePercent = periodStartPrice > 0 ? (priceChange / periodStartPrice) * 100 : 0;
+  const isPositive = priceChange >= 0;
   
   const toggleIndicator = (ind: string) => {
     setActiveIndicators(prev => 
@@ -200,6 +202,7 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
                 <span className="font-mono">
                   {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
                 </span>
+                <span className="text-muted-foreground text-xs ml-1">{timeframe}</span>
               </div>
             </div>
           </div>
