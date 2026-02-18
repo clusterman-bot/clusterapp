@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Settings } from 'lucide-react';
+import { Save, Settings, Wallet, Shield } from 'lucide-react';
 
 export default function ModelEdit() {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +28,9 @@ export default function ModelEdit() {
   const [isPublic, setIsPublic] = useState(false);
   const [performanceFee, setPerformanceFee] = useState('20');
   const [status, setStatus] = useState('draft');
+  const [minAllocation, setMinAllocation] = useState('100');
+  const [maxAllocation, setMaxAllocation] = useState('10000');
+  const [maxExposure, setMaxExposure] = useState('20');
 
   useEffect(() => {
     if (model) {
@@ -37,6 +40,9 @@ export default function ModelEdit() {
       setIsPublic(model.is_public || false);
       setPerformanceFee(String(model.performance_fee_percent || 20));
       setStatus(model.status || 'draft');
+      setMinAllocation(String((model as any).min_allocation ?? 100));
+      setMaxAllocation(String((model as any).max_allocation ?? 10000));
+      setMaxExposure(String((model as any).max_exposure_percent ?? 20));
     }
   }, [model]);
 
@@ -88,7 +94,10 @@ export default function ModelEdit() {
           is_public: isPublic,
           performance_fee_percent: parseFloat(performanceFee),
           status,
-        },
+          min_allocation: parseFloat(minAllocation),
+          max_allocation: parseFloat(maxAllocation),
+          max_exposure_percent: parseFloat(maxExposure),
+        } as any,
       });
       toast({ title: 'Success', description: 'Model updated successfully!' });
       navigate(`/models/${id}`);
@@ -191,8 +200,65 @@ export default function ModelEdit() {
                 </div>
                 <Switch checked={isPublic} onCheckedChange={setIsPublic} />
               </div>
+            </CardContent>
+          </Card>
 
-              <div className="flex gap-3 pt-4">
+          {/* Subscription Constraints */}
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Subscription Constraints
+              </CardTitle>
+              <CardDescription>
+                Control how much capital subscribers can allocate when mirroring your model
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="minAllocation">Min Allocation ($)</Label>
+                  <Input
+                    id="minAllocation"
+                    type="number"
+                    min="0"
+                    value={minAllocation}
+                    onChange={(e) => setMinAllocation(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Minimum a subscriber must allocate</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maxAllocation">Max Allocation ($)</Label>
+                  <Input
+                    id="maxAllocation"
+                    type="number"
+                    min="0"
+                    value={maxAllocation}
+                    onChange={(e) => setMaxAllocation(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Maximum a subscriber can allocate</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="maxExposure" className="flex items-center gap-2">
+                  <Wallet className="h-4 w-4" />
+                  Max Exposure per Trade (%)
+                </Label>
+                <Input
+                  id="maxExposure"
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={maxExposure}
+                  onChange={(e) => setMaxExposure(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Maximum % of subscriber's allocation that can be used in a single trade
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
                 <Button onClick={handleSave} disabled={updateModel.isPending} className="flex-1">
                   <Save className="mr-2 h-4 w-4" />
                   {updateModel.isPending ? 'Saving...' : 'Save Changes'}
