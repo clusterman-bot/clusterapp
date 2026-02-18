@@ -14,7 +14,7 @@ export function TradingModeToggle() {
   const { mode, setMode, isPaper, isLive } = useTradingMode();
 
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+    <div className="flex items-center gap-2 p-2 sm:p-3 rounded-lg border bg-card shrink-0">
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -24,7 +24,7 @@ export function TradingModeToggle() {
               ) : (
                 <AlertTriangle className="h-4 w-4 text-amber-500" />
               )}
-              <Label htmlFor="trading-mode" className="text-sm font-medium cursor-pointer">
+              <Label htmlFor="trading-mode" className="text-xs sm:text-sm font-medium cursor-pointer hidden xs:block sm:block">
                 {isPaper ? 'Paper Trading' : 'Live Trading'}
               </Label>
             </div>
