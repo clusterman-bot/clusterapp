@@ -24,6 +24,8 @@ export interface StockAutomation {
   max_quantity: number;
   stop_loss_percent: number;
   take_profit_percent: number;
+  max_investment_amount: number | null;
+  current_invested_amount: number;
   last_checked_at: string | null;
   last_signal_at: string | null;
   total_signals: number;
@@ -61,7 +63,7 @@ export function useStockAutomation(symbol?: string) {
         .eq('symbol', symbol.toUpperCase())
         .maybeSingle();
       if (error) throw error;
-      return data as StockAutomation | null;
+      return data as unknown as StockAutomation | null;
     },
     enabled: !!user && !!symbol,
   });
@@ -79,7 +81,7 @@ export function useMyAutomations() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return (data || []) as StockAutomation[];
+      return (data || []) as unknown as StockAutomation[];
     },
     enabled: !!user,
   });
@@ -144,6 +146,27 @@ export function useDeleteAutomation() {
       queryClient.invalidateQueries({ queryKey: ['my-automations'] });
       queryClient.invalidateQueries({ queryKey: ['stock-automation'] });
       toast({ title: 'Automation deleted' });
+    },
+  });
+}
+
+export function useResetInvestedAmount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('stock_automations')
+        .update({ current_invested_amount: 0 } as any)
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-automations'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-automation'] });
+      toast({ title: 'Budget reset', description: 'Current invested amount has been reset to $0.' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
     },
   });
 }

@@ -324,7 +324,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Automation not found or inactive' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const { user_id, symbol, indicators, rsi_oversold, rsi_overbought, theta, max_quantity, horizon_minutes, allow_shorting } = automation;
+    const { user_id, symbol, indicators, rsi_oversold, rsi_overbought, theta, max_quantity, horizon_minutes, allow_shorting, max_investment_amount, current_invested_amount } = automation;
 
     console.log(`[StockMonitor] Processing ${symbol} for user ${user_id}, horizon=${horizon_minutes}min, theta=${theta}`);
 
@@ -413,6 +413,43 @@ serve(async (req) => {
         const side = signalType.toLowerCase();
         let qty = Math.min(max_quantity, Math.max(1, Math.floor(max_quantity * confidence)));
 
+        // ==================== BUDGET CAP (BUY only) ====================
+        const maxInvestment: number | null = max_investment_amount ?? null;
+        const currentInvested: number = current_invested_amount ?? 0;
+
+        if (side === 'buy' && maxInvestment !== null) {
+          const remaining = maxInvestment - currentInvested;
+          if (remaining <= 0) {
+            console.log(`[StockMonitor] Budget exhausted for ${symbol}: $${currentInvested.toFixed(2)} / $${maxInvestment.toFixed(2)}`);
+            signalRecord.trade_executed = false;
+            signalRecord.error_message = `Budget exhausted ($${currentInvested.toFixed(2)} / $${maxInvestment.toFixed(2)})`;
+            const { error: insertErr } = await supabaseAdmin.from('automation_signals').insert(signalRecord);
+            if (insertErr) console.error('[StockMonitor] Failed to insert signal:', insertErr);
+            await supabaseAdmin.from('stock_automations').update({
+              last_checked_at: new Date().toISOString(),
+              total_signals: (automation.total_signals || 0) + 1,
+              last_signal_at: new Date().toISOString(),
+            }).eq('id', automationId);
+            return new Response(JSON.stringify({ signal: signalType, traded: false, reason: 'Budget exhausted' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          const budgetCappedQty = Math.floor(remaining / currentPrice);
+          qty = Math.min(qty, budgetCappedQty);
+          if (qty <= 0) {
+            console.log(`[StockMonitor] Budget too small to buy 1 share of ${symbol}: remaining=$${remaining.toFixed(2)}, price=$${currentPrice.toFixed(2)}`);
+            signalRecord.trade_executed = false;
+            signalRecord.error_message = `Remaining budget ($${remaining.toFixed(2)}) insufficient to buy 1 share at $${currentPrice.toFixed(2)}`;
+            const { error: insertErr } = await supabaseAdmin.from('automation_signals').insert(signalRecord);
+            if (insertErr) console.error('[StockMonitor] Failed to insert signal:', insertErr);
+            await supabaseAdmin.from('stock_automations').update({
+              last_checked_at: new Date().toISOString(),
+              total_signals: (automation.total_signals || 0) + 1,
+              last_signal_at: new Date().toISOString(),
+            }).eq('id', automationId);
+            return new Response(JSON.stringify({ signal: signalType, traded: false, reason: 'Insufficient budget for 1 share' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          console.log(`[StockMonitor] Budget cap applied: requested qty capped to ${qty} (remaining budget: $${remaining.toFixed(2)})`);
+        }
+
         // For SELL signals, check position unless shorting is allowed
         if (side === 'sell' && !allow_shorting) {
           try {
@@ -472,15 +509,30 @@ serve(async (req) => {
           signalRecord.alpaca_order_id = orderData.id;
 
           // Poll for fill (up to 5 seconds)
+          let filledPrice = 0;
           for (let i = 0; i < 5; i++) {
             await new Promise(r => setTimeout(r, 1000));
             const statusRes = await fetch(`${alpacaBaseUrl}/v2/orders/${orderData.id}`, { headers: alpacaHeaders });
             const statusData = await statusRes.json();
             if (statusData.status === 'filled') {
-              signalRecord.executed_price = parseFloat(statusData.filled_avg_price);
+              filledPrice = parseFloat(statusData.filled_avg_price);
+              signalRecord.executed_price = filledPrice;
               break;
             }
           }
+
+          // ==================== LEDGER UPDATE ====================
+          const currentInvested2: number = current_invested_amount ?? 0;
+          const side2 = signalType.toLowerCase();
+          const tradeValue = qty * (filledPrice > 0 ? filledPrice : currentPrice);
+          let newInvested: number;
+          if (side2 === 'buy') {
+            newInvested = currentInvested2 + tradeValue;
+          } else {
+            newInvested = Math.max(0, currentInvested2 - tradeValue);
+          }
+          console.log(`[StockMonitor] Ledger update: ${side2} ${qty} @ $${(filledPrice || currentPrice).toFixed(2)} = $${tradeValue.toFixed(2)}. New invested: $${newInvested.toFixed(2)}`);
+          await supabaseAdmin.from('stock_automations').update({ current_invested_amount: newInvested } as any).eq('id', automationId);
 
           console.log(`[StockMonitor] Order placed: ${orderData.id}, filled_price=${signalRecord.executed_price}`);
         } else {

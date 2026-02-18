@@ -1152,12 +1152,14 @@ export type Database = {
         Row: {
           allow_shorting: boolean
           created_at: string | null
+          current_invested_amount: number
           horizon_minutes: number | null
           id: string
           indicators: Json
           is_active: boolean | null
           last_checked_at: string | null
           last_signal_at: string | null
+          max_investment_amount: number | null
           max_quantity: number | null
           position_size_percent: number | null
           rsi_overbought: number | null
@@ -1174,12 +1176,14 @@ export type Database = {
         Insert: {
           allow_shorting?: boolean
           created_at?: string | null
+          current_invested_amount?: number
           horizon_minutes?: number | null
           id?: string
           indicators?: Json
           is_active?: boolean | null
           last_checked_at?: string | null
           last_signal_at?: string | null
+          max_investment_amount?: number | null
           max_quantity?: number | null
           position_size_percent?: number | null
           rsi_overbought?: number | null
@@ -1196,12 +1200,14 @@ export type Database = {
         Update: {
           allow_shorting?: boolean
           created_at?: string | null
+          current_invested_amount?: number
           horizon_minutes?: number | null
           id?: string
           indicators?: Json
           is_active?: boolean | null
           last_checked_at?: string | null
           last_signal_at?: string | null
+          max_investment_amount?: number | null
           max_quantity?: number | null
           position_size_percent?: number | null
           rsi_overbought?: number | null
