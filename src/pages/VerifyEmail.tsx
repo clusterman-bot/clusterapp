@@ -30,6 +30,8 @@ export default function VerifyEmail() {
         if (error) throw error;
 
         if (data?.success) {
+          // Refresh session so useAuth picks up the new email immediately
+          await supabase.auth.refreshSession();
           setStatus('success');
           setMessage(data.message || 'Email verified successfully!');
         } else {

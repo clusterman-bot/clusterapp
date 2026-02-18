@@ -26,25 +26,18 @@ export function ChangeEmailCard() {
   const performEmailChange = async () => {
     setIsUpdating(true);
     try {
-      const { error } = await supabase.auth.updateUser({ email: newEmail });
+      // Send verification email to the NEW address.
+      // The edge function stores pending_email in the profile so verify-email-token
+      // can use the admin API to atomically swap the auth credential on verification.
+      const { error } = await supabase.functions.invoke('send-verification-email', {
+        body: { email: newEmail, userId: user!.id },
+      });
+
       if (error) throw error;
-
-      await supabase
-        .from('profiles')
-        .update({ email_verified: false })
-        .eq('id', user!.id);
-
-      try {
-        await supabase.functions.invoke('send-verification-email', {
-          body: { email: newEmail, userId: user!.id },
-        });
-      } catch (e) {
-        console.error('Failed to send verification email:', e);
-      }
 
       toast({
         title: 'Verification email sent',
-        description: `We sent a verification link to ${newEmail}. Please verify to continue using the app.`,
+        description: `We sent a verification link to ${newEmail}. Click the link to confirm your new email address.`,
       });
       setNewEmail('');
     } catch (error: any) {

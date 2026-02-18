@@ -1003,6 +1003,7 @@ export type Database = {
           is_verified: boolean | null
           linkedin_url: string | null
           paper_balance: number | null
+          pending_email: string | null
           show_contact_info: boolean | null
           total_earnings: number | null
           total_followers: number | null
@@ -1029,6 +1030,7 @@ export type Database = {
           is_verified?: boolean | null
           linkedin_url?: string | null
           paper_balance?: number | null
+          pending_email?: string | null
           show_contact_info?: boolean | null
           total_earnings?: number | null
           total_followers?: number | null
@@ -1055,6 +1057,7 @@ export type Database = {
           is_verified?: boolean | null
           linkedin_url?: string | null
           paper_balance?: number | null
+          pending_email?: string | null
           show_contact_info?: boolean | null
           total_earnings?: number | null
           total_followers?: number | null
