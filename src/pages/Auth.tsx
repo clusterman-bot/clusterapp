@@ -7,12 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Mail, CheckCircle, AtSign } from 'lucide-react';
+import { Mail, CheckCircle, AtSign, KeyRound } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { MFAChallenge } from '@/components/auth/MFAChallenge';
 import { useTour } from '@/contexts/TourContext';
 
-type AuthMode = 'signup' | 'login' | 'verify-email' | 'mfa-challenge';
+type AuthMode = 'signup' | 'login' | 'verify-email' | 'mfa-challenge' | 'forgot-password' | 'forgot-sent';
 
 const REMEMBER_ME_KEY = 'cluster_remember_me';
 const REMEMBER_ME_DURATION = 60 * 60 * 1000; // 1 hour in ms
@@ -168,6 +168,26 @@ export default function Auth() {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      toast({ title: 'Email required', description: 'Enter your account email.', variant: 'destructive' });
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      setMode('forgot-sent');
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
@@ -238,6 +258,90 @@ export default function Auth() {
   }
 
   // Signup form
+  // Forgot password form
+  if (mode === 'forgot-password') {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <img src="/favicon.png" alt="Cluster" className="h-8 w-8" />
+              <span className="text-2xl font-bold">Cluster</span>
+            </div>
+            <div className="mx-auto w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mb-3">
+              <KeyRound className="h-7 w-7 text-primary" />
+            </div>
+            <CardTitle>Reset your password</CardTitle>
+            <CardDescription>Enter your email and we'll send you a reset link.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="reset-email">Email</Label>
+                <Input
+                  id="reset-email"
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  autoFocus
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? 'Sending…' : 'Send reset link'}
+              </Button>
+            </form>
+            <div className="mt-4 text-center text-sm">
+              <button type="button" onClick={() => setMode('login')} className="text-primary hover:underline">
+                Back to sign in
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Forgot password sent confirmation
+  if (mode === 'forgot-sent') {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+              <Mail className="h-8 w-8 text-primary" />
+            </div>
+            <CardTitle className="text-2xl">Check your inbox</CardTitle>
+            <CardDescription className="text-base">We sent a password reset link to</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="bg-muted rounded-lg p-4">
+              <p className="font-medium text-foreground">{email}</p>
+            </div>
+            <div className="space-y-3 text-left">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                <p className="text-sm text-muted-foreground">Click the link in the email to reset your password</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <CheckCircle className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                <p className="text-sm text-muted-foreground">If MFA is enabled you'll be asked to verify first</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <CheckCircle className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                <p className="text-sm text-muted-foreground">Check your spam folder if you don't see it</p>
+              </div>
+            </div>
+            <div className="pt-4 border-t">
+              <Button variant="ghost" onClick={() => setMode('login')} className="w-full">Back to sign in</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (mode === 'signup') {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -365,10 +469,17 @@ export default function Auth() {
             {loading ? 'Connecting...' : 'Continue with Google'}
           </Button>
 
-          <div className="mt-4 text-center text-sm">
-            <button type="button" onClick={() => setMode('signup')} className="text-primary hover:underline">
-              Don't have an account? Sign up
-            </button>
+          <div className="mt-4 text-center text-sm space-y-2">
+            <div>
+              <button type="button" onClick={() => setMode('forgot-password')} className="text-muted-foreground hover:text-foreground hover:underline">
+                Forgot your password?
+              </button>
+            </div>
+            <div>
+              <button type="button" onClick={() => setMode('signup')} className="text-primary hover:underline">
+                Don't have an account? Sign up
+              </button>
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -24,6 +24,7 @@ import AIBotBuilder from "./pages/AIBotBuilder";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import VerifyEmail from "./pages/VerifyEmail";
+import ResetPassword from "./pages/ResetPassword";
 import AlphaDashboard from "./pages/AlphaDashboard";
 
 const queryClient = new QueryClient();
@@ -56,6 +57,7 @@ const App = () => (
                 <Route path="/faq" element={<FAQ />} />
                 <Route path="/sms-consent" element={<SMSConsent />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/alpha" element={<AlphaDashboard />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
