@@ -249,8 +249,13 @@ async function executeModelTrades(
     console.error('[RunAutomations] Error fetching subscribers:', subError);
   }
 
+  // Respect the owner_trades_too config flag (default true for backward compat)
+  const ownerTradesToo = deployment.config?.owner_trades_too !== false;
+
   const usersToTrade = [
-    { userId: deployment.user_id, subscriptionId: null, isOwner: true, allocation: null, fundWarningAlreadySent: false },
+    ...(ownerTradesToo
+      ? [{ userId: deployment.user_id, subscriptionId: null, isOwner: true, allocation: null, fundWarningAlreadySent: false }]
+      : []),
     ...(subscriptions || []).map((sub: any) => ({
       userId: sub.subscriber_id,
       subscriptionId: sub.id,

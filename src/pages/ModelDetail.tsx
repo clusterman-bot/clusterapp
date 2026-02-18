@@ -2,7 +2,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useModel, useUpdateModel, useDeleteModel } from '@/hooks/useModels';
-import { useModelSignals, useDeployedModel, useDeployModel, useStopModel, useSignalRealtimeUpdates } from '@/hooks/useDeployedModels';
+import { useModelSignals, useDeployedModel, useDeployModel, useStopModel, useSignalRealtimeUpdates, useUpdateDeploymentConfig } from '@/hooks/useDeployedModels';
+import { Switch } from '@/components/ui/switch';
 import { useIsSubscribed } from '@/hooks/useSubscriptions';
 import { useBacktests } from '@/hooks/useBacktests';
 import { MainNav } from '@/components/MainNav';
@@ -74,6 +75,7 @@ export default function ModelDetail() {
   const deleteModel = useDeleteModel();
   const deployModel = useDeployModel();
   const stopModel = useStopModel();
+  const updateDeploymentConfig = useUpdateDeploymentConfig();
   const [runningSignal, setRunningSignal] = useState(false);
 
   const handleDeploy = async () => {
@@ -363,6 +365,27 @@ export default function ModelDetail() {
               <p className="text-xs text-muted-foreground text-right">
                 {model.total_subscribers ?? 0} subscriber{model.total_subscribers !== 1 ? 's' : ''}
               </p>
+              {/* Owner trades too toggle — only visible when a deployment record exists */}
+              {deployedModel && (
+                <div className="flex items-start gap-3 mt-1 p-3 rounded-lg border bg-muted/30 max-w-xs text-left">
+                  <Switch
+                    checked={deployedModel.config?.owner_trades_too !== false}
+                    onCheckedChange={async (checked) => {
+                      await updateDeploymentConfig.mutateAsync({
+                        id: deployedModel.id,
+                        config: { ...(deployedModel.config ?? {}), owner_trades_too: checked },
+                      });
+                    }}
+                    disabled={updateDeploymentConfig.isPending}
+                  />
+                  <div>
+                    <p className="text-xs font-medium leading-snug">Also trade on my account</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                      When off, subscribers mirror the model but no orders are placed on your own Alpaca account.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
