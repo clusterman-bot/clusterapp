@@ -48,12 +48,14 @@ serve(async (req) => {
 
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
+    // Store the pending_email so verify-email-token knows what to swap to
     const { error: updateError } = await supabase
       .from("profiles")
       .update({
         verification_token: tokenHash,
         verification_token_expires_at: expiresAt,
         email_verified: false,
+        pending_email: email,
       })
       .eq("id", userId);
 

@@ -37,7 +37,7 @@ serve(async (req) => {
     // Fetch the profile
     const { data: profile, error: fetchError } = await supabase
       .from("profiles")
-      .select("verification_token, verification_token_expires_at, email_verified")
+      .select("verification_token, verification_token_expires_at, email_verified, pending_email")
       .eq("id", uid)
       .single();
 
@@ -81,13 +81,26 @@ serve(async (req) => {
       );
     }
 
-    // Mark as verified and clear token
+    // If there's a pending email change, update the auth email via admin API
+    if (profile.pending_email) {
+      const { error: authUpdateError } = await supabase.auth.admin.updateUserById(uid, {
+        email: profile.pending_email,
+      });
+
+      if (authUpdateError) {
+        console.error("Failed to update auth email:", authUpdateError);
+        throw new Error(`Failed to update auth email: ${authUpdateError.message}`);
+      }
+    }
+
+    // Mark as verified, clear token and pending_email
     const { error: updateError } = await supabase
       .from("profiles")
       .update({
         email_verified: true,
         verification_token: null,
         verification_token_expires_at: null,
+        pending_email: null,
       })
       .eq("id", uid);
 
