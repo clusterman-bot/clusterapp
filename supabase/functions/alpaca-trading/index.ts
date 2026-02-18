@@ -398,18 +398,41 @@ serve(async (req) => {
         }
         
         const quoteData = await response.json();
-        const midPrice = quoteData.quote 
-          ? (quoteData.quote.ap + quoteData.quote.bp) / 2 
-          : 0;
-        
+        const bp = quoteData.quote?.bp || 0;
+        const ap = quoteData.quote?.ap || 0;
+
+        // Only use midpoint when BOTH bid and ask are valid non-zero values.
+        // If ask is 0 (after-hours / illiquid), use bid alone.
+        // Fall back to last trade price via a secondary call if neither is valid.
+        let price = 0;
+        if (bp > 0 && ap > 0) {
+          price = (bp + ap) / 2;
+        } else if (bp > 0) {
+          price = bp;
+        } else if (ap > 0) {
+          price = ap;
+        }
+
+        // If we still have no price, fetch the latest trade as fallback
+        if (price === 0) {
+          const tradeResp = await fetch(
+            `https://data.alpaca.markets/v2/stocks/${symbol}/trades/latest`,
+            { headers: { 'APCA-API-KEY-ID': alpacaApiKey, 'APCA-API-SECRET-KEY': alpacaApiSecret } }
+          );
+          if (tradeResp.ok) {
+            const tradeData = await tradeResp.json();
+            price = tradeData.trade?.p || 0;
+          }
+        }
+
         return new Response(
           JSON.stringify({ 
             success: true, 
             quote: {
               symbol,
-              bid: quoteData.quote?.bp,
-              ask: quoteData.quote?.ap,
-              price: midPrice,
+              bid: bp,
+              ask: ap,
+              price,
               timestamp: quoteData.quote?.t,
             }
           }),
