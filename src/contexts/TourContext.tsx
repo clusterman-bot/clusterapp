@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export interface TourStep {
@@ -83,14 +83,28 @@ interface TourContextType {
 
 const TourContext = createContext<TourContextType | undefined>(undefined);
 
+const TOUR_PENDING_KEY = 'cluster_tour_pending';
+
 export function TourProvider({ children }: { children: ReactNode }) {
   const [isActive, setIsActive] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const navigate = useNavigate();
 
+  // On mount, resume tour if it was pending (e.g. user had to verify email mid-tour)
+  useEffect(() => {
+    const pending = localStorage.getItem(TOUR_PENDING_KEY);
+    if (pending === 'true') {
+      localStorage.removeItem(TOUR_PENDING_KEY);
+      setCurrentStep(0);
+      setIsActive(true);
+    }
+  }, []);
+
   const startTour = useCallback(() => {
     setCurrentStep(0);
     setIsActive(true);
+    // Mark as pending so it survives a redirect to email verification
+    localStorage.setItem(TOUR_PENDING_KEY, 'true');
   }, []);
 
   const nextStep = useCallback(() => {
@@ -98,6 +112,8 @@ export function TourProvider({ children }: { children: ReactNode }) {
     if (next >= TOUR_STEPS.length) {
       setIsActive(false);
       setCurrentStep(0);
+      localStorage.removeItem(TOUR_PENDING_KEY);
+      localStorage.setItem('tour_completed', 'true');
       return;
     }
     const nextStepData = TOUR_STEPS[next];
@@ -120,6 +136,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const skipTour = useCallback(() => {
     setIsActive(false);
     setCurrentStep(0);
+    localStorage.removeItem(TOUR_PENDING_KEY);
     localStorage.setItem('tour_completed', 'true');
   }, []);
 
