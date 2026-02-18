@@ -137,7 +137,7 @@ function generateOHLCData(currentPrice: number, previousClose: number, days: num
   return data;
 }
 
-const timeframes = ['1D', '1W', '1M', '3M', '1Y', 'ALL'];
+const timeframes = ['1D', '1W', '1M', '3M', '1Y'];
 const indicators = ['SMA', 'EMA', 'BB', 'RSI', 'MACD', 'VOL'];
 
 export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, dayLow }: AdvancedChartProps) {
