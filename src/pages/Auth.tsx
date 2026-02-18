@@ -9,8 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Mail, CheckCircle, AtSign } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import InteractiveTutorial from '@/components/InteractiveTutorial';
 import { MFAChallenge } from '@/components/auth/MFAChallenge';
+import { useTour } from '@/contexts/TourContext';
 
 type AuthMode = 'signup' | 'login' | 'verify-email' | 'mfa-challenge';
 
@@ -43,12 +43,12 @@ export default function Auth() {
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
-  const [tutorialOpen, setTutorialOpen] = useState(showTutorial);
   const [rememberMe, setRememberMe] = useState(false);
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
   const { signIn, signUp, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { startTour } = useTour();
 
   const justSignedOut = searchParams.get('signout') === 'true';
 
@@ -92,12 +92,15 @@ export default function Auth() {
         return;
       }
 
-      // 4. No MFA enrolled — proceed to app
+      // 4. No MFA enrolled — proceed to app, start tour if tutorial=true
       navigate('/trade', { replace: true });
+      if (showTutorial) {
+        setTimeout(() => startTour(), 600);
+      }
     };
 
     proceed();
-  }, [user, authLoading, navigate, justSignedOut, mode]);
+  }, [user, authLoading, navigate, justSignedOut, mode, showTutorial, startTour]);
 
   if (authLoading) {
     return (
@@ -237,11 +240,7 @@ export default function Auth() {
   // Signup form
   if (mode === 'signup') {
     return (
-      <>
-        {tutorialOpen && (
-          <InteractiveTutorial onComplete={() => setTutorialOpen(false)} />
-        )}
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
           <Card className="w-full max-w-md">
             <CardHeader className="text-center">
               <div className="flex items-center justify-center gap-2 mb-4">
@@ -309,7 +308,6 @@ export default function Auth() {
             </CardContent>
           </Card>
         </div>
-      </>
     );
   }
 

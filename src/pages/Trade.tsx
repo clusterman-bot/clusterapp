@@ -245,7 +245,7 @@ export default function Trade() {
                       <p className="text-muted-foreground">Link your Alpaca account to start trading with real or paper money</p>
                     </div>
                   </div>
-                  <Button onClick={() => navigate('/settings/brokerage')} size="lg">
+                  <Button data-tour="connect-brokerage-btn" onClick={() => navigate('/settings/brokerage')} size="lg">
                     <Settings className="mr-2 h-4 w-4" /> Connect Account
                   </Button>
                 </div>
@@ -258,6 +258,7 @@ export default function Trade() {
         <div className="relative mb-6">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
+            data-tour="stock-search-input"
             placeholder="Search any stock (e.g., AAPL, TSLA, MSFT)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

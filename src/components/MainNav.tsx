@@ -152,6 +152,7 @@ export function MainNav() {
             {navLinks.map(({ label, icon: Icon, path, match }) => (
               <Button
                 key={path}
+                data-tour={path === '/settings/brokerage' ? 'nav-settings' : undefined}
                 variant={match(location.pathname) ? 'secondary' : 'ghost'}
                 size="sm"
                 onClick={() => navigate(path)}
