@@ -1,97 +1,44 @@
 
-## The Real Problem: Two Separate Pipelines That Don't Talk to Each Other
+## Fix: Non-MFA Users Log In Immediately
 
-After a full audit of the backend, here is the honest diagnosis:
+### Root Cause
 
-### What Actually Exists
+In `src/pages/Auth.tsx`, line 113 has a guard:
 
-**Pipeline 1 — Stock Automations (WORKING)**
-
-- A `pg_cron` job runs every minute, calls `run-automations`, which calls `stock-monitor` for each active automation.
-- `stock-monitor` fetches real Alpaca bars, runs RSI/SMA/EMA/Bollinger indicators, generates a BUY/SELL/HOLD decision, places the Alpaca order for the **automation owner**, and logs it to `automation_signals`.
-- This pipeline is fully functional for the automation owner only. It does not involve subscribers or `model_signals`.
-
-**Pipeline 2 — Model Marketplace + Trade Mirroring (BROKEN — the missing link)**
-
-- `trading-bot/deploy` marks a model as `status: running` in `deployed_models`. ✓
-- `trading-bot/generate-signal` generates signals and calls `executeTradeForOwnerAndSubscribers`, which mirrors trades to all active subscribers. ✓
-- **The problem: nothing ever calls `generate-signal` automatically.** The cron job only calls `run-automations → stock-monitor`, which handles `stock_automations` (the per-stock automations). It never touches `deployed_models`. There is no scheduler that loops over running models and calls `generate-signal`.
-
-### The Missing Link Visualized
-
-```text
-CURRENT STATE:
-pg_cron (every 1 min)
-  └─► run-automations
-        └─► stock-monitor (per automation)
-              └─► places Alpaca order for owner ONLY
-              └─► writes to automation_signals
-              └─► NEVER writes to model_signals
-              └─► NEVER notifies subscribers
-
-model.deploy() → deployed_models (status=running)
-trading-bot/generate-signal → [NEVER CALLED AUTOMATICALLY]
-
-WHAT NEEDS TO HAPPEN:
-pg_cron (every 1 min)
-  └─► run-automations
-        ├─► stock-monitor (existing — per-stock automations)
-        └─► [NEW] model-signal-runner (per deployed running model)
-              └─► fetches market data from Alpaca
-              └─► generates BUY/SELL/HOLD signal
-              └─► writes to model_signals
-              └─► calls executeTradeForOwnerAndSubscribers
-                    ├─► places Alpaca order for model OWNER
-                    └─► for each active subscriber:
-                          ├─► checks allocation budget + buying power
-                          ├─► places proportional Alpaca order
-                          ├─► writes to subscriber_trades
-                          └─► sends one-time email if blocked
+```typescript
+if (user && !justSignedOut && mode !== 'verify-email' && mode !== 'mfa-challenge') {
+  return <p>Redirecting...</p>
+}
 ```
 
-### The Fix: Wire Deployed Models into the Cron Loop
+This fires the instant `user` is set after login, before the async `proceed()` function has even finished checking MFA factors. For users with no TOTP enrolled, `proceed()` eventually reaches step 4 and calls `navigate('/trade')`, but the screen is frozen on "Redirecting..." during that async gap — causing the freeze you see.
 
-**Two things need to change:**
+### Fix (one file, minimal change)
 
-**1. Extend `run-automations` to also process deployed models**
+**`src/pages/Auth.tsx`** — two small changes:
 
-The existing `run-automations` function loops over `stock_automations`. It needs a second loop that:
-- Fetches all `deployed_models` where `status = 'running'`
-- Joins to `models` to get `ticker`, `horizon`, `theta`, `max_quantity`, `position_size_percent`, `indicators_config`
-- For each running model, fetches the last 100 bars from Alpaca (using the model owner's Alpaca credentials)
-- Runs indicator logic to generate a signal
-- Calls `trading-bot/generate-signal` with the result (which handles the full mirroring to subscribers)
+1. Add `'redirecting'` to the `AuthMode` union type.
+2. At the top of `proceed()`, before the async DB calls begin, set `setMode('redirecting')`. This converts the premature guard into a controlled state.
+3. Update the guard at line 113 to check for `mode === 'redirecting'` instead of the blanket `user &&` check — so the "Redirecting..." screen only shows when we have explicitly decided to redirect, not just because `user` exists.
+4. Remove the email OTP logic entirely — no new edge functions, no DB columns, no new components needed.
 
-**2. Update `trading-bot/generate-signal` to handle the model owner's Alpaca execution too**
+The updated flow for a non-MFA user becomes:
 
-Currently the `executeTradeForOwnerAndSubscribers` function places trades for both owner and subscribers, but the owner's Alpaca key comes from `user_brokerage_accounts` — this is correct and complete. No change needed here.
+```
+signIn() succeeds → user set in state
+  → proceed() starts:
+      1. Check email_verified (if not: show verify-email screen)
+      2. Check isRemembered() (if yes: setMode('redirecting') → navigate /trade)
+      3. Check TOTP factors (if found: show mfa-challenge)
+      4. No MFA → setMode('redirecting') → navigate /trade immediately
+```
 
-### Files to Change
+No freezing, no extra screens, no email OTPs — users without MFA just land on `/trade`.
 
-| File | What Changes |
-|---|---|
-| `supabase/functions/run-automations/index.ts` | Add a second loop after the stock-automation loop that fetches all running deployed models, fetches market data from Alpaca for each, generates the signal internally (same indicator logic as stock-monitor), and calls `trading-bot/generate-signal` |
+### Technical Details
 
-That is the only file that needs to change. The `trading-bot` mirroring logic is already correct and complete — it just never gets triggered automatically.
-
-### How Signals Are Generated for Models
-
-Models created via the AI Chat Builder have `indicators_config` in JSONB (same RSI/SMA/EMA structure) stored on the `models` table. The `run-automations` extension will:
-
-1. Read `models.indicators_config`, `models.horizon`, `models.theta`, `models.ticker`
-2. Fetch 100 bars from Alpaca (using the model owner's brokerage credentials, same as stock-monitor)
-3. Run the same indicator voting logic that stock-monitor uses
-4. If composite score exceeds theta → BUY; below -theta → SELL; else → HOLD
-5. Call `trading-bot/generate-signal` with the result, which writes to `model_signals` and fans out to all subscribers
-
-### What This Achieves
-
-Once this is in place:
-- Every minute the cron fires
-- Every **deployed running model** is evaluated against live market data
-- BUY/SELL signals automatically place Alpaca orders for the model owner
-- The same signals are immediately mirrored to every active subscriber proportional to their allocation
-- Insufficient-funds scenarios are caught and the subscriber is emailed once
-- Everything is logged to `model_signals` and `subscriber_trades`
-
-No additional cron jobs, no new database tables, no new edge functions needed — just one targeted extension to `run-automations`.
+- Only `src/pages/Auth.tsx` is modified
+- The `AuthMode` type gains `'redirecting'` as a valid state
+- The early-return guard becomes: `if (mode === 'redirecting')`
+- `proceed()` calls `setMode('redirecting')` right before each `navigate()` call
+- The existing MFA, verify-email, forgot-password, and signup flows are completely unchanged
