@@ -79,7 +79,7 @@ export default function Auth() {
           .eq('id', user.id)
           .single();
 
-        if (!profile?.email_verified) {
+        if (profile?.email_verified === false) {
           setPendingEmail(user.email || '');
           setMode('verify-email');
           proceedingRef.current = false;

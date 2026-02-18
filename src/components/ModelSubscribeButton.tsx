@@ -8,7 +8,8 @@ import { useAllocationForSubscription } from '@/hooks/useAllocations';
 import { AllocationDialog } from '@/components/model/AllocationDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
-import { Check, Plus, Loader2, Wallet } from 'lucide-react';
+import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
+import { Check, Plus, Loader2, Wallet, Link } from 'lucide-react';
 
 import {
   Dialog,
@@ -45,8 +46,10 @@ export function ModelSubscribeButton({
   const unsubscribe = useUnsubscribeFromModel();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { data: brokerageAccounts } = useBrokerageAccounts();
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showUnsubscribeDialog, setShowUnsubscribeDialog] = useState(false);
+  const [showNoBrokerageDialog, setShowNoBrokerageDialog] = useState(false);
 
   const isSubscribed = !!subscription;
   const isRetailTrader = userRole?.role === 'retail_trader';
@@ -63,9 +66,16 @@ export function ModelSubscribeButton({
     
     if (isSubscribed) {
       setShowUnsubscribeDialog(true);
-    } else {
-      setShowConfirmDialog(true);
+      return;
     }
+
+    const hasActiveBrokerage = brokerageAccounts?.some(a => a.is_active);
+    if (!hasActiveBrokerage) {
+      setShowNoBrokerageDialog(true);
+      return;
+    }
+
+    setShowConfirmDialog(true);
   };
 
   const handleSubscribe = async () => {
@@ -131,6 +141,32 @@ export function ModelSubscribeButton({
           </>
         )}
       </Button>
+
+      {/* No Brokerage Account Dialog */}
+      <Dialog open={showNoBrokerageDialog} onOpenChange={setShowNoBrokerageDialog}>
+        <DialogContent className="bg-background">
+          <DialogHeader>
+            <DialogTitle>Brokerage Account Required</DialogTitle>
+            <DialogDescription>
+              You need to connect a brokerage account before subscribing to models.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground">
+              Model trades are mirrored automatically through your connected Alpaca account. Connect your Alpaca paper or live account to get started.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNoBrokerageDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => { setShowNoBrokerageDialog(false); navigate('/settings/brokerage'); }}>
+              <Link className="h-4 w-4 mr-2" />
+              Connect Brokerage
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Subscribe Confirmation Dialog */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
