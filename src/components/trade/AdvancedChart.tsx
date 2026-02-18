@@ -365,19 +365,19 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
           </div>
         )}
         
-        {/* OHLC Stats */}
+        {/* OHLC Stats — period open/high/low, latest close */}
         <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t border-border">
           <div className="text-center">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Open</p>
-            <p className="font-mono font-semibold">${latestData?.open.toFixed(2)}</p>
+            <p className="font-mono font-semibold">${chartData[0]?.open.toFixed(2)}</p>
           </div>
           <div className="text-center">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">High</p>
-            <p className="font-mono font-semibold text-profit">${latestData?.high.toFixed(2)}</p>
+            <p className="font-mono font-semibold text-profit">${Math.max(...chartData.map(d => d.high)).toFixed(2)}</p>
           </div>
           <div className="text-center">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Low</p>
-            <p className="font-mono font-semibold text-loss">${latestData?.low.toFixed(2)}</p>
+            <p className="font-mono font-semibold text-loss">${Math.min(...chartData.map(d => d.low)).toFixed(2)}</p>
           </div>
           <div className="text-center">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Close</p>
