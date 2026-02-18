@@ -27,6 +27,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { AvatarUpload } from '@/components/profile/AvatarUpload';
 import { SocialLinks } from '@/components/profile/SocialLinks';
 import { MFASetup } from '@/components/auth/MFASetup';
+import { ChangeEmailCard } from '@/components/auth/ChangeEmailCard';
 import { ProfilePostsTab } from '@/components/profile/ProfilePostsTab';
 import { ProfileLikesTab } from '@/components/profile/ProfileLikesTab';
 import { ProfileBookmarksTab } from '@/components/profile/ProfileBookmarksTab';
@@ -698,18 +699,7 @@ export default function Profile() {
                     </p>
                   </div>
 
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Mail className="h-4 w-4" />
-                        Email Address
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground">{user?.email}</p>
-                    </CardContent>
-                  </Card>
-
+                  <ChangeEmailCard />
                   <ChangePasswordCard />
                   <MFASetup />
                 </div>

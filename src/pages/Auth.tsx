@@ -5,12 +5,32 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Mail, CheckCircle, AtSign } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import InteractiveTutorial from '@/components/InteractiveTutorial';
+import { MFAChallenge } from '@/components/auth/MFAChallenge';
 
-type AuthMode = 'signup' | 'login' | 'verify-email';
+type AuthMode = 'signup' | 'login' | 'verify-email' | 'mfa-challenge';
+
+const REMEMBER_ME_KEY = 'cluster_remember_me';
+const REMEMBER_ME_DURATION = 60 * 60 * 1000; // 1 hour in ms
+
+function isRemembered(): boolean {
+  const stored = localStorage.getItem(REMEMBER_ME_KEY);
+  if (!stored) return false;
+  const timestamp = parseInt(stored, 10);
+  return Date.now() - timestamp < REMEMBER_ME_DURATION;
+}
+
+function setRemembered() {
+  localStorage.setItem(REMEMBER_ME_KEY, Date.now().toString());
+}
+
+function clearRemembered() {
+  localStorage.removeItem(REMEMBER_ME_KEY);
+}
 
 export default function Auth() {
   const [searchParams] = useSearchParams();
@@ -24,6 +44,8 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
   const [tutorialOpen, setTutorialOpen] = useState(showTutorial);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
   const { signIn, signUp, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -31,10 +53,14 @@ export default function Auth() {
   const justSignedOut = searchParams.get('signout') === 'true';
 
   useEffect(() => {
-    if (justSignedOut) return;
+    if (justSignedOut) {
+      clearRemembered();
+      return;
+    }
     if (authLoading) return;
     if (!user) return;
-    // Check custom email_verified flag from profiles
+    if (mode === 'mfa-challenge') return;
+    
     const checkVerification = async () => {
       const { data: profile } = await supabase
         .from('profiles')
@@ -50,7 +76,7 @@ export default function Auth() {
       navigate('/trade', { replace: true });
     };
     checkVerification();
-  }, [user, authLoading, navigate, justSignedOut]);
+  }, [user, authLoading, navigate, justSignedOut, mode]);
 
   if (authLoading) {
     return (
@@ -60,13 +86,29 @@ export default function Auth() {
     );
   }
 
-  if (user && !justSignedOut && mode !== 'verify-email') {
+  if (user && !justSignedOut && mode !== 'verify-email' && mode !== 'mfa-challenge') {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Redirecting...</p>
       </div>
     );
   }
+
+  const checkMFAAndProceed = async () => {
+    // Check if user has MFA enabled
+    const { data: factors } = await supabase.auth.mfa.listFactors();
+    const verifiedFactor = factors?.totp?.find(f => f.status === 'verified');
+    
+    if (verifiedFactor && !isRemembered()) {
+      // MFA required
+      setMfaFactorId(verifiedFactor.id);
+      setMode('mfa-challenge');
+      return;
+    }
+    
+    // No MFA or remembered - proceed
+    if (rememberMe) setRemembered();
+  };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,11 +140,28 @@ export default function Auth() {
     try {
       const { error } = await signIn(email, password);
       if (error) throw error;
-      navigate('/trade', { replace: true });
+      
+      // Check MFA after successful login
+      await checkMFAAndProceed();
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
       setLoading(false);
     }
+  };
+
+  const handleMFASuccess = () => {
+    if (rememberMe) setRemembered();
+    setMode('login'); // Reset mode so the useEffect redirect kicks in
+    setMfaFactorId(null);
+  };
+
+  const handleMFACancel = async () => {
+    // Sign out if they cancel MFA
+    await supabase.auth.signOut({ scope: 'global' });
+    setMode('login');
+    setMfaFactorId(null);
+    setLoading(false);
+    toast({ title: 'MFA required', description: 'You must complete MFA verification to sign in.', variant: 'destructive' });
   };
 
   const handleGoogleSignIn = async () => {
@@ -120,6 +179,19 @@ export default function Auth() {
       setLoading(false);
     }
   };
+
+  // MFA Challenge screen
+  if (mode === 'mfa-challenge' && mfaFactorId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <MFAChallenge
+          factorId={mfaFactorId}
+          onSuccess={handleMFASuccess}
+          onCancel={handleMFACancel}
+        />
+      </div>
+    );
+  }
 
   // Email verification screen
   if (mode === 'verify-email') {
@@ -261,6 +333,16 @@ export default function Auth() {
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="remember-me"
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(checked === true)}
+              />
+              <Label htmlFor="remember-me" className="text-sm font-normal cursor-pointer">
+                Remember me for 1 hour (skip MFA)
+              </Label>
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
