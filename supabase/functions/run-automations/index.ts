@@ -658,6 +658,63 @@ serve(async (req) => {
             await executeModelTrades(supabaseAdmin, deployment, model, signalRecord, encryptionSecret, resendApiKey);
           }
 
+          // ── Live Metrics Aggregation ──
+          // Compute win_rate and total_return from subscriber_trades for this model
+          try {
+            const { data: closedTrades } = await supabaseAdmin
+              .from('subscriber_trades')
+              .select('pnl, status')
+              .eq('status', 'executed')
+              .in(
+                'signal_id',
+                // get all signal ids for this model
+                (await supabaseAdmin
+                  .from('model_signals')
+                  .select('id')
+                  .eq('model_id', model.id)
+                ).data?.map((s: any) => s.id) ?? []
+              );
+
+            if (closedTrades && closedTrades.length > 0) {
+              const winningTrades = closedTrades.filter((t: any) => (t.pnl ?? 0) > 0).length;
+              const liveWinRate = winningTrades / closedTrades.length;
+
+              // Total return: sum of pnl / total allocation for this model
+              const { data: allocs } = await supabaseAdmin
+                .from('allocations')
+                .select('allocated_amount, total_pnl')
+                .eq('model_id', model.id)
+                .eq('is_active', true);
+
+              const totalAllocated = allocs?.reduce((sum: number, a: any) => sum + (a.allocated_amount ?? 0), 0) ?? 0;
+              const totalPnl = allocs?.reduce((sum: number, a: any) => sum + (a.total_pnl ?? 0), 0) ?? 0;
+              const liveTotalReturn = totalAllocated > 0 ? totalPnl / totalAllocated : null;
+
+              // Total signals for this model
+              const { count: totalSignalCount } = await supabaseAdmin
+                .from('model_signals')
+                .select('id', { count: 'exact', head: true })
+                .eq('model_id', model.id);
+
+              const metricsUpdate: any = {
+                win_rate: liveWinRate,
+                updated_at: new Date().toISOString(),
+              };
+              if (liveTotalReturn !== null) {
+                metricsUpdate.total_return = liveTotalReturn;
+              }
+
+              await supabaseAdmin
+                .from('models')
+                .update(metricsUpdate)
+                .eq('id', model.id);
+
+              console.log(`[RunAutomations] Updated live metrics for model ${model.id}: win_rate=${liveWinRate.toFixed(3)}, total_return=${liveTotalReturn}`);
+            }
+          } catch (metricsErr) {
+            console.error(`[RunAutomations] Failed to compute live metrics for model ${model.id}:`, metricsErr);
+          }
+
           modelResults.push({
             deploymentId: deployment.id,
             modelId: model.id,
