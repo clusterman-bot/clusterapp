@@ -27,15 +27,8 @@ export function ChangeEmailCard() {
 
     setIsUpdating(true);
     try {
-      // Try to update email in Supabase Auth
-      // If AAL2 is required (MFA enrolled), skip auth update and just handle verification
-      try {
-        const { error } = await supabase.auth.updateUser({ email: newEmail });
-        if (error && !error.message.includes('aal2')) throw error;
-      } catch (authError: any) {
-        if (!authError.message?.toLowerCase().includes('aal2')) throw authError;
-        // AAL2 required but MFA is disabled in app - proceed with profile-level change
-      }
+      const { error } = await supabase.auth.updateUser({ email: newEmail });
+      if (error) throw error;
 
       // Mark email as unverified in profiles
       await supabase
