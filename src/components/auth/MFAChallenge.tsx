@@ -57,7 +57,7 @@ export function MFAChallenge({ factorId, onSuccess, onCancel }: MFAChallengeProp
         </div>
         <CardTitle>Two-Factor Authentication</CardTitle>
         <CardDescription>
-          Enter the 6-digit code from your authenticator app
+          Open your authenticator app (e.g. Google Authenticator or Authy) and enter the 6-digit code shown for this account.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -72,6 +72,9 @@ export function MFAChallenge({ factorId, onSuccess, onCancel }: MFAChallengeProp
             maxLength={6}
             autoFocus
           />
+          <p className="text-xs text-center text-muted-foreground">
+            Codes refresh every 30 seconds — if it fails, wait for the next one.
+          </p>
         </div>
 
         <Button 
@@ -90,7 +93,7 @@ export function MFAChallenge({ factorId, onSuccess, onCancel }: MFAChallengeProp
           className="w-full" 
           onClick={onCancel}
         >
-          Use a different method
+          Cancel sign in
         </Button>
       </CardContent>
     </Card>

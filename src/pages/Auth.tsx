@@ -60,22 +60,43 @@ export default function Auth() {
     if (authLoading) return;
     if (!user) return;
     if (mode === 'mfa-challenge') return;
-    
-    const checkVerification = async () => {
+    if (mode === 'verify-email') return;
+
+    const proceed = async () => {
+      // 1. Check email verification first
       const { data: profile } = await supabase
         .from('profiles')
         .select('email_verified')
         .eq('id', user.id)
         .single();
-      
+
       if (!profile?.email_verified) {
         setPendingEmail(user.email || '');
         setMode('verify-email');
         return;
       }
+
+      // 2. If remembered within 1 hour, skip MFA and auto-login
+      if (isRemembered()) {
+        navigate('/trade', { replace: true });
+        return;
+      }
+
+      // 3. Check if user has a verified MFA factor
+      const { data: factors } = await supabase.auth.mfa.listFactors();
+      const verifiedFactor = factors?.totp?.find(f => f.status === 'verified');
+
+      if (verifiedFactor) {
+        setMfaFactorId(verifiedFactor.id);
+        setMode('mfa-challenge');
+        return;
+      }
+
+      // 4. No MFA enrolled — proceed to app
       navigate('/trade', { replace: true });
     };
-    checkVerification();
+
+    proceed();
   }, [user, authLoading, navigate, justSignedOut, mode]);
 
   if (authLoading) {
@@ -94,20 +115,30 @@ export default function Auth() {
     );
   }
 
-  const checkMFAAndProceed = async () => {
-    // Check if user has MFA enabled
-    const { data: factors } = await supabase.auth.mfa.listFactors();
-    const verifiedFactor = factors?.totp?.find(f => f.status === 'verified');
-    
-    if (verifiedFactor && !isRemembered()) {
-      // MFA required
-      setMfaFactorId(verifiedFactor.id);
-      setMode('mfa-challenge');
-      return;
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const { error } = await signIn(email, password);
+      if (error) throw error;
+      // useEffect handles MFA check and redirect from here
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      setLoading(false);
     }
-    
-    // No MFA or remembered - proceed
+  };
+
+  const handleMFASuccess = () => {
     if (rememberMe) setRemembered();
+    navigate('/trade', { replace: true });
+  };
+
+  const handleMFACancel = async () => {
+    await supabase.auth.signOut({ scope: 'global' });
+    setMode('login');
+    setMfaFactorId(null);
+    setLoading(false);
+    toast({ title: 'MFA required', description: 'You must complete MFA verification to sign in.', variant: 'destructive' });
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -132,35 +163,6 @@ export default function Auth() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const { error } = await signIn(email, password);
-      if (error) throw error;
-      
-      await checkMFAAndProceed();
-    } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-      setLoading(false);
-    }
-  };
-
-  const handleMFASuccess = () => {
-    if (rememberMe) setRemembered();
-    setMode('login'); // Reset mode so the useEffect redirect kicks in
-    setMfaFactorId(null);
-  };
-
-  const handleMFACancel = async () => {
-    // Sign out if they cancel MFA
-    await supabase.auth.signOut({ scope: 'global' });
-    setMode('login');
-    setMfaFactorId(null);
-    setLoading(false);
-    toast({ title: 'MFA required', description: 'You must complete MFA verification to sign in.', variant: 'destructive' });
   };
 
   const handleGoogleSignIn = async () => {
@@ -340,7 +342,7 @@ export default function Auth() {
                 onCheckedChange={(checked) => setRememberMe(checked === true)}
               />
               <Label htmlFor="remember-me" className="text-sm font-normal cursor-pointer">
-                Remember me for 1 hour (skip MFA)
+                Remember me for 1 hour (auto-login after MFA)
               </Label>
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
