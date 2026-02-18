@@ -162,9 +162,11 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
   const maxPrice = Math.max(...chartData.map(d => d.high)) * 1.005;
   const latestData = chartData[chartData.length - 1];
 
-  // Start price: always the first bar's open (pre-market starts at 13:50 UTC)
+  // Start price:
+  // - 1D (intraday bars): first bar's OPEN (pre-market starts at 13:50 UTC)
+  // - All other timeframes (daily bars): first bar's CLOSE (end of first day = baseline for period gain)
   const periodStartPrice = isLive && chartData.length > 0
-    ? chartData[0].open
+    ? (timeframe === '1D' ? chartData[0].open : chartData[0].close)
     : (previousClose || currentPrice);
 
   // End price: for intraday (1D) use last bar at/before 21:00 UTC (4 PM ET = market close).
