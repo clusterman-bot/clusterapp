@@ -61,6 +61,7 @@ export default function Auth() {
     if (!user) return;
     if (mode === 'mfa-challenge') return;
     if (mode === 'verify-email') return;
+    if (mode === 'redirecting') return;
 
     const proceed = async () => {
       // 1. Check email verification first
