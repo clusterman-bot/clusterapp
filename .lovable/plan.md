@@ -1,116 +1,133 @@
 
-## How the Trading Pipeline Currently Works (and What's Broken)
+## Root Cause Analysis: Why Nothing Is Connected
 
-### The Full Flow (When Working Correctly)
+The database confirms **5 separate broken links** in the pipeline. Here is what the data shows:
 
-```text
-1. User posts automation to marketplace
-   → model created in DB (configuration JSONB has indicators + source_symbol)
+### Broken Link 1 — Deployed models have no `ticker` or `indicators_config`
 
-2. Owner "deploys" the model
-   → deployed_models row created with status = 'running'
+The two running models (`NVDA Automation Strategy`, `SPY Automation Strategy`) were deployed **before** the fix to `PostToMarketplaceDialog` was applied. Their `ticker` column is `NULL` and `indicators_config` is `NULL` in the `models` table. The `run-automations` function explicitly skips any model where `ticker` is null — confirmed by the logs showing `"has no ticker, skipping"`. Zero signals will ever be generated until this is fixed.
 
-3. run-automations edge function runs (triggered every 1 min via cron OR manually)
-   → Fetches all deployed_models WHERE status = 'running'
-   → For each: reads models.ticker + models.indicators_config
-   → Fetches live Alpaca bars for that ticker
-   → Runs indicator calculations → generates BUY/SELL/HOLD
-   → Inserts row into model_signals
-   → If BUY/SELL: executes trade on owner's Alpaca + all subscribers' Alpaca
+The data exists — both models have `configuration->>'source_symbol'` (NVDA, SPY) and indicators inside `configuration->'indicators'`. It just needs to be copied to the top-level columns.
 
-4. Signals appear in ModelDetail page
-5. Metrics (win_rate, total_return) update after each trade cycle
-```
+**Fix:** A database migration that backfills `ticker` and `indicators_config` for all models where they are null but `configuration` has the data.
 
-### Three Root Causes of "0 Signals"
+### Broken Link 2 — Subscribers have NO allocations
 
-**Problem 1 — `models.ticker` is NULL for all marketplace models (most critical)**
+Every subscription row shows `allocation_id = NULL`. There is no allocation record in the `allocations` table for any subscriber. This means:
+- When `run-automations` fetches subscribers via `subscriptions.select('*, allocations(*)')`, `sub.allocations` is always an empty array
+- The trade execution code for subscribers does `trader.allocation = sub.allocations?.[0] || null`
+- With `allocation = null`, the fund check is bypassed BUT the `allocation_id` written to `subscriber_trades` is also null
+- More critically: the `max_exposure_percent` budget calculation falls back to zero, meaning the trade quantity math produces zero or 1 share with no meaningful budget constraint
 
-When a user posts from `PostToMarketplaceDialog`, the `source_symbol` (e.g. `AAPL`) is stored inside `configuration.source_symbol` as JSON — but the `models.ticker` column is never set. 
+The subscription flow never creates an `allocations` row. This needs to be created automatically when someone subscribes.
 
-In `run-automations` line 536: `if (!model || !model.ticker) { ... continue; }` — every single model is skipped because `ticker` is always `null`.
+**Fix:** In `useSubscriptions.tsx`, after a successful subscribe, automatically insert an `allocations` row with `allocated_amount` set to the model's `min_allocation` (or a sensible default). Also ensure the UI provides a way for the subscriber to set their allocation amount.
 
-**Fix:** Set `ticker: symbol` in the `useCreateModel` call inside `PostToMarketplaceDialog`.
+### Broken Link 3 — Signals and trades don't appear in real-time on the Orders page
 
-**Problem 2 — `models.indicators_config` is NULL (secondary blocker)**
+`model_signals` and `subscriber_trades` **are** in the `supabase_realtime` publication — good. However, `useTradeRealtimeUpdates()` and `useSignalRealtimeUpdates()` exist in `useDeployedModels.tsx` but are **never called** from `Orders.tsx`. The Orders page fetches data once on mount and never subscribes to live updates.
 
-The indicators are stored inside `configuration.indicators` (JSONB), but `run-automations` reads `model.indicators_config` (a separate column). Since `indicators_config` is never set during marketplace posting, all signals default to HOLD even if `ticker` were fixed.
+**Fix:** Call `useTradeRealtimeUpdates()` inside `Orders.tsx` so the Bot Trades tab auto-refreshes when new `subscriber_trades` rows arrive.
 
-**Fix:** Also set `indicators_config` to the indicators object when creating the model.
+### Broken Link 4 — `model_signals` has no SELECT policy for subscribers
 
-**Problem 3 — No deploy step exists in the UI for marketplace models**
+Looking at the RLS policies on `model_signals`:
+- `Model owners can manage signals` — ALL operations for model owners ✓
+- `Subscribers can view signals` — SELECT for active subscribers ✓ (this exists, confirmed from schema)
 
-After posting to the marketplace, the model is never "deployed" — there's no entry in `deployed_models` with `status = 'running'`. The `run-automations` function only processes deployed models. The current ModelDetail page has Pause/Resume controls but no Deploy button. The owner must explicitly deploy before trading starts.
+This is actually fine. The issue is just the missing ticker, not RLS.
 
-**Fix:** Add a "Deploy" button to the ModelDetail page (for owners), using the existing `useDeployModel()` hook. Show the current deployment status clearly.
+### Broken Link 5 — Owner's own trades are NOT logged to `subscriber_trades`
 
-**Problem 4 — `run-automations` has no scheduler (manual trigger only)**
+In `run-automations`, the code only inserts into `subscriber_trades` for non-owners (`if (!trader.isOwner && trader.subscriptionId)`). The model owner's executed trades go to Alpaca's order history (fetchable via the `alpaca-trading` edge function) but are **never written to `subscriber_trades`**. This is intentional for the owner, but it means:
 
-The function exists and is correctly written, but there is no cron job calling it. It only runs if manually invoked. This means even with all the above fixed, trading won't happen automatically without a scheduler.
+- Owner sees trades under "All Orders" tab (from Alpaca API) ✓
+- Subscriber sees trades under "Bot Trades" tab (from `subscriber_trades`) — **only if allocation exists**
+- There is no unified view
 
-**Fix:** Add a note in the UI that trading runs on a 1-minute cycle, and add a "Run Now" button for owners to manually trigger a signal cycle during testing. We can also expose a simple way to call `run-automations` from the deployed model panel.
+The current design is acceptable (owner = Alpaca orders, subscriber = Bot Trades tab), but the subscriber tab will remain empty until broken links 1, 2, and 3 are fixed.
 
 ---
 
-## Implementation Plan
+## The Fix Plan
 
-### Files to Change
+### Step 1 — Database migration: Backfill `ticker` and `indicators_config` for existing models
 
-**1. `src/components/automation/PostToMarketplaceDialog.tsx`**
-
-In `createModel.mutateAsync(...)`, add two fields to the top-level object (not inside `configuration`):
-- `ticker: symbol` — fills the `models.ticker` column so `run-automations` can find the stock
-- `indicators_config` — copy of the indicators object so `run-automations` can read signal logic
-
-```typescript
-await createModel.mutateAsync({
-  name: name.trim(),
-  ticker: symbol,                    // ← ADD THIS
-  indicators_config: {               // ← ADD THIS
-    ...indicatorsSource,
-    custom: customArr,
-  },
-  // ... rest unchanged
-});
+```sql
+UPDATE public.models
+SET 
+  ticker = configuration->>'source_symbol',
+  indicators_config = configuration->'indicators'
+WHERE 
+  ticker IS NULL 
+  AND configuration->>'source_symbol' IS NOT NULL
+  AND indicators_config IS NULL;
 ```
 
-**2. `src/hooks/useModels.tsx`**
+This immediately unblocks the deployed models. On the next `run-automations` call, they will generate signals.
 
-Update `useCreateModel` mutation to pass `ticker` and `indicators_config` through to the Supabase insert. Currently these fields are not in the insert payload.
+### Step 2 — Auto-create allocation when subscribing
+
+In `src/hooks/useSubscriptions.tsx`, after the subscription insert/upsert succeeds, insert an `allocations` row:
 
 ```typescript
-const { data, error } = await supabase.from('models').insert({
-  name: model.name,
-  ticker: model.ticker,              // ← ADD
-  indicators_config: model.indicators_config, // ← ADD
-  // ... rest unchanged
-});
+// After successful subscribe:
+await supabase.from('allocations').upsert({
+  user_id: user.id,
+  subscription_id: data.id,  // the new subscription id
+  model_id: modelId,
+  allocated_amount: modelMinAllocation,   // fetched from model
+  current_value: modelMinAllocation,
+  is_active: true,
+}, { onConflict: 'subscription_id' });
 ```
 
-Also update the `mutationFn` type signature to accept `ticker?: string` and `indicators_config?: Json`.
+We also need to fetch the model's `min_allocation` as part of the subscription flow. This needs to be passed in or fetched.
 
-**3. `src/pages/ModelDetail.tsx`**
+### Step 3 — Subscribe Orders page to real-time trade updates
 
-Add a "Deploy / Stop" section for model owners, using the existing `useDeployModel`, `useStopModel`, and `useDeployedModel` hooks from `useDeployedModels.tsx`. The deploy section shows:
-- Current deployment status badge (Running / Stopped / Not deployed)
-- A "Deploy" button → calls `useDeployModel()` to create a `deployed_models` row with `status = 'running'`
-- A "Stop" button → calls `useStopModel()` to set status to `'stopped'`
-- Last signal timestamp when running
-- A "Generate Signal Now" test button that calls `run-automations` manually
+In `src/pages/Orders.tsx`, import and call `useTradeRealtimeUpdates()`:
 
-This gives owners complete visibility and control over whether their model is actively trading.
+```typescript
+import { useTradeRealtimeUpdates } from '@/hooks/useDeployedModels';
 
-### Technical Details
+// Inside the component:
+useTradeRealtimeUpdates(); // subscribes to subscriber_trades changes via Realtime
+```
 
-- `run-automations` is already fully implemented and correct — the only blockers are the missing `ticker` and `indicators_config` columns and the missing `deployed_models` row
-- The `useDeployModel` and `useStopModel` hooks already exist in `src/hooks/useDeployedModels.tsx` — we just need to wire them into the ModelDetail UI
-- No DB schema changes needed — both `ticker` and `indicators_config` columns exist on the `models` table
-- The `run-automations` cron gap is a separate concern — we'll add a visible "manual trigger" button for owners
+This ensures when `run-automations` inserts a new `subscriber_trades` row, the Bot Trades tab auto-refreshes without requiring a page reload.
 
-### Summary of Changes
+### Step 4 — Also wire real-time updates on ModelDetail signals list
+
+The `ModelDetail.tsx` already calls `useModelSignals()` but doesn't call `useSignalRealtimeUpdates()`. Add it so signals appear live on the model page:
+
+```typescript
+import { useSignalRealtimeUpdates } from '@/hooks/useDeployedModels';
+
+// Inside ModelDetail:
+useSignalRealtimeUpdates(id);
+```
+
+### Step 5 — Show subscriber allocation in the subscribe flow
+
+Currently `ModelSubscribeButton.tsx` / subscription hooks don't ask for an allocation amount. The subscriber's allocation defaults to `min_allocation`. We should display the model's `min_allocation` and `max_allocation` in the subscribe dialog so the user understands how much of their capital will be committed.
+
+---
+
+## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/automation/PostToMarketplaceDialog.tsx` | Pass `ticker` and `indicators_config` when creating model |
-| `src/hooks/useModels.tsx` | Accept and insert `ticker` + `indicators_config` |
-| `src/pages/ModelDetail.tsx` | Add Deploy/Stop controls + deployment status for owners |
+| Database migration | Backfill `ticker` + `indicators_config` for existing null-ticker models |
+| `src/hooks/useSubscriptions.tsx` | Auto-create `allocations` row on subscribe; handle reactivation allocation update |
+| `src/pages/Orders.tsx` | Add `useTradeRealtimeUpdates()` hook call |
+| `src/pages/ModelDetail.tsx` | Add `useSignalRealtimeUpdates(id)` hook call |
+| `src/components/ModelSubscribeButton.tsx` | Show allocation amount in subscribe UI |
+
+## What This Will Fix End-to-End
+
+After these changes:
+1. Model owner runs "Run Now" → `run-automations` fetches ticker (now populated) → generates signal → inserts `model_signals` row → model page shows signal in real-time (Step 4)
+2. Signal is BUY/SELL → `run-automations` fetches subscribers → finds allocation (now created, Step 2) → executes on subscriber's Alpaca → inserts `subscriber_trades` row
+3. Subscriber opens Orders → Bot Trades tab auto-refreshes via Realtime (Step 3) → sees the mirrored trade
+4. Subscriber's portfolio reflects the trade value via the `allocations` table
