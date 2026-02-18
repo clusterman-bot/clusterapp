@@ -162,25 +162,24 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
   const maxPrice = Math.max(...chartData.map(d => d.high)) * 1.005;
   const latestData = chartData[chartData.length - 1];
 
-  // End price: last bar's close (4 PM bar when market closed, or latest live bar)
-  const periodEndPrice = (isLive && latestData) ? latestData.close : currentPrice;
+  // Start price: always the first bar's open (pre-market starts at 13:50 UTC)
+  const periodStartPrice = isLive && chartData.length > 0
+    ? chartData[0].open
+    : (previousClose || currentPrice);
 
-  // Start price logic:
-  // 1D → first bar at/after 9:30 AM ET (14:30 UTC) = regular market open
-  // All other periods → first bar's open price
-  const periodStartPrice = (() => {
-    if (!isLive || chartData.length === 0) return previousClose || currentPrice;
+  // End price: for intraday (1D) use last bar at/before 21:00 UTC (4 PM ET = market close).
+  // For daily bars (1W, 1M, etc.) just use the last bar's close.
+  const periodEndPrice = (() => {
+    if (!isLive || !latestData) return currentPrice;
     if (timeframe === '1D' && alpacaBars && alpacaBars.length > 0) {
-      // Find the first bar at or after 9:30 AM ET (14:30 UTC) = regular market open
-      const regularOpenBar = alpacaBars.find(b => {
+      // Find last bar at or before 21:00 UTC (4 PM ET) to exclude after-hours
+      const marketBars = alpacaBars.filter(b => {
         const d = new Date(b.date);
-        const utcHour = d.getUTCHours();
-        const utcMin = d.getUTCMinutes();
-        return utcHour > 14 || (utcHour === 14 && utcMin >= 30);
+        return d.getUTCHours() < 21;
       });
-      if (regularOpenBar) return regularOpenBar.open;
+      if (marketBars.length > 0) return marketBars[marketBars.length - 1].close;
     }
-    return chartData[0].open;
+    return latestData.close;
   })();
 
   const priceChange = periodEndPrice - periodStartPrice;
