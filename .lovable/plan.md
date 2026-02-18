@@ -1,118 +1,110 @@
 
-# Three Bug Fixes: Login Freeze, MFA Bypass, Subscription Gate
+## Problem: Model Metrics Are Always NULL
 
-## Bug 1: Login Freeze for Non-MFA Users
+### What the Data Shows
 
-### Root Cause
-In `proceed()` (Auth.tsx line 76-87), the code fetches `email_verified` from the `profiles` table. If the column is `null` or the query fails, the logic treats it as "not verified" and sends the user to the verify-email screen — or the catch block resets `proceedingRef.current` and nothing re-triggers it. The user is frozen.
+All public models have `total_return = null`, `sharpe_ratio = null`, `max_drawdown = null`, `win_rate = null`. No backtests exist. No signals exist. This is confirmed by querying the database directly.
 
-The fix has two parts:
-1. Only block on email verification if `email_verified === false` explicitly (not just falsy/null)
-2. Wrap the DB call more defensively so a missing profile row doesn't block login
+### Why Metrics Are Never Populated
 
-### Fix in `src/pages/Auth.tsx`
-Change line 82 from:
-```typescript
-if (!profile?.email_verified) {
-```
-To:
-```typescript
-if (profile?.email_verified === false) {
-```
-This means: only redirect to verify-email if the field is explicitly `false`. If the profile row doesn't exist or the field is null, let the user through.
+There are two separate gaps:
 
----
+**Gap 1 — Backtest results never sync to the `models` row**
 
-## Bug 2: MFA Bypass via Direct Navigation
+When a backtest completes (either via `run-automations` or `ml-backend`), the results are stored in the `backtests` table (columns: `total_return`, `sharpe_ratio`, `max_drawdown`, `win_rate`, `total_trades`). But nothing ever reads those results and writes them back into the `models` table. The `models.total_return` etc. columns are set once at creation and never updated.
 
-### Root Cause
-The app has no route-level protection. `supabase.auth.signIn()` immediately creates a valid session token. The MFA challenge in `Auth.tsx` is purely a UI screen — if the user types `/trade` in the address bar or navigates to any other route after password login but before completing the MFA code entry, they get in with no MFA verification at all.
+**Gap 2 — Live signal performance is never aggregated**
 
-### Fix: Protected Route Wrapper
-Create `src/components/ProtectedRoute.tsx` — a wrapper that:
-1. Checks `authLoading` — shows a spinner while loading
-2. If no `user` — redirects to `/auth`
-3. Checks `supabase.auth.mfa.getAuthenticatorAssuranceLevel()` — if the user has a verified TOTP factor (`nextLevel === 'aal2'`) but `currentLevel` is only `'aal1'`, they have NOT completed MFA yet → redirect back to `/auth` (which will re-show the MFA challenge screen since `user` is set and a verified factor exists)
+When the automation runs and executes BUY/SELL signals via Alpaca, trades are logged in `subscriber_trades`. But nothing computes win rate, total return, or drawdown from those live trades and writes them back to `models.*`. The `run-automations` function only updates `deployed_models.total_signals` and `deployed_models.total_trades` — it never touches `models.*`.
 
-Wrap all protected routes in `App.tsx` with this component. The public routes (`/auth`, `/verify-email`, `/reset-password`, `/privacy`, `/terms`, `/faq`, `/sms-consent`) remain unwrapped.
+### The Fix: Two Parts
 
-### Updated `src/App.tsx`
-```tsx
-<Route path="/trade" element={<ProtectedRoute><Trade /></ProtectedRoute>} />
-<Route path="/trade/stocks/:symbol" element={<ProtectedRoute><StockDetail /></ProtectedRoute>} />
-// ... all other private routes wrapped
-```
+**Part 1 — Sync best backtest metrics to the model when a backtest completes**
 
-### New `src/components/ProtectedRoute.tsx`
-```tsx
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+In `ModelDetail.tsx`, when `useBacktests()` returns data, if the latest completed backtest has results but the `model.*` metrics are still null, we trigger a model update to sync the values. This is the safest approach — it happens client-side when a model owner or viewer loads the detail page. We also add a dedicated "Sync from backtest" action.
 
-export function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
-  const [mfaChecking, setMfaChecking] = useState(true);
-  const [mfaPassed, setMfaPassed] = useState(false);
+More robustly: add a Postgres database trigger (via migration) on the `backtests` table — when `status` changes to `'completed'` and `total_return IS NOT NULL`, automatically update the parent `models` row with the best backtest's metrics.
 
-  useEffect(() => {
-    if (!user) { setMfaChecking(false); return; }
-    supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data }) => {
-      // If user has MFA enrolled but hasn't completed it (aal1 but needs aal2)
-      if (data?.nextLevel === 'aal2' && data?.currentLevel !== 'aal2') {
-        setMfaPassed(false);
-      } else {
-        setMfaPassed(true);
-      }
-      setMfaChecking(false);
-    });
-  }, [user]);
+**Part 2 — Compute live performance metrics from model_signals + subscriber_trades in `run-automations`**
 
-  if (loading || mfaChecking) return <Loader2 spinner />;
-  if (!user) return <Navigate to="/auth" replace />;
-  if (!mfaPassed) return <Navigate to="/auth" replace />;
-  return children;
-}
+After the signal generation loop, update the `models` row with aggregated stats from `model_signals`:
+- `total_return`: computed from executed subscriber_trades pnl relative to total allocation
+- `win_rate`: ratio of profitable closed trades to total closed trades  
+- `sharpe_ratio`: computed from per-trade returns
+- `max_drawdown`: max peak-to-trough in cumulative pnl
+
+### Implementation Plan
+
+#### Step 1 — Database Trigger: Backtest → Model Sync (Migration)
+
+Create a Postgres trigger that fires `AFTER UPDATE` on `backtests` when `status = 'completed'`. It writes the best completed backtest's metrics into the parent `models` row:
+
+```sql
+CREATE OR REPLACE FUNCTION public.sync_model_metrics_from_backtest()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+BEGIN
+  IF NEW.status = 'completed' AND NEW.total_return IS NOT NULL THEN
+    UPDATE public.models
+    SET
+      total_return   = NEW.total_return,
+      sharpe_ratio   = NEW.sharpe_ratio,
+      max_drawdown   = NEW.max_drawdown,
+      win_rate       = NEW.win_rate,
+      updated_at     = NOW()
+    WHERE id = NEW.model_id
+      -- Only update if this backtest is better (higher return) or metrics are null
+      AND (total_return IS NULL OR NEW.total_return > total_return);
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER on_backtest_completed
+  AFTER UPDATE ON public.backtests
+  FOR EACH ROW EXECUTE FUNCTION public.sync_model_metrics_from_backtest();
 ```
 
----
+This means: the moment a backtest finishes and its `status` is set to `'completed'`, the model's displayed metrics update automatically.
 
-## Bug 3: Subscription Allowed Without Brokerage Account
+#### Step 2 — Live Metrics Aggregation in `run-automations`
 
-### Root Cause
-`ModelSubscribeButton.tsx` `handleClick()` opens a confirm dialog with no checks. The subscription inserts into the DB but the actual trade execution via Alpaca will fail silently since there's no linked brokerage account.
+After executing trades for a model, compute and write live metrics back to the `models` table. The `run-automations` edge function will:
 
-### Fix in `src/components/ModelSubscribeButton.tsx`
-Before opening the confirm dialog, check if the user has an active brokerage account using the existing `useBrokerageAccounts()` hook. If none, show a different dialog prompting them to link one first with a button to `/settings/brokerage`.
+1. Query `model_signals` for this model filtered to `status = 'executed'`
+2. Compute:
+   - **Total signals**: count
+   - **Buy/Sell ratio**: for display
+   - **Win rate**: from `subscriber_trades` where `pnl > 0` / total closed trades
+   - **Total return** (approximate): sum of `subscriber_trades.pnl` / sum of `allocations.allocated_amount`
+3. Write back to `models` via `supabaseAdmin.from('models').update({...}).eq('id', model.id)`
 
-```typescript
-import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
+This keeps metrics fresh on every automation cycle (every 1 minute when deployed).
 
-// Inside component:
-const { data: brokerageAccounts } = useBrokerageAccounts();
-const [showNoBrokerageDialog, setShowNoBrokerageDialog] = useState(false);
+#### Step 3 — ModelDetail UI: Show Real Signal Stats
 
-const handleClick = () => {
-  if (!user) { navigate('/auth'); return; }
-  if (isSubscribed) { setShowUnsubscribeDialog(true); return; }
-  
-  const hasActiveBrokerage = brokerageAccounts?.some(a => a.is_active);
-  if (!hasActiveBrokerage) {
-    setShowNoBrokerageDialog(true); // Show "link a brokerage first" dialog
-    return;
-  }
-  setShowConfirmDialog(true);
-};
-```
+Currently `ModelDetail.tsx` counts signals from only the last 10 (`recentSignals`). Fix it to:
+- Use `signals` (all 50 fetched) for buy/sell counts
+- Show `signals.length` as "Total Signals" stat card (sourced from `useModelSignals`)
+- Show executed vs pending breakdown
+- Display "No backtest run yet" clearly when equity curve is empty, with a prompt for owners to run one
 
-The "no brokerage" dialog will say: *"You need to connect a brokerage account before subscribing to models. Model trades are mirrored automatically through your connected Alpaca account."* with a **Connect Brokerage** button that navigates to `/settings/brokerage`.
+#### Step 4 — ModelDetail UI: Explicit "Metrics from backtest" Label
 
----
+When metrics exist and a completed backtest exists, label the Performance section with:
+`"Based on backtest: [start_date] → [end_date]"`
 
-## Files Changed
+When metrics are null (new model, no backtest yet), show placeholder `—` values (already done) plus a clear note: *"Run a backtest to see performance metrics"* for owners, or *"Performance data not yet available"* for visitors.
 
-1. **`src/pages/Auth.tsx`** — Fix the `email_verified` falsy check (1 line change)
-2. **`src/components/ProtectedRoute.tsx`** — New file: MFA-aware route guard
-3. **`src/App.tsx`** — Wrap all private routes with `<ProtectedRoute>`
-4. **`src/components/ModelSubscribeButton.tsx`** — Add brokerage account check + "no brokerage" dialog
+### Files Changed
+
+1. **Database migration** — new trigger `on_backtest_completed` that auto-syncs backtest results to `models` columns
+2. **`supabase/functions/run-automations/index.ts`** — after trade execution loop, compute and write live win_rate and signal count back to `models`
+3. **`src/pages/ModelDetail.tsx`** — fix signal count display to use all signals (not just last 10), add context labels for where metrics come from, add "no metrics yet" callout
+
+### What Will NOT Change
+
+- The `models.*` schema (columns already exist)
+- The `backtests` table (no schema change needed)
+- The `ModelMarketplaceCard` component (it already reads from `models.*` correctly — once those are populated, cards will show real data automatically)
+- The `Explore` page (same, reads from `models.*`)
+- All RLS policies (the trigger runs as `SECURITY DEFINER` and writes via service role in the edge function)
