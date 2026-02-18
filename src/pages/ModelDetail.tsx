@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useModel } from '@/hooks/useModels';
+import { useModel, useUpdateModel, useDeleteModel } from '@/hooks/useModels';
 import { useModelSignals } from '@/hooks/useDeployedModels';
 import { useIsSubscribed } from '@/hooks/useSubscriptions';
 import { useBacktests } from '@/hooks/useBacktests';
@@ -12,10 +12,17 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
+} from '@/components/ui/alert-dialog';
+import { toast } from '@/hooks/use-toast';
 import {
   TrendingUp, TrendingDown, Users, Shield, Wallet,
   BarChart3, Target, Zap, Activity, AlertTriangle,
-  CheckCircle, Clock, ArrowUpRight, ArrowDownRight
+  CheckCircle, Clock, ArrowUpRight, ArrowDownRight,
+  Sparkles, Code2, Pause, Play, Trash2, Settings2
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -58,6 +65,30 @@ export default function ModelDetail() {
   const { data: signals } = useModelSignals(id!);
   const { data: subscription } = useIsSubscribed(id);
   const { data: backtests } = useBacktests(id!, false);
+  const updateModel = useUpdateModel();
+  const deleteModel = useDeleteModel();
+
+  const handlePauseResume = async () => {
+    if (!model) return;
+    const newStatus = model.status === 'published' ? 'draft' : 'published';
+    try {
+      await updateModel.mutateAsync({ id: model.id, updates: { status: newStatus } });
+      toast({ title: newStatus === 'published' ? 'Model resumed' : 'Model paused', description: newStatus === 'published' ? 'Your model is now live on the marketplace.' : 'Your model is hidden from the marketplace.' });
+    } catch {
+      toast({ title: 'Error', description: 'Failed to update model status.', variant: 'destructive' });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!model) return;
+    try {
+      await deleteModel.mutateAsync(model.id);
+      toast({ title: 'Model deleted', description: 'Your model has been removed from the marketplace.' });
+      navigate('/community');
+    } catch {
+      toast({ title: 'Error', description: 'Failed to delete model.', variant: 'destructive' });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -114,6 +145,14 @@ export default function ModelDetail() {
   const riskColor =
     riskLevel === 'low' ? 'text-profit' :
     riskLevel === 'high' ? 'text-loss' : 'text-chart-4';
+
+  // AI-generated indicators from model configuration
+  const config = (model as any).configuration ?? {};
+  const indicatorsSource = config.indicators ?? config;
+  const customIndicators: any[] =
+    (indicatorsSource.custom && Array.isArray(indicatorsSource.custom) ? indicatorsSource.custom : null) ??
+    (Array.isArray(config.custom_indicators) ? config.custom_indicators : null) ??
+    [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -180,7 +219,7 @@ export default function ModelDetail() {
             </div>
           </div>
 
-          {/* Subscribe CTA */}
+          {/* Subscribe CTA for non-owners */}
           {!isOwner && model.is_public && (
             <div className="flex flex-col items-end gap-2 shrink-0">
               <ModelSubscribeButton
@@ -196,6 +235,56 @@ export default function ModelDetail() {
               </p>
             </div>
           )}
+
+          {/* Owner controls */}
+          {isOwner && (
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <Badge variant={model.status === 'published' ? 'default' : 'secondary'} className="text-xs">
+                <Settings2 className="h-3 w-3 mr-1" />
+                {model.status === 'published' ? 'Live' : model.status === 'draft' ? 'Paused' : model.status}
+              </Badge>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handlePauseResume}
+                  disabled={updateModel.isPending}
+                  className="gap-1.5"
+                >
+                  {model.status === 'published' ? (
+                    <><Pause className="h-3.5 w-3.5" /> Pause</>
+                  ) : (
+                    <><Play className="h-3.5 w-3.5" /> Resume</>
+                  )}
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button size="sm" variant="destructive" className="gap-1.5">
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete model?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently remove <strong>{model.name}</strong> from the marketplace. All subscribers will lose access. This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+              <p className="text-xs text-muted-foreground text-right">
+                {model.total_subscribers ?? 0} subscriber{model.total_subscribers !== 1 ? 's' : ''}
+              </p>
+            </div>
+          )}
+
         </div>
 
         <Separator />
@@ -405,7 +494,51 @@ export default function ModelDetail() {
           )}
         </div>
 
-        {/* ── Subscriber stats (if subscribed) ── */}
+        {/* ── AI-Generated Indicators ── */}
+        {customIndicators.length > 0 && (
+          <div>
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              AI-Generated Indicators
+            </h2>
+            <div className="space-y-3">
+              {customIndicators.map((indicator: any, i: number) => (
+                <Card key={i}>
+                  <CardContent className="pt-4 pb-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <div className="mt-0.5 p-1.5 rounded-md bg-primary/10 shrink-0">
+                          <Code2 className="h-3.5 w-3.5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm">{indicator.name ?? `Custom Indicator ${i + 1}`}</p>
+                          {indicator.description && (
+                            <p className="text-xs text-muted-foreground mt-0.5">{indicator.description}</p>
+                          )}
+                          {indicator.signal_logic && (
+                            <div className="mt-2 p-2 rounded bg-muted/50 font-mono text-xs text-muted-foreground overflow-x-auto whitespace-pre-wrap break-all">
+                              {indicator.signal_logic}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 flex flex-col items-end gap-1">
+                        <Badge variant="outline" className="text-xs gap-1 border-primary/40 text-primary">
+                          <Sparkles className="h-3 w-3" /> AI
+                        </Badge>
+                        {indicator.weight != null && (
+                          <span className="text-xs text-muted-foreground">Weight: {indicator.weight}</span>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+
         {isSubscribed && (
           <div>
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
