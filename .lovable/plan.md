@@ -1,128 +1,159 @@
 
-## Position Budget System for Stock Automations
+## Alpha-Only Instagram Marketing Bot — Implementation Plan
 
-### What this solves
+### What gets built
 
-Right now the automation fires trades based on `max_quantity` (shares) with no dollar cap. The user wants a **maximum investment amount** per automation (e.g. "$1,000 in AAPL") and a **live tracking ledger** that adjusts the remaining budget as trades execute:
-
-- BUY $500 of AAPL → remaining budget drops from $1,000 to $500
-- SELL $300 worth → remaining budget rises back to $800
-- Bot never buys more than the remaining budget allows
+A fully automated Instagram marketing bot, accessible only to Alpha accounts, living inside a new "Marketing Bot" tab on the existing Alpha Dashboard (`/alpha`). You configure a timer, connect your Instagram account once, and the bot runs automatically — taking screenshots of the live website, using AI to write captions, and posting Instagram carousels on schedule.
 
 ---
 
-### Data Model
+### One-time setup steps (you do these, not us)
 
-Two new columns go on `stock_automations`:
+**A. Browserless.io (for screenshots)**
+1. Sign up free at [browserless.io](https://browserless.io)
+2. Copy your API key — you paste it into the Alpha Dashboard
+
+**B. Meta / Instagram (for posting)**
+1. Go to [developers.facebook.com](https://developers.facebook.com) → Create App → Business type
+2. Add "Instagram Graph API" product
+3. Connect your Instagram Business account
+4. In the Graph API Explorer, generate a User Token with scopes: `instagram_basic`, `instagram_content_publish`
+5. Exchange it for a long-lived token (60-day expiry):
+   `GET https://graph.facebook.com/oauth/access_token?grant_type=fb_exchange_token&client_id={app-id}&client_secret={app-secret}&fb_exchange_token={short-token}`
+6. Get your Instagram Business Account ID:
+   `GET https://graph.facebook.com/{page-id}?fields=instagram_business_account&access_token={token}`
+7. Paste the Account ID and long-lived token into the Alpha Dashboard UI
+
+---
+
+### Architecture
+
+```text
+Alpha Dashboard (/alpha) → "Marketing Bot" tab (3rd tab)
+        │
+        ▼
+marketing_bot_config table  ← settings + encrypted IG token
+        │
+Hourly pg_cron job
+        │
+        ▼
+instagram-marketing-bot edge function
+  ├── Browserless API  → screenshots (JPEG)
+  ├── Upload to Storage bucket → public URLs
+  ├── Lovable AI (Gemini Flash) → AI caption + hashtags
+  ├── Instagram Graph API → create carousel → publish
+  └── Write to marketing_bot_logs
+        │
+        ▼
+Alpha Dashboard → Logs subtab (auto-refreshes every 30s)
+```
+
+---
+
+### Database — 2 new tables + 1 storage bucket
+
+**`marketing_bot_config`** (one row per Alpha user, unique on `user_id`)
 
 | Column | Type | Default | Purpose |
 |---|---|---|---|
-| `max_investment_amount` | `numeric` | `null` | Dollar cap the user sets — null means no cap (current behaviour) |
-| `current_invested_amount` | `numeric` | `0` | Running ledger of dollars currently invested |
+| `id` | uuid | gen_random_uuid() | PK |
+| `user_id` | uuid | — | Alpha owner |
+| `is_active` | boolean | false | Master on/off |
+| `interval_hours` | integer | 24 | Post frequency (1–168 hrs) |
+| `pages_to_capture` | jsonb | `["/trade","/community"]` | Pages to screenshot |
+| `instagram_account_id` | text | null | IG Business Account ID |
+| `ig_access_token_encrypted` | text | null | AES-256-GCM encrypted token |
+| `caption_template` | text | null | Optional caption prefix |
+| `last_posted_at` | timestamptz | null | Last successful post |
+| `next_post_at` | timestamptz | null | When next post fires |
 
-These columns track the **position budget**, not account buying power. The check happens at trade time in the `stock-monitor` edge function.
+RLS: `auth.uid() = user_id` — owner-only read/write.
 
-**Database migration required** — 2 new columns added to `stock_automations`.
+**`marketing_bot_logs`** (one row per posting attempt)
+
+| Column | Type | Default | Purpose |
+|---|---|---|---|
+| `id` | uuid | gen_random_uuid() | PK |
+| `user_id` | uuid | — | Owner |
+| `status` | text | — | `'success'` or `'error'` |
+| `instagram_post_id` | text | null | IG post ID on success |
+| `caption` | text | null | AI caption used |
+| `pages_captured` | jsonb | `[]` | Pages screenshotted |
+| `error_message` | text | null | Error detail |
+
+RLS: `auth.uid() = user_id` — owner SELECT only.
+
+**Storage bucket: `marketing-assets`** — public, so Instagram's servers can fetch screenshot URLs directly.
 
 ---
 
-### Logic in `stock-monitor` (the actual trade executor for personal automations)
+### Secrets
 
-**BUY signal:**
-1. If `max_investment_amount` is set, compute `remaining = max_investment_amount - current_invested_amount`.
-2. If `remaining <= 0` → block the trade (log error, skip order).
-3. Otherwise, cap the trade value to `remaining`: `capped_qty = floor(remaining / currentPrice)` and use `min(capped_qty, requested_qty)`.
-4. After a successful fill, update `current_invested_amount += filled_qty * filled_price`.
+One new backend secret: **`BROWSERLESS_API_KEY`**.
 
-**SELL signal:**
-1. After a successful fill, update `current_invested_amount = max(0, current_invested_amount - filled_qty * filled_price)`.
-2. Limit never blocks a sell — only buys are throttled.
+The Instagram access token is stored per-config in the database, encrypted with the existing `ENCRYPTION_SECRET` using AES-256-GCM (same pattern already used for brokerage keys). Never exposed to the client.
 
 ---
 
-### UI changes — `StockAutomationConfig.tsx`
+### Edge function: `instagram-marketing-bot`
 
-Inside the "Trading Parameters" card, add a new field above or below "Max Quantity":
+Handles both cron-triggered (hourly auto-check) and manual ("Post Now") triggers.
 
+**Processing flow:**
+1. Fetch configs where `is_active = true AND next_post_at <= now()` (or a specific `config_id` for manual)
+2. Decrypt IG token using `ENCRYPTION_SECRET`
+3. For each page: call Browserless → JPEG → upload to `marketing-assets` → get public URL
+4. Call Lovable AI (Gemini 3 Flash) → generate caption + hashtags
+5. For each image: `POST /{ig_account_id}/media` → get container ID
+6. Create carousel container: `POST /{ig_account_id}/media` with `media_type=CAROUSEL`
+7. Publish: `POST /{ig_account_id}/media_publish`
+8. Update `last_posted_at` and `next_post_at = now() + interval_hours`
+9. Insert row into `marketing_bot_logs`
+
+---
+
+### Cron job
+
+pg_cron fires every hour. The function checks `next_post_at <= now()` so it only posts when actually due:
+
+```sql
+SELECT cron.schedule(
+  'instagram-marketing-bot-hourly', '0 * * * *',
+  $$ SELECT net.http_post(
+    url := 'https://pfszkghqoxybhbaouliw.supabase.co/functions/v1/instagram-marketing-bot',
+    headers := '{"Content-Type": "application/json"}'::jsonb,
+    body := '{}'::jsonb
+  ); $$
+);
 ```
-Max Investment Amount ($)
-[___________] ← dollar input, blank/0 = no limit
-
-Current Invested: $480.00 / $1,000.00  [Reset]
-                  ████████░░  (48%)
-```
-
-- The field maps to `max_investment_amount`.
-- A read-only row shows `current_invested_amount / max_investment_amount` with a progress bar.
-- A "Reset" button zeros `current_invested_amount` (useful if the user manually exited a position on Alpaca and wants to clear the ledger).
 
 ---
 
-### Hook changes — `useStockAutomations.tsx`
+### UI in Alpha Dashboard — new "Marketing Bot" tab
 
-Add `max_investment_amount` and `current_invested_amount` to the `StockAutomation` interface and to the `handleSave` payload.
+**Config card**
+- Toggle: Bot Active
+- Number: "Post every N hours" (1–168)
+- Checkboxes: Pages to capture (`/trade`, `/community`, `/models/new`)
+- Input: Instagram Business Account ID
+- Password input: Instagram Long-Lived Access Token (stored encrypted)
+- Textarea: Caption prefix (optional)
+- Save + "Post Now" buttons
 
-Add a new `useResetInvestedAmount` mutation that sets `current_invested_amount = 0` for a given automation ID (for the Reset button).
+**Status card** — Last posted, Next scheduled, Active/Paused badge
+
+**Logs table** — Last 20 rows, auto-refreshes every 30s: Timestamp | Status | Pages | Post ID | Error
 
 ---
 
-### Files to change
+### Files changed
 
-| File | Change |
+| File | Action |
 |---|---|
-| Database migration | Add `max_investment_amount numeric` and `current_invested_amount numeric DEFAULT 0` to `stock_automations` |
-| `src/hooks/useStockAutomations.tsx` | Add fields to interface + `useResetInvestedAmount` mutation |
-| `src/pages/StockAutomationConfig.tsx` | Add dollar input, progress bar, and Reset button in Trading Parameters section |
-| `supabase/functions/stock-monitor/index.ts` | Enforce budget cap on BUY, update ledger on BUY fill and SELL fill |
+| `supabase/migrations/..._marketing_bot.sql` | Create — tables + RLS + storage bucket |
+| `supabase/functions/instagram-marketing-bot/index.ts` | Create — full engine |
+| `supabase/config.toml` | Edit — add function entry |
+| `src/hooks/useMarketingBot.tsx` | Create — React Query hooks |
+| `src/pages/AlphaDashboard.tsx` | Edit — add "Marketing Bot" as 3rd tab |
 
----
-
-### Precise engine logic in `stock-monitor`
-
-```
-// --- After generating signal, before placing order ---
-const maxInvestment = automation.max_investment_amount ?? null;
-const currentInvested = automation.current_invested_amount ?? 0;
-
-if (side === 'buy' && maxInvestment !== null) {
-  const remaining = maxInvestment - currentInvested;
-  if (remaining <= 0) {
-    // Block the trade — budget exhausted
-    signalRecord.error_message = `Budget exhausted ($${currentInvested.toFixed(2)} / $${maxInvestment.toFixed(2)})`;
-    // log signal and return
-  }
-  // Cap quantity to what remaining budget can afford
-  const budgetCappedQty = Math.floor(remaining / currentPrice);
-  qty = Math.min(qty, budgetCappedQty);
-  if (qty <= 0) { /* block */ }
-}
-
-// --- After successful fill ---
-if (orderData.id && filledPrice > 0) {
-  const tradeValue = qty * filledPrice;
-  if (side === 'buy') {
-    newInvested = currentInvested + tradeValue;
-  } else {
-    newInvested = Math.max(0, currentInvested - tradeValue);
-  }
-  // UPDATE stock_automations SET current_invested_amount = newInvested WHERE id = automationId
-}
-```
-
----
-
-### Backward compatibility
-
-- `max_investment_amount = null` means no cap — the bot behaves exactly as it does today.
-- `current_invested_amount` starts at 0. Existing automations get the new columns with these safe defaults so no existing row is broken.
-- The UI only shows the progress bar and Reset button when `max_investment_amount` is set to a value > 0.
-
----
-
-### What the user sees end-to-end
-
-1. Open AAPL automation config → set "Max Investment Amount" to $1,000 → Save.
-2. Bot runs → BUY signal at $180/share → budget has $1,000 remaining → buys 5 shares ($900) → ledger becomes $900 / $1,000.
-3. Bot runs again → BUY signal → only $100 left → buys 0 whole shares (budget exhausted) → trade blocked, logged.
-4. Bot generates SELL → sells 3 shares at $185 → ledger drops by $555 → ledger is now $345 / $1,000 → more buys are allowed again.
-5. User manually exited Alpaca position → clicks "Reset" → ledger goes back to $0 / $1,000.
+No routing changes — everything lives inside the existing `/alpha` page which already guards non-Alpha users.
