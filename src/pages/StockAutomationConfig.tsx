@@ -16,8 +16,40 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PostToMarketplaceDialog } from '@/components/automation/PostToMarketplaceDialog';
 import { 
   Activity, BarChart3, Settings2, History, Save, Power, PowerOff, 
-  TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle2, XCircle, Loader2, Store, RotateCcw, DollarSign
+  TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle2, XCircle, Loader2, Store, RotateCcw, DollarSign,
+  Clock
 } from 'lucide-react';
+
+// Market hours helper (9AM–4PM ET, Mon–Fri, DST-aware)
+function getEasternOffset(now: Date): number {
+  const year = now.getFullYear();
+  const march = new Date(year, 2, 1);
+  const marchDow = march.getDay();
+  const firstSundayMarch = marchDow === 0 ? march : new Date(year, 2, 7 - marchDow);
+  const dstStart = new Date(firstSundayMarch.getTime() + 7 * 24 * 3600 * 1000);
+  const nov = new Date(year, 10, 1);
+  const novDow = nov.getDay();
+  const dstEnd = novDow === 0 ? nov : new Date(year, 10, 7 - novDow);
+  return now >= dstStart && now < dstEnd ? -4 : -5;
+}
+
+function useMarketStatus() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    function check() {
+      const now = new Date();
+      const offset = getEasternOffset(now);
+      const et = new Date(now.getTime() + offset * 3600 * 1000);
+      const day = et.getUTCDay();
+      const mins = et.getUTCHours() * 60 + et.getUTCMinutes();
+      setOpen(day >= 1 && day <= 5 && mins >= 9 * 60 && mins < 16 * 60);
+    }
+    check();
+    const id = setInterval(check, 60_000);
+    return () => clearInterval(id);
+  }, []);
+  return open;
+}
 import { Progress } from '@/components/ui/progress';
 import { 
   useStockAutomation, useUpsertAutomation, useToggleAutomation, 
@@ -44,8 +76,9 @@ export default function StockAutomationConfig() {
   const upsertMutation = useUpsertAutomation();
   const toggleMutation = useToggleAutomation();
   const resetInvestedMutation = useResetInvestedAmount();
+  const marketOpen = useMarketStatus();
 
-  // Form state
+
   const [indicators, setIndicators] = useState(DEFAULT_INDICATORS);
   const [rsiOversold, setRsiOversold] = useState(30);
   const [rsiOverbought, setRsiOverbought] = useState(70);
@@ -164,6 +197,16 @@ export default function StockAutomationConfig() {
                   <Badge variant={automation.is_active ? 'default' : 'secondary'}>
                     {automation.is_active ? 'Active' : 'Paused'}
                   </Badge>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-muted-foreground">Market: </span>
+                  <Badge variant={marketOpen ? 'default' : 'secondary'} className={marketOpen ? 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20' : ''}>
+                    {marketOpen ? 'Open' : 'Closed'}
+                  </Badge>
+                  {!marketOpen && automation.is_active && (
+                    <span className="text-xs text-muted-foreground ml-1">(trading paused until 9AM ET)</span>
+                  )}
                 </div>
                 <div>
                   <span className="text-muted-foreground">Last Checked: </span>
@@ -513,7 +556,7 @@ export default function StockAutomationConfig() {
                             <TableCell className="font-mono">${sig.price_at_signal?.toFixed(2)}</TableCell>
                             <TableCell>
                               {sig.trade_executed ? (
-                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                <CheckCircle2 className="h-4 w-4 text-primary" />
                               ) : sig.error_message ? (
                                 <XCircle className="h-4 w-4 text-destructive" />
                               ) : (

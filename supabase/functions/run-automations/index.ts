@@ -444,6 +444,36 @@ async function executeModelTrades(
     .eq('id', deployment.id);
 }
 
+// ==================== MARKET HOURS ====================
+
+function getSecondSundayOfMarch(year: number): Date {
+  const march = new Date(Date.UTC(year, 2, 1));
+  const dow = march.getUTCDay();
+  const firstSunday = dow === 0 ? march : new Date(Date.UTC(year, 2, 7 - dow));
+  return new Date(firstSunday.getTime() + 7 * 24 * 3600 * 1000);
+}
+
+function getFirstSundayOfNovember(year: number): Date {
+  const nov = new Date(Date.UTC(year, 10, 1));
+  const dow = nov.getUTCDay();
+  return dow === 0 ? nov : new Date(Date.UTC(year, 10, 7 - dow));
+}
+
+function isMarketOpen(): boolean {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const dstStart = getSecondSundayOfMarch(year);
+  const dstEnd = getFirstSundayOfNovember(year);
+  const isDST = now >= dstStart && now < dstEnd;
+  const offsetHours = isDST ? 4 : 5;
+  const etMs = now.getTime() - offsetHours * 3600 * 1000;
+  const et = new Date(etMs);
+  const dayOfWeek = et.getUTCDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) return false;
+  const timeInMinutes = et.getUTCHours() * 60 + et.getUTCMinutes();
+  return timeInMinutes >= 9 * 60 && timeInMinutes < 16 * 60;
+}
+
 // ==================== MAIN HANDLER ====================
 
 serve(async (req) => {
@@ -485,6 +515,14 @@ serve(async (req) => {
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // ── MARKET HOURS GUARD ──
+    if (!isMarketOpen()) {
+      console.log('[RunAutomations] Outside market hours (9AM–4PM ET, Mon–Fri), skipping all pipelines');
+      return new Response(JSON.stringify({ message: 'Outside market hours' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     console.log('[RunAutomations] Starting automation run...');
 
