@@ -572,6 +572,84 @@ export type Database = {
         }
         Relationships: []
       }
+      marketing_bot_config: {
+        Row: {
+          caption_template: string | null
+          created_at: string
+          id: string
+          ig_access_token_encrypted: string | null
+          instagram_account_id: string | null
+          interval_hours: number
+          is_active: boolean
+          last_posted_at: string | null
+          next_post_at: string | null
+          pages_to_capture: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          caption_template?: string | null
+          created_at?: string
+          id?: string
+          ig_access_token_encrypted?: string | null
+          instagram_account_id?: string | null
+          interval_hours?: number
+          is_active?: boolean
+          last_posted_at?: string | null
+          next_post_at?: string | null
+          pages_to_capture?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          caption_template?: string | null
+          created_at?: string
+          id?: string
+          ig_access_token_encrypted?: string | null
+          instagram_account_id?: string | null
+          interval_hours?: number
+          is_active?: boolean
+          last_posted_at?: string | null
+          next_post_at?: string | null
+          pages_to_capture?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      marketing_bot_logs: {
+        Row: {
+          caption: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          instagram_post_id: string | null
+          pages_captured: Json
+          status: string
+          user_id: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          instagram_post_id?: string | null
+          pages_captured?: Json
+          status: string
+          user_id: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          instagram_post_id?: string | null
+          pages_captured?: Json
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       model_signals: {
         Row: {
           confidence: number | null
