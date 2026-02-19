@@ -258,6 +258,36 @@ async function decryptKey(encrypted: string, secret: string): Promise<string> {
   throw new Error('CREDENTIALS_INVALID');
 }
 
+// ==================== MARKET HOURS ====================
+
+function getSecondSundayOfMarch(year: number): Date {
+  const march = new Date(Date.UTC(year, 2, 1));
+  const dow = march.getUTCDay();
+  const firstSunday = dow === 0 ? march : new Date(Date.UTC(year, 2, 7 - dow));
+  return new Date(firstSunday.getTime() + 7 * 24 * 3600 * 1000);
+}
+
+function getFirstSundayOfNovember(year: number): Date {
+  const nov = new Date(Date.UTC(year, 10, 1));
+  const dow = nov.getUTCDay();
+  return dow === 0 ? nov : new Date(Date.UTC(year, 10, 7 - dow));
+}
+
+function isMarketOpen(): boolean {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const dstStart = getSecondSundayOfMarch(year);
+  const dstEnd = getFirstSundayOfNovember(year);
+  const isDST = now >= dstStart && now < dstEnd;
+  const offsetHours = isDST ? 4 : 5;
+  const etMs = now.getTime() - offsetHours * 3600 * 1000;
+  const et = new Date(etMs);
+  const dayOfWeek = et.getUTCDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) return false;
+  const timeInMinutes = et.getUTCHours() * 60 + et.getUTCMinutes();
+  return timeInMinutes >= 9 * 60 && timeInMinutes < 16 * 60;
+}
+
 // ==================== MAIN HANDLER ====================
 
 serve(async (req) => {
@@ -409,6 +439,22 @@ serve(async (req) => {
 
     // Execute trade if signal is BUY or SELL
     if (signalType !== 'HOLD') {
+      // ── MARKET HOURS GUARD ──
+      if (!isMarketOpen()) {
+        console.log(`[StockMonitor] Market closed — skipping trade for ${symbol} (outside 9AM–4PM ET, Mon–Fri)`);
+        signalRecord.trade_executed = false;
+        signalRecord.error_message = 'Market closed (outside 9AM–4PM ET, Mon–Fri)';
+        const { error: insertErr } = await supabaseAdmin.from('automation_signals').insert(signalRecord);
+        if (insertErr) console.error('[StockMonitor] Failed to insert signal:', insertErr);
+        await supabaseAdmin.from('stock_automations').update({
+          last_checked_at: new Date().toISOString(),
+          total_signals: (automation.total_signals || 0) + 1,
+          last_signal_at: new Date().toISOString(),
+        }).eq('id', automationId);
+        return new Response(JSON.stringify({ signal: signalType, traded: false, reason: 'Market closed' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       try {
         const side = signalType.toLowerCase();
         let qty = Math.min(max_quantity, Math.max(1, Math.floor(max_quantity * confidence)));
