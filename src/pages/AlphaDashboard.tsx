@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAlpha, useAllUsersForAlpha, useMuteUser, useFreezeTrading, usePlatformSettings, useUpdatePlatformSetting, useSetRoleForUser } from '@/hooks/useAlpha';
+import { useMarketingBotConfig, useMarketingBotLogs, useSaveMarketingBotConfig, useTriggerMarketingBot } from '@/hooks/useMarketingBot';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -12,6 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -25,9 +28,13 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import {
   Shield, Search, VolumeX, Volume2, TrendingDown,
   Lock, Unlock, UserX, Users, MessageSquareOff, MessageSquare,
-  ArrowLeft, AlertTriangle, CheckCircle, UserCog
+  ArrowLeft, AlertTriangle, CheckCircle, UserCog, Instagram,
+  Bot, Play, Save, Clock, Calendar, CheckCircle2, XCircle, RefreshCw,
 } from 'lucide-react';
 import {
   Select,
@@ -37,6 +44,322 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatDistanceToNow } from 'date-fns';
+
+const CAPTURABLE_PAGES = [
+  { path: '/trade', label: 'Trade Dashboard' },
+  { path: '/community', label: 'Community Feed' },
+  { path: '/portfolio', label: 'Portfolio' },
+  { path: '/models', label: 'AI Models' },
+];
+
+function MarketingBotTab() {
+  const { toast } = useToast();
+  const { data: config, isLoading: configLoading } = useMarketingBotConfig();
+  const { data: logs, isLoading: logsLoading } = useMarketingBotLogs();
+  const saveConfig = useSaveMarketingBotConfig();
+  const triggerBot = useTriggerMarketingBot();
+
+  const [isActive, setIsActive] = useState(false);
+  const [intervalHours, setIntervalHours] = useState(24);
+  const [selectedPages, setSelectedPages] = useState<string[]>(['/trade', '/community']);
+  const [igAccountId, setIgAccountId] = useState('');
+  const [igToken, setIgToken] = useState('');
+  const [captionTemplate, setCaptionTemplate] = useState('');
+  const [initialized, setInitialized] = useState(false);
+
+  // Initialize form from config once loaded
+  if (config && !initialized) {
+    setIsActive(config.is_active);
+    setIntervalHours(config.interval_hours);
+    setSelectedPages(Array.isArray(config.pages_to_capture) ? config.pages_to_capture : ['/trade', '/community']);
+    setIgAccountId(config.instagram_account_id || '');
+    setCaptionTemplate(config.caption_template || '');
+    setInitialized(true);
+  }
+
+  const togglePage = (path: string) => {
+    setSelectedPages((prev) =>
+      prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]
+    );
+  };
+
+  const handleSave = async () => {
+    try {
+      await saveConfig.mutateAsync({
+        is_active: isActive,
+        interval_hours: Math.max(1, Math.min(168, intervalHours)),
+        pages_to_capture: selectedPages,
+        instagram_account_id: igAccountId,
+        ig_access_token_plaintext: igToken || undefined,
+        caption_template: captionTemplate,
+      });
+      setIgToken('');
+      toast({ title: 'Settings saved', description: 'Marketing bot configuration updated.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const handlePostNow = async () => {
+    if (!config?.id) {
+      toast({ title: 'Save settings first', description: 'Please save your configuration before posting.', variant: 'destructive' });
+      return;
+    }
+    try {
+      toast({ title: 'Posting…', description: 'Taking screenshots and posting to Instagram. This may take 30–60 seconds.' });
+      await triggerBot.mutateAsync(config.id);
+      toast({ title: 'Posted!', description: 'Successfully posted to Instagram.' });
+    } catch (e: any) {
+      toast({ title: 'Post failed', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Status card */}
+      {config && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Bot Status</CardTitle>
+              <Badge className={config.is_active ? 'bg-primary/20 text-primary border-primary/30' : 'bg-muted text-muted-foreground'}>
+                {config.is_active ? '● Active' : '○ Paused'}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Clock className="h-4 w-4 shrink-0" />
+                <span>Last posted: {config.last_posted_at
+                  ? formatDistanceToNow(new Date(config.last_posted_at), { addSuffix: true })
+                  : 'Never'}</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Calendar className="h-4 w-4 shrink-0" />
+                <span>Next post: {config.next_post_at
+                  ? formatDistanceToNow(new Date(config.next_post_at), { addSuffix: true })
+                  : 'Not scheduled'}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Config card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Instagram className="h-5 w-5" />
+            Bot Configuration
+          </CardTitle>
+          <CardDescription>
+            Configure your automated Instagram marketing bot. Screenshots are posted as carousels.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {configLoading ? (
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : (
+            <>
+              {/* Master toggle */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="font-medium">Bot Active</Label>
+                  <p className="text-sm text-muted-foreground mt-0.5">Enable automatic posting on schedule</p>
+                </div>
+                <Switch checked={isActive} onCheckedChange={setIsActive} />
+              </div>
+
+              <Separator />
+
+              {/* Interval */}
+              <div className="space-y-2">
+                <Label>Post every N hours</Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={168}
+                    value={intervalHours}
+                    onChange={(e) => setIntervalHours(Number(e.target.value))}
+                    className="w-28"
+                  />
+                  <span className="text-sm text-muted-foreground">hours (1–168)</span>
+                </div>
+              </div>
+
+              {/* Pages */}
+              <div className="space-y-3">
+                <Label>Pages to capture</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {CAPTURABLE_PAGES.map(({ path, label }) => (
+                    <div key={path} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`page-${path}`}
+                        checked={selectedPages.includes(path)}
+                        onCheckedChange={() => togglePage(path)}
+                      />
+                      <label htmlFor={`page-${path}`} className="text-sm cursor-pointer select-none">
+                        {label}
+                        <span className="block text-xs text-muted-foreground">{path}</span>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Instagram credentials */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="ig-account-id">Instagram Business Account ID</Label>
+                  <Input
+                    id="ig-account-id"
+                    placeholder="e.g. 17841400123456789"
+                    value={igAccountId}
+                    onChange={(e) => setIgAccountId(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Found via Graph API: GET /&#123;page-id&#125;?fields=instagram_business_account
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ig-token">Instagram Long-Lived Access Token</Label>
+                  <Input
+                    id="ig-token"
+                    type="password"
+                    placeholder={config?.ig_access_token_encrypted ? '●●●●●●●● (saved — paste to update)' : 'Paste your 60-day token…'}
+                    value={igToken}
+                    onChange={(e) => setIgToken(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Stored encrypted. Requires scopes: instagram_basic, instagram_content_publish
+                  </p>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Caption template */}
+              <div className="space-y-2">
+                <Label htmlFor="caption-template">Caption prefix (optional)</Label>
+                <Textarea
+                  id="caption-template"
+                  placeholder="e.g. 🚀 Check out our latest AI trading signals! AI will append hashtags."
+                  value={captionTemplate}
+                  onChange={(e) => setCaptionTemplate(e.target.value)}
+                  className="min-h-[80px]"
+                />
+              </div>
+
+              {/* Setup instructions */}
+              <div className="p-4 bg-muted/50 rounded-lg border text-sm space-y-1">
+                <p className="font-medium">Setup checklist</p>
+                <p className="text-muted-foreground">1. Sign up at <a href="https://browserless.io" target="_blank" rel="noreferrer" className="text-primary underline">browserless.io</a> — add your key as <code className="bg-muted px-1 rounded">BROWSERLESS_API_KEY</code> secret ✓</p>
+                <p className="text-muted-foreground">2. Create a Meta Business app → add Instagram Graph API product</p>
+                <p className="text-muted-foreground">3. Generate a long-lived token with scopes: <code className="bg-muted px-1 rounded">instagram_basic, instagram_content_publish</code></p>
+                <p className="text-muted-foreground">4. Paste your Business Account ID + token above and save</p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2">
+                <Button onClick={handleSave} disabled={saveConfig.isPending} className="gap-2">
+                  <Save className="h-4 w-4" />
+                  {saveConfig.isPending ? 'Saving…' : 'Save Settings'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handlePostNow}
+                  disabled={triggerBot.isPending || !config?.id}
+                  className="gap-2"
+                >
+                  {triggerBot.isPending ? (
+                    <><RefreshCw className="h-4 w-4 animate-spin" /> Posting…</>
+                  ) : (
+                    <><Play className="h-4 w-4" /> Post Now</>
+                  )}
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Logs */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Bot className="h-4 w-4" />
+              Post History
+            </CardTitle>
+            <span className="text-xs text-muted-foreground">Auto-refreshes every 30s</span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {logsLoading ? (
+            <div className="space-y-2">
+              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : !logs || logs.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              <Bot className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No posts yet — use "Post Now" or wait for the scheduler</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Pages</TableHead>
+                  <TableHead>Post ID</TableHead>
+                  <TableHead>Error</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {logs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                      {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
+                    </TableCell>
+                    <TableCell>
+                      {log.status === 'success' ? (
+                        <span className="flex items-center gap-1 text-primary text-xs">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Success
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-destructive text-xs">
+                          <XCircle className="h-3.5 w-3.5" /> Error
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {(Array.isArray(log.pages_captured) ? log.pages_captured : []).join(', ') || '—'}
+                    </TableCell>
+                    <TableCell className="text-xs font-mono">
+                      {log.instagram_post_id
+                        ? <a href={`https://www.instagram.com/p/${log.instagram_post_id}/`} target="_blank" rel="noreferrer" className="text-primary underline">{log.instagram_post_id.slice(0, 12)}…</a>
+                        : '—'}
+                    </TableCell>
+                    <TableCell className="text-xs text-destructive max-w-[200px] truncate">
+                      {log.error_message || '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export default function AlphaDashboard() {
   const { user } = useAuth();
@@ -205,6 +528,10 @@ export default function AlphaDashboard() {
           <TabsList>
             <TabsTrigger value="users">User Moderation</TabsTrigger>
             <TabsTrigger value="platform">Platform Controls</TabsTrigger>
+            <TabsTrigger value="marketing-bot">
+              <Instagram className="h-3.5 w-3.5 mr-1.5" />
+              Marketing Bot
+            </TabsTrigger>
           </TabsList>
 
           {/* User Moderation */}
@@ -569,6 +896,11 @@ export default function AlphaDashboard() {
                 </div>
               </div>
             </div>
+          </TabsContent>
+
+          {/* Marketing Bot */}
+          <TabsContent value="marketing-bot">
+            <MarketingBotTab />
           </TabsContent>
         </Tabs>
       </main>
