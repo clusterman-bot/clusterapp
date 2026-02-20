@@ -53,6 +53,7 @@ export default function Auth() {
   const proceedingRef = useRef(false);
 
   const justSignedOut = searchParams.get('signout') === 'true';
+  const mfaRequired = searchParams.get('mfa_required') === '1';
 
   useEffect(() => {
     if (justSignedOut) {
@@ -65,14 +66,39 @@ export default function Auth() {
       proceedingRef.current = false;
       return;
     }
+
+    // If we're already showing the MFA challenge screen, don't re-run
+    if (mode === 'mfa-challenge') return;
+
+    // If ProtectedRoute detected pending MFA, load the factor and show challenge directly
+    if (mfaRequired && !proceedingRef.current) {
+      proceedingRef.current = true;
+      supabase.auth.mfa.listFactors().then(({ data: factors }) => {
+        const verifiedFactor = factors?.totp?.find(f => f.status === 'verified');
+        if (verifiedFactor) {
+          setMfaFactorId(verifiedFactor.id);
+          setMode('mfa-challenge');
+        }
+        proceedingRef.current = false;
+      });
+      return;
+    }
+
     // Prevent multiple simultaneous or repeated executions
     if (proceedingRef.current) return;
-
     proceedingRef.current = true;
 
     const proceed = async () => {
       try {
-        // 1. Check email verification first
+        // 1. Check AAL level first — if user already completed MFA (AAL2), go straight to app
+        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aalData?.currentLevel === 'aal2') {
+          navigate('/trade', { replace: true });
+          if (showTutorial) setTimeout(() => startTour(), 600);
+          return;
+        }
+
+        // 2. Check email verification
         const { data: profile } = await supabase
           .from('profiles')
           .select('email_verified')
@@ -86,26 +112,26 @@ export default function Auth() {
           return;
         }
 
-        // 2. If remembered within 1 hour, skip MFA and auto-login
+        // 3. If remembered within 1 hour, skip MFA and auto-login
         if (isRemembered()) {
           navigate('/trade', { replace: true });
           return;
         }
 
-        // 3. Check if user has a verified MFA factor
+        // 4. Check if user has a verified MFA factor that still needs challenge
         const { data: factors } = await supabase.auth.mfa.listFactors();
         const verifiedFactor = factors?.totp?.find(f => f.status === 'verified');
 
         if (verifiedFactor) {
+          // User has MFA enrolled but hasn't passed the challenge yet (AAL1 → needs AAL2)
           setMfaFactorId(verifiedFactor.id);
           setMode('mfa-challenge');
-          // Reset loading so the UI doesn't freeze on the login button spinner
           setLoading(false);
           proceedingRef.current = false;
           return;
         }
 
-        // 4. No MFA enrolled — proceed to app immediately
+        // 5. No MFA enrolled — proceed to app immediately
         navigate('/trade', { replace: true });
         if (showTutorial) {
           setTimeout(() => startTour(), 600);
@@ -117,7 +143,7 @@ export default function Auth() {
     };
 
     proceed();
-  }, [user, authLoading, navigate, justSignedOut, showTutorial, startTour]);
+  }, [user, authLoading, navigate, justSignedOut, showTutorial, startTour, mode, mfaRequired]);
 
   if (authLoading) {
     return (
