@@ -21,8 +21,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
 
     supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data }) => {
-      // If user has MFA enrolled but hasn't completed the challenge yet
-      if (data?.nextLevel === 'aal2' && data?.currentLevel !== 'aal2') {
+      if (!data) {
+        // Can't determine level — allow through to avoid lockout
+        setMfaPassed(true);
+      } else if (data.nextLevel === 'aal2' && data.currentLevel !== 'aal2') {
+        // User has MFA enrolled but hasn't completed the challenge yet.
         setMfaPassed(false);
       } else {
         setMfaPassed(true);
@@ -44,7 +47,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!mfaPassed) {
-    return <Navigate to="/auth" replace />;
+    // Redirect with a flag so Auth page knows to show MFA challenge directly
+    return <Navigate to="/auth?mfa_required=1" replace />;
   }
 
   return <>{children}</>;
