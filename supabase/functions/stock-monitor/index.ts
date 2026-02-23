@@ -457,7 +457,8 @@ serve(async (req) => {
       }
       try {
         const side = signalType.toLowerCase();
-        let qty = Math.min(max_quantity, Math.max(1, Math.floor(max_quantity * confidence)));
+        // Fractional shares: scale quantity by confidence, round to 2 decimals
+        let qty = Math.min(max_quantity, Math.max(0.01, parseFloat((max_quantity * confidence).toFixed(2))));
 
         // ==================== BUDGET CAP (BUY only) ====================
         const maxInvestment: number | null = max_investment_amount ?? null;
@@ -478,12 +479,12 @@ serve(async (req) => {
             }).eq('id', automationId);
             return new Response(JSON.stringify({ signal: signalType, traded: false, reason: 'Budget exhausted' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
-          const budgetCappedQty = Math.floor(remaining / currentPrice);
+          const budgetCappedQty = parseFloat((remaining / currentPrice).toFixed(2));
           qty = Math.min(qty, budgetCappedQty);
-          if (qty <= 0) {
+          if (qty < 0.01) {
             console.log(`[StockMonitor] Budget too small to buy 1 share of ${symbol}: remaining=$${remaining.toFixed(2)}, price=$${currentPrice.toFixed(2)}`);
             signalRecord.trade_executed = false;
-            signalRecord.error_message = `Remaining budget ($${remaining.toFixed(2)}) insufficient to buy 1 share at $${currentPrice.toFixed(2)}`;
+            signalRecord.error_message = `Remaining budget ($${remaining.toFixed(2)}) insufficient to buy shares at $${currentPrice.toFixed(2)}`;
             const { error: insertErr } = await supabaseAdmin.from('automation_signals').insert(signalRecord);
             if (insertErr) console.error('[StockMonitor] Failed to insert signal:', insertErr);
             await supabaseAdmin.from('stock_automations').update({
@@ -491,7 +492,7 @@ serve(async (req) => {
               total_signals: (automation.total_signals || 0) + 1,
               last_signal_at: new Date().toISOString(),
             }).eq('id', automationId);
-            return new Response(JSON.stringify({ signal: signalType, traded: false, reason: 'Insufficient budget for 1 share' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            return new Response(JSON.stringify({ signal: signalType, traded: false, reason: 'Insufficient budget' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
           console.log(`[StockMonitor] Budget cap applied: requested qty capped to ${qty} (remaining budget: $${remaining.toFixed(2)})`);
         }
@@ -519,8 +520,16 @@ serve(async (req) => {
               await supabaseAdmin.from('stock_automations').update({ last_checked_at: new Date().toISOString() }).eq('id', automationId);
               return new Response(JSON.stringify({ signal: signalType, traded: false, reason: 'Zero position' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
-            // Don't sell more than we hold
-            qty = Math.min(qty, Math.floor(heldQty));
+            // Don't sell more than we hold (fractional)
+            qty = Math.min(qty, parseFloat(parseFloat(posData.qty || '0').toFixed(2)));
+            if (qty < 0.01) {
+              console.log(`[StockMonitor] Position too small to sell in ${symbol}`);
+              signalRecord.error_message = 'Position too small to sell';
+              const { error: insertErr } = await supabaseAdmin.from('automation_signals').insert(signalRecord);
+              if (insertErr) console.error('[StockMonitor] Failed to insert signal:', insertErr);
+              await supabaseAdmin.from('stock_automations').update({ last_checked_at: new Date().toISOString() }).eq('id', automationId);
+              return new Response(JSON.stringify({ signal: signalType, traded: false, reason: 'Position too small' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
             console.log(`[StockMonitor] Holding ${heldQty} shares of ${symbol}, will sell ${qty}`);
           } catch (posErr) {
             console.error(`[StockMonitor] Error checking position for ${symbol}:`, posErr);

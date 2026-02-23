@@ -92,10 +92,16 @@ export default function StockAutomationConfig() {
   const [showMarketplaceDialog, setShowMarketplaceDialog] = useState(false);
   const [maxInvestmentAmount, setMaxInvestmentAmount] = useState<string>('');
 
+  // Raw text states for comma-separated inputs to allow free typing
+  const [rsiPeriodsText, setRsiPeriodsText] = useState('14');
+  const [smaWindowsText, setSmaWindowsText] = useState('5, 20');
+  const [emaWindowsText, setEmaWindowsText] = useState('5, 20');
+
   // Load existing config
   useEffect(() => {
     if (automation) {
-      setIndicators(automation.indicators || DEFAULT_INDICATORS);
+      const ind = automation.indicators || DEFAULT_INDICATORS;
+      setIndicators(ind);
       setRsiOversold(automation.rsi_oversold);
       setRsiOverbought(automation.rsi_overbought);
       setHorizonMinutes(automation.horizon_minutes);
@@ -106,6 +112,9 @@ export default function StockAutomationConfig() {
       setTakeProfitPercent(automation.take_profit_percent);
       setAllowShorting(automation.allow_shorting ?? false);
       setMaxInvestmentAmount(automation.max_investment_amount != null ? String(automation.max_investment_amount) : '');
+      setRsiPeriodsText((ind.rsi?.periods || [14]).join(', '));
+      setSmaWindowsText((ind.sma?.windows || [5, 20]).join(', '));
+      setEmaWindowsText((ind.ema?.windows || [5, 20]).join(', '));
     }
   }, [automation]);
 
@@ -117,10 +126,19 @@ export default function StockAutomationConfig() {
   };
 
   const handleSave = () => {
+    // Parse comma-separated text fields into indicator arrays before saving
+    const parseList = (text: string) => text.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0);
+    const finalIndicators = {
+      ...indicators,
+      rsi: { ...indicators.rsi, periods: parseList(rsiPeriodsText).length > 0 ? parseList(rsiPeriodsText) : [14] },
+      sma: { ...indicators.sma, windows: parseList(smaWindowsText).length > 0 ? parseList(smaWindowsText) : [5, 20] },
+      ema: { ...indicators.ema, windows: parseList(emaWindowsText).length > 0 ? parseList(emaWindowsText) : [5, 20] },
+    };
+
     const parsedMax = maxInvestmentAmount !== '' ? parseFloat(maxInvestmentAmount) : null;
     upsertMutation.mutate({
       symbol: upperSymbol,
-      indicators: indicators as any,
+      indicators: finalIndicators as any,
       rsi_oversold: rsiOversold,
       rsi_overbought: rsiOverbought,
       horizon_minutes: horizonMinutes,
@@ -198,16 +216,16 @@ export default function StockAutomationConfig() {
                     {automation.is_active ? 'Active' : 'Paused'}
                   </Badge>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-muted-foreground">Market: </span>
-                  <Badge variant={marketOpen ? 'default' : 'secondary'} className={marketOpen ? 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20' : ''}>
-                    {marketOpen ? 'Open' : 'Closed'}
-                  </Badge>
-                  {!marketOpen && automation.is_active && (
-                    <span className="text-xs text-muted-foreground ml-1">(trading paused until 9AM ET)</span>
-                  )}
-                </div>
+                 <div className="flex items-center gap-1.5">
+                   <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                   <span className="text-muted-foreground">Market: </span>
+                   <Badge variant={marketOpen ? 'default' : 'secondary'} className={marketOpen ? 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20' : ''}>
+                     {marketOpen ? 'Open' : 'Closed'}
+                   </Badge>
+                   {!marketOpen && automation.is_active && (
+                     <span className="text-xs text-amber-500 font-medium ml-1">⏸ Auto-paused until market opens (9 AM ET)</span>
+                   )}
+                 </div>
                 <div>
                   <span className="text-muted-foreground">Last Checked: </span>
                   <span>{automation.last_checked_at ? new Date(automation.last_checked_at).toLocaleString() : 'Never'}</span>
@@ -250,11 +268,8 @@ export default function StockAutomationConfig() {
                       <div>
                         <Label className="text-sm">Periods (comma-separated)</Label>
                         <Input
-                          value={indicators.rsi.periods.join(', ')}
-                          onChange={e => {
-                            const vals = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0);
-                            if (vals.length > 0) updateIndicator('rsi', 'periods', vals);
-                          }}
+                          value={rsiPeriodsText}
+                          onChange={e => setRsiPeriodsText(e.target.value)}
                           placeholder="7, 14, 21"
                         />
                       </div>
@@ -289,11 +304,8 @@ export default function StockAutomationConfig() {
                     <div className="ml-4 p-3 bg-muted/30 rounded-lg">
                       <Label className="text-sm">Windows (comma-separated)</Label>
                       <Input
-                        value={indicators.sma.windows.join(', ')}
-                        onChange={e => {
-                          const vals = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0);
-                          if (vals.length > 0) updateIndicator('sma', 'windows', vals);
-                        }}
+                        value={smaWindowsText}
+                        onChange={e => setSmaWindowsText(e.target.value)}
                         placeholder="5, 20, 50"
                       />
                     </div>
@@ -311,11 +323,8 @@ export default function StockAutomationConfig() {
                     <div className="ml-4 p-3 bg-muted/30 rounded-lg">
                       <Label className="text-sm">Windows (comma-separated)</Label>
                       <Input
-                        value={indicators.ema.windows.join(', ')}
-                        onChange={e => {
-                          const vals = e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0);
-                          if (vals.length > 0) updateIndicator('ema', 'windows', vals);
-                        }}
+                        value={emaWindowsText}
+                        onChange={e => setEmaWindowsText(e.target.value)}
                         placeholder="5, 20"
                       />
                     </div>
@@ -395,7 +404,8 @@ export default function StockAutomationConfig() {
                   </div>
                   <div>
                     <Label>Max Quantity (shares)</Label>
-                    <Input type="number" min={1} max={1000} value={maxQuantity} onChange={e => setMaxQuantity(parseInt(e.target.value) || 10)} />
+                    <Input type="number" min={0.01} max={10000} step={0.01} value={maxQuantity} onChange={e => setMaxQuantity(parseFloat(e.target.value) || 10)} />
+                    <p className="text-xs text-muted-foreground mt-1">Maximum shares per trade. Fractional shares supported. The bot may trade fewer shares based on signal confidence.</p>
                   </div>
                   <div>
                     <Label className="flex items-center gap-1.5">
