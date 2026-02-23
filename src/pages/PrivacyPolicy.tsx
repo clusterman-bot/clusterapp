@@ -85,7 +85,7 @@ export default function PrivacyPolicy() {
                   <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
                     <li><strong>Alpaca Securities LLC</strong> — Brokerage services and trade execution. Your brokerage API keys are encrypted at rest and never exposed in plaintext.</li>
                     <li><strong>Authentication Providers</strong> — Email-based authentication with optional Multi-Factor Authentication (MFA) via TOTP authenticator apps.</li>
-                    <li><strong>Instagram Graph API</strong> — For optional automated marketing features (Alpha users only). We only access your business account with your explicit authorization.</li>
+                    
                   </ul>
                   <p className="text-muted-foreground mt-2">
                     We do not sell, rent, or share your personal information with third parties for their marketing purposes. Data shared with third-party services is limited to what is necessary to provide the requested functionality.
@@ -138,6 +138,6 @@ export default function PrivacyPolicy() {
           </CardContent>
         </Card>
       </div>
-    </div>
-  );
+    </div>);
+
 }
