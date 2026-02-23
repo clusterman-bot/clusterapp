@@ -158,6 +158,32 @@ function formatIGError(action: string, data: any): string {
   return `Failed to ${action}: ${JSON.stringify(data)}`;
 }
 
+// Poll a media container until it's FINISHED (or error/timeout)
+async function waitForContainerReady(
+  containerId: string,
+  igToken: string,
+  maxAttempts = 15,
+  delayMs = 3000
+): Promise<void> {
+  const graphBase = "https://graph.facebook.com/v21.0";
+  for (let i = 0; i < maxAttempts; i++) {
+    const res = await fetch(
+      `${graphBase}/${containerId}?fields=status_code,status&access_token=${igToken}`
+    );
+    const data = await res.json();
+    const status = data.status_code ?? data.status;
+    console.log(`Container ${containerId} status: ${status} (attempt ${i + 1}/${maxAttempts})`);
+
+    if (status === "FINISHED") return;
+    if (status === "ERROR") {
+      throw new Error(`Media container ${containerId} failed: ${JSON.stringify(data)}`);
+    }
+    // IN_PROGRESS or other — wait and retry
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  throw new Error(`Media container ${containerId} not ready after ${maxAttempts} attempts`);
+}
+
 async function postToInstagram(
   igAccountId: string,
   igToken: string,
@@ -180,6 +206,12 @@ async function postToInstagram(
     containerIds.push(data.id);
   }
 
+  // Wait for all containers to finish processing
+  console.log(`Waiting for ${containerIds.length} media container(s) to finish processing...`);
+  for (const cid of containerIds) {
+    await waitForContainerReady(cid, igToken);
+  }
+
   // If only one image, post as single
   if (containerIds.length === 1) {
     const singleRes = await fetch(
@@ -188,6 +220,8 @@ async function postToInstagram(
     );
     const singleData = await singleRes.json();
     if (!singleData.id) throw new Error(formatIGError("create single media", singleData));
+
+    await waitForContainerReady(singleData.id, igToken);
 
     const publishRes = await fetch(
       `${graphBase}/${igAccountId}/media_publish?creation_id=${singleData.id}&access_token=${igToken}`,
@@ -216,6 +250,9 @@ async function postToInstagram(
   if (!carouselData.id) {
     throw new Error(formatIGError("create carousel", carouselData));
   }
+
+  // Wait for carousel container to be ready
+  await waitForContainerReady(carouselData.id, igToken);
 
   // Publish carousel
   const publishRes = await fetch(
