@@ -74,7 +74,7 @@ async function takeScreenshot(pageUrl: string, browserlessApiKey: string): Promi
         url: pageUrl,
         options: { type: "jpeg", quality: 85, fullPage: false },
         viewport: { width: 1080, height: 1080 },
-        waitForTimeout: 3000,
+        waitForTimeout: 5000,
       }),
     }
   );
@@ -85,6 +85,37 @@ async function takeScreenshot(pageUrl: string, browserlessApiKey: string): Promi
 
   const buffer = await response.arrayBuffer();
   return new Uint8Array(buffer);
+}
+
+// Generate an authenticated URL using a magic link that redirects to the target page
+async function getAuthenticatedUrl(
+  supabase: any,
+  userId: string,
+  targetUrl: string
+): Promise<string> {
+  // Get user email
+  const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
+  if (userError || !userData?.user?.email) {
+    console.warn("Could not get user email for auth bypass, using unauthenticated URL");
+    return targetUrl;
+  }
+
+  // Generate a magic link that redirects to the target page
+  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+    type: "magiclink",
+    email: userData.user.email,
+    options: {
+      redirectTo: targetUrl,
+    },
+  });
+
+  if (linkError || !linkData?.properties?.action_link) {
+    console.warn("Could not generate magic link, using unauthenticated URL:", linkError?.message);
+    return targetUrl;
+  }
+
+  console.log(`Generated auth link for ${targetUrl}`);
+  return linkData.properties.action_link;
 }
 
 async function generateCaption(
@@ -355,13 +386,15 @@ serve(async (req) => {
 
         const imageUrls: string[] = [];
         for (const page of pages.slice(0, 10)) {
-          const fullUrl = `${baseUrl}${page}`;
+          const targetUrl = `${baseUrl}${page}`;
           const timestamp = Date.now();
           const safePageName = page.replace(/\//g, "_").replace(/[^a-z0-9_]/gi, "");
           const filename = `${config.user_id}_${safePageName}_${timestamp}.jpg`;
 
-          console.log(`Screenshotting: ${fullUrl}`);
-          const imageBytes = await takeScreenshot(fullUrl, BROWSERLESS_API_KEY);
+          // Generate authenticated URL so Browserless can access protected pages
+          const authUrl = await getAuthenticatedUrl(supabase, config.user_id, targetUrl);
+          console.log(`Screenshotting: ${targetUrl} (via auth link)`);
+          const imageBytes = await takeScreenshot(authUrl, BROWSERLESS_API_KEY);
           const publicUrl = await uploadToStorage(supabase, imageBytes, filename);
           imageUrls.push(publicUrl);
         }
