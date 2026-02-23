@@ -104,6 +104,7 @@ export function useSaveMarketingBotConfig() {
         }
       }
 
+      const intervalMs = (payload.interval_hours || 24) * 60 * 60 * 1000;
       const upsertData: any = {
         user_id: user!.id,
         is_active: payload.is_active,
@@ -111,6 +112,7 @@ export function useSaveMarketingBotConfig() {
         pages_to_capture: payload.pages_to_capture,
         instagram_account_id: payload.instagram_account_id || null,
         caption_template: payload.caption_template || null,
+        next_post_at: new Date(Date.now() + intervalMs).toISOString(),
       };
 
       if (tokenEncrypted) {

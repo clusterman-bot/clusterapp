@@ -232,10 +232,25 @@ serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  let body: { config_id?: string; manual?: boolean } = {};
+  let body: { config_id?: string; manual?: boolean; action?: string; token?: string } = {};
   try {
     body = await req.json();
   } catch (_) {}
+
+  // Handle encrypt_token action early
+  if (body.action === "encrypt_token" && body.token) {
+    try {
+      const encrypted = await encryptToken(body.token, ENCRYPTION_SECRET);
+      return new Response(JSON.stringify({ encrypted }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (err: any) {
+      return new Response(JSON.stringify({ error: err.message }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
 
   const configId = body.config_id;
   const isManual = body.manual === true;
