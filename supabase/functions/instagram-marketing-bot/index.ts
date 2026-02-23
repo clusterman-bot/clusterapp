@@ -147,6 +147,17 @@ async function uploadToStorage(
   return urlData.publicUrl;
 }
 
+function formatIGError(action: string, data: any): string {
+  if (data?.error) {
+    const e = data.error;
+    const parts = [`IG API error (code ${e.code ?? '?'}): ${e.message ?? 'Unknown error'}`];
+    if (e.type) parts.push(`[type: ${e.type}]`);
+    if (e.is_transient) parts.push('(transient — retry may work)');
+    return parts.join(' ');
+  }
+  return `Failed to ${action}: ${JSON.stringify(data)}`;
+}
+
 async function postToInstagram(
   igAccountId: string,
   igToken: string,
@@ -164,7 +175,7 @@ async function postToInstagram(
     );
     const data = await res.json();
     if (!data.id) {
-      throw new Error(`Failed to create IG media container: ${JSON.stringify(data)}`);
+      throw new Error(formatIGError("create media container", data));
     }
     containerIds.push(data.id);
   }
@@ -176,14 +187,14 @@ async function postToInstagram(
       { method: "POST" }
     );
     const singleData = await singleRes.json();
-    if (!singleData.id) throw new Error(`Failed to create single IG media: ${JSON.stringify(singleData)}`);
+    if (!singleData.id) throw new Error(formatIGError("create single media", singleData));
 
     const publishRes = await fetch(
       `${graphBase}/${igAccountId}/media_publish?creation_id=${singleData.id}&access_token=${igToken}`,
       { method: "POST" }
     );
     const publishData = await publishRes.json();
-    if (!publishData.id) throw new Error(`Failed to publish single IG post: ${JSON.stringify(publishData)}`);
+    if (!publishData.id) throw new Error(formatIGError("publish single post", publishData));
     return publishData.id;
   }
 
@@ -203,7 +214,7 @@ async function postToInstagram(
   );
   const carouselData = await carouselRes.json();
   if (!carouselData.id) {
-    throw new Error(`Failed to create IG carousel: ${JSON.stringify(carouselData)}`);
+    throw new Error(formatIGError("create carousel", carouselData));
   }
 
   // Publish carousel
@@ -213,7 +224,7 @@ async function postToInstagram(
   );
   const publishData = await publishRes.json();
   if (!publishData.id) {
-    throw new Error(`Failed to publish IG carousel: ${JSON.stringify(publishData)}`);
+    throw new Error(formatIGError("publish carousel", publishData));
   }
 
   return publishData.id;

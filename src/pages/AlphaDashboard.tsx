@@ -46,6 +46,25 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDistanceToNow } from 'date-fns';
 
+function ExpandableError({ message }: { message: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = message.length > 80;
+
+  return (
+    <div className="break-words whitespace-pre-wrap">
+      <span>{expanded || !isLong ? message : `${message.slice(0, 80)}…`}</span>
+      {isLong && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="ml-1 text-muted-foreground hover:text-foreground underline text-[10px]"
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 const CAPTURABLE_PAGES = [
   { path: '/trade', label: 'Trade Dashboard' },
   { path: '/community', label: 'Community Feed' },
@@ -347,8 +366,10 @@ function MarketingBotTab() {
                         ? <a href={`https://www.instagram.com/p/${log.instagram_post_id}/`} target="_blank" rel="noreferrer" className="text-primary underline">{log.instagram_post_id.slice(0, 12)}…</a>
                         : '—'}
                     </TableCell>
-                    <TableCell className="text-xs text-destructive max-w-[200px] truncate">
-                      {log.error_message || '—'}
+                    <TableCell className="text-xs text-destructive max-w-[300px]">
+                      {log.error_message ? (
+                        <ExpandableError message={log.error_message} />
+                      ) : '—'}
                     </TableCell>
                   </TableRow>
                 ))}
