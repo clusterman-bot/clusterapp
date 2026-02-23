@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useEmailVerified } from '@/hooks/useEmailVerified';
 import { useUserRole } from '@/hooks/useUserRole';
 import { MainNav } from '@/components/MainNav';
+import { Footer } from '@/components/Footer';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -460,6 +461,7 @@ export default function Trade() {
           </TabsContent>
         </Tabs>
       </main>
+      <Footer />
     </div>
   );
 }
