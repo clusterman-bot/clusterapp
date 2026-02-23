@@ -13,8 +13,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  DropdownMenuTrigger } from
+'@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 
@@ -36,12 +36,12 @@ export function MainNav() {
   const isActive = (path: string) => location.pathname === path;
 
   const navLinks = [
-    { label: 'Trade', icon: LineChart, path: '/trade', match: (p: string) => p.startsWith('/trade') },
-    { label: 'Portfolio', icon: Briefcase, path: '/trade/portfolio', match: (p: string) => p === '/trade/portfolio' },
-    { label: 'Orders', icon: ClipboardList, path: '/trade/orders', match: (p: string) => p === '/trade/orders' },
-    { label: 'Community', icon: Users, path: '/community', match: (p: string) => p === '/community' },
-    { label: 'Settings', icon: Settings, path: '/settings/brokerage', match: (p: string) => p === '/settings/brokerage' },
-  ];
+  { label: 'Trade', icon: LineChart, path: '/trade', match: (p: string) => p.startsWith('/trade') },
+  { label: 'Portfolio', icon: Briefcase, path: '/trade/portfolio', match: (p: string) => p === '/trade/portfolio' },
+  { label: 'Orders', icon: ClipboardList, path: '/trade/orders', match: (p: string) => p === '/trade/orders' },
+  { label: 'Community', icon: Users, path: '/community', match: (p: string) => p === '/community' },
+  { label: 'Settings', icon: Settings, path: '/settings/brokerage', match: (p: string) => p === '/settings/brokerage' }];
+
 
   const handleMobileNav = (path: string) => {
     navigate(path);
@@ -66,8 +66,8 @@ export function MainNav() {
               </div>
 
               {/* User info in mobile drawer */}
-              {user && (
-                <div className="p-4 border-b border-border">
+              {user &&
+              <div className="p-4 border-b border-border">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-10 w-10">
                       <AvatarImage src={profile?.avatar_url || undefined} />
@@ -78,95 +78,95 @@ export function MainNav() {
                     <div className="flex flex-col">
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-sm">{profile?.display_name || profile?.username || 'User'}</p>
-                        {isAlpha && (
-                          <Badge className="text-xs py-0 px-1.5 bg-primary/20 text-primary border border-primary/30">Alpha</Badge>
-                        )}
+                        {isAlpha &&
+                      <Badge className="text-xs py-0 px-1.5 bg-primary/20 text-primary border border-primary/30">Alpha</Badge>
+                      }
                       </div>
                       <p className="text-xs text-muted-foreground">{user.email}</p>
                     </div>
                   </div>
                 </div>
-              )}
+              }
 
               {/* Mobile nav links */}
               <nav className="flex flex-col p-2 gap-1">
-                {navLinks.map(({ label, icon: Icon, path, match }) => (
-                  <button
-                    key={path}
-                    onClick={() => handleMobileNav(path)}
-                    className={`flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium transition-colors w-full text-left
-                      ${match(location.pathname)
-                        ? 'bg-secondary text-secondary-foreground'
-                        : 'text-foreground hover:bg-muted'
-                      }`}
-                  >
+                {navLinks.map(({ label, icon: Icon, path, match }) =>
+                <button
+                  key={path}
+                  onClick={() => handleMobileNav(path)}
+                  className={`flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium transition-colors w-full text-left
+                      ${match(location.pathname) ?
+                  'bg-secondary text-secondary-foreground' :
+                  'text-foreground hover:bg-muted'}`
+                  }>
+
                     <Icon className="h-4 w-4" />
                     {label}
                   </button>
-                ))}
+                )}
 
-                {isAlpha && (
-                  <button
-                    onClick={() => handleMobileNav('/alpha')}
-                    className={`flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium transition-colors w-full text-left
-                      ${isActive('/alpha') ? 'bg-secondary text-secondary-foreground' : 'text-foreground hover:bg-muted'}`}
-                  >
+                {isAlpha &&
+                <button
+                  onClick={() => handleMobileNav('/alpha')}
+                  className={`flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium transition-colors w-full text-left
+                      ${isActive('/alpha') ? 'bg-secondary text-secondary-foreground' : 'text-foreground hover:bg-muted'}`}>
+
                     <Shield className="h-4 w-4 text-primary" />
                     Alpha Control
                   </button>
-                )}
+                }
               </nav>
 
               <Separator />
 
               <div className="p-2">
                 <button
-                  onClick={() => { handleMobileNav('/profile'); }}
-                  className="flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium transition-colors w-full text-left text-foreground hover:bg-muted"
-                >
+                  onClick={() => {handleMobileNav('/profile');}}
+                  className="flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium transition-colors w-full text-left text-foreground hover:bg-muted">
+
                   <User className="h-4 w-4" />
                   Profile
                 </button>
-                {user && (
-                  <button
-                    onClick={() => { setMobileOpen(false); handleSignOut(); }}
-                    className="flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium transition-colors w-full text-left text-destructive hover:bg-muted"
-                  >
+                {user &&
+                <button
+                  onClick={() => {setMobileOpen(false);handleSignOut();}}
+                  className="flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium transition-colors w-full text-left text-destructive hover:bg-muted">
+
                     <LogOut className="h-4 w-4" />
                     Sign out
                   </button>
-                )}
+                }
               </div>
             </SheetContent>
           </Sheet>
 
-          <div 
-            className="flex items-center gap-2 cursor-pointer" 
-            onClick={() => navigate('/trade')}
-          >
-            <img src="/favicon.png" alt="Cluster" className="h-7 w-7" />
+          <div
+            className="flex items-center gap-2 cursor-pointer"
+            onClick={() => navigate('/trade')}>
+
+            <img alt="Cluster" className="h-7 w-7" src="/lovable-uploads/f089770d-e6ef-4c61-9a28-40711b81c6d6.png" />
             <span className="text-xl font-bold">Cluster</span>
           </div>
 
           <nav className="hidden md:flex items-center gap-1">
-            {navLinks.map(({ label, icon: Icon, path, match }) => (
-              <Button
-                key={path}
-                data-tour={path === '/settings/brokerage' ? 'nav-settings' : undefined}
-                variant={match(location.pathname) ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => navigate(path)}
-              >
+            {navLinks.map(({ label, icon: Icon, path, match }) =>
+            <Button
+              key={path}
+              data-tour={path === '/settings/brokerage' ? 'nav-settings' : undefined}
+              variant={match(location.pathname) ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => navigate(path)}>
+
                 <Icon className="mr-2 h-4 w-4" />
                 {label}
               </Button>
-            ))}
+            )}
           </nav>
         </div>
 
         <div className="flex items-center gap-4">
-          {user ? (
-            <DropdownMenu>
+          {user ?
+          <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                   <Avatar className="h-10 w-10">
@@ -182,11 +182,11 @@ export function MainNav() {
                   <div className="flex flex-col space-y-1 leading-none">
                     <div className="flex items-center gap-2">
                       <p className="font-medium">{profile?.display_name || profile?.username || 'User'}</p>
-                      {isAlpha && (
-                        <Badge className="text-xs py-0 px-1.5 bg-primary/20 text-primary border border-primary/30">
+                      {isAlpha &&
+                    <Badge className="text-xs py-0 px-1.5 bg-primary/20 text-primary border border-primary/30">
                           Alpha
                         </Badge>
-                      )}
+                    }
                     </div>
                     <p className="text-xs text-muted-foreground">{user.email}</p>
                   </div>
@@ -196,28 +196,27 @@ export function MainNav() {
                   <User className="mr-2 h-4 w-4" />
                   Profile
                 </DropdownMenuItem>
-                {isAlpha && (
-                  <>
+                {isAlpha &&
+              <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => navigate('/alpha')}>
                       <Shield className="mr-2 h-4 w-4 text-primary" />
                       Alpha Control
                     </DropdownMenuItem>
                   </>
-                )}
+              }
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <Button onClick={() => navigate('/auth')}>Sign In</Button>
-          )}
+            </DropdownMenu> :
+
+          <Button onClick={() => navigate('/auth')}>Sign In</Button>
+          }
         </div>
       </div>
-    </header>
-  );
-}
+    </header>);
 
+}
