@@ -360,10 +360,10 @@ async function executeModelTrades(
             continue;
           }
 
-          // Proportional qty based on allocation + buying power
+          // Proportional qty based on allocation + buying power (fractional)
           if (signal.price_at_signal && signal.price_at_signal > 0) {
-            const maxAffordableQty = Math.floor(Math.min(maxTradeValue, buyingPower) / signal.price_at_signal);
-            tradeQty = Math.max(1, Math.min(signal.quantity, maxAffordableQty));
+            const maxAffordableQty = parseFloat((Math.min(maxTradeValue, buyingPower) / signal.price_at_signal).toFixed(2));
+            tradeQty = Math.max(0.01, Math.min(signal.quantity, maxAffordableQty));
           }
         }
       }
@@ -661,7 +661,7 @@ serve(async (req) => {
               const acctData = await acctResp.json();
               const buyingPower = parseFloat(acctData.buying_power ?? '0');
               const notional = (positionSizePct / 100) * buyingPower;
-              quantity = Math.max(1, Math.floor(notional / currentPrice));
+              quantity = Math.max(0.01, parseFloat((notional / currentPrice).toFixed(2)));
             }
           } catch (_) { /* use default qty 1 */ }
 
