@@ -80,9 +80,57 @@ export default function PrivacyPolicy() {
                 </section>
 
                 <section>
-                  <h2 className="text-xl font-semibold mb-3">7. Contact Us</h2>
+                  <h2 className="text-xl font-semibold mb-3">7. Third-Party Services</h2>
+                  <p className="text-muted-foreground mb-2">We integrate with the following third-party services to provide our platform:</p>
+                  <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                    <li><strong>Alpaca Securities LLC</strong> — Brokerage services and trade execution. Your brokerage API keys are encrypted at rest and never exposed in plaintext.</li>
+                    <li><strong>Authentication Providers</strong> — Email-based authentication with optional Multi-Factor Authentication (MFA) via TOTP authenticator apps.</li>
+                    <li><strong>Instagram Graph API</strong> — For optional automated marketing features (Alpha users only). We only access your business account with your explicit authorization.</li>
+                  </ul>
+                  <p className="text-muted-foreground mt-2">
+                    We do not sell, rent, or share your personal information with third parties for their marketing purposes. Data shared with third-party services is limited to what is necessary to provide the requested functionality.
+                  </p>
+                </section>
+
+                <section>
+                  <h2 className="text-xl font-semibold mb-3">8. Cookies and Tracking</h2>
                   <p className="text-muted-foreground">
-                    If you have questions about this Privacy Policy, please contact us at privacy@cluster.com
+                    We use essential cookies and local storage to maintain your authentication session, remember your trading preferences, and provide core platform functionality. We do not use third-party advertising cookies or tracking pixels. Analytics data is collected in aggregate form only and cannot be used to identify individual users.
+                  </p>
+                </section>
+
+                <section>
+                  <h2 className="text-xl font-semibold mb-3">9. Children's Privacy</h2>
+                  <p className="text-muted-foreground">
+                    Cluster is not intended for use by individuals under the age of 18. We do not knowingly collect personal information from children. If we become aware that we have collected data from a minor, we will take steps to delete that information promptly.
+                  </p>
+                </section>
+
+                <section>
+                  <h2 className="text-xl font-semibold mb-3">10. International Data Transfers</h2>
+                  <p className="text-muted-foreground">
+                    Your information may be transferred to and processed in countries other than the country in which you reside. These countries may have data protection laws that are different from the laws of your country. We take appropriate safeguards to ensure that your personal information remains protected in accordance with this Privacy Policy.
+                  </p>
+                </section>
+
+                <section>
+                  <h2 className="text-xl font-semibold mb-3">11. Changes to This Policy</h2>
+                  <p className="text-muted-foreground">
+                    We may update this Privacy Policy from time to time. We will notify you of any material changes by posting the new Privacy Policy on this page and updating the "Last updated" date. Your continued use of the platform after any changes constitutes your acceptance of the updated policy.
+                  </p>
+                </section>
+
+                <section>
+                  <h2 className="text-xl font-semibold mb-3">12. Contact Us</h2>
+                  <p className="text-muted-foreground mb-2">
+                    If you have any questions, concerns, or requests regarding this Privacy Policy or your personal data, please reach out:
+                  </p>
+                  <p className="text-muted-foreground">
+                    <strong>Email:</strong>{' '}
+                    <a href="mailto:seif@clusterapp.space" className="text-primary hover:underline">seif@clusterapp.space</a>
+                  </p>
+                  <p className="text-muted-foreground text-xs mt-2 italic">
+                    This is the founder's direct email — feel free to reach out if you ever need anything.
                   </p>
                 </section>
               </div>
