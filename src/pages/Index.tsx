@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { Footer } from '@/components/Footer';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect } from 'react';
 import { usePublicFeed, useLikePost, useUnlikePost, useLikesForPosts } from '@/hooks/useSocial';
@@ -146,6 +147,7 @@ export default function Index() {
           </Card>
         )}
       </div>
+      <Footer />
     </div>
   );
 }
