@@ -456,7 +456,7 @@ export default function Auth() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <img src="/favicon.png" alt="Cluster" className="h-8 w-8" />
+            <img src="/lovable-uploads/f089770d-e6ef-4c61-9a28-40711b81c6d6.png" alt="Cluster" className="h-8 w-8" />
             <span className="text-2xl font-bold">Cluster</span>
           </div>
           <CardTitle>Welcome back</CardTitle>
