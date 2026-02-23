@@ -66,10 +66,12 @@ function ExpandableError({ message }: { message: string }) {
 }
 
 const CAPTURABLE_PAGES = [
+  { path: '/', label: 'Landing Page' },
   { path: '/trade', label: 'Trade Dashboard' },
   { path: '/community', label: 'Community Feed' },
   { path: '/trade/portfolio', label: 'Portfolio' },
   { path: '/trade/orders', label: 'Orders' },
+  { path: '/explore', label: 'Explore' },
 ];
 
 function MarketingBotTab() {
