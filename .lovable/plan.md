@@ -1,48 +1,53 @@
 
 
-## Fix: Marketing Bot Token Encryption
+## Fix: Full Error Visibility in Marketing Bot Logs
 
-### The Problem
+### Two Issues
 
-When you save your Instagram access token, the UI calls the edge function with `{ action: 'encrypt_token', token: '...' }`. But the edge function **has no handler for this action** -- it only handles posting logic. So the encrypt call returns a generic response without an `encrypted` field, the token is silently discarded, and every bot run fails because `ig_access_token_encrypted` is null in the database.
+1. **Truncated error in UI**: The error column has `max-w-[200px] truncate`, so long error messages like `Failed to create IG media container: {"error":{"message":"An unexpected error...` get cut off and are unreadable.
 
-### The Fix
+2. **The IG error itself**: The Instagram API returned a transient `OAuthException` (code 2, `is_transient: true`) which means Instagram's servers had a temporary issue. This is not a bug in your code -- retrying should work. But making the full error visible will help you diagnose future issues.
 
-**File: `supabase/functions/instagram-marketing-bot/index.ts`**
+### Plan
 
-Add an `action` handler right after parsing the request body (before the main posting logic):
+**File: `src/pages/AlphaDashboard.tsx`** (Error column in logs table)
 
-1. Parse `action` from the request body alongside `config_id` and `manual`
-2. If `action === 'encrypt_token'`:
-   - Read the `token` field from the body
-   - Call the existing `encryptToken()` function with the token and `ENCRYPTION_SECRET`
-   - Return `{ encrypted: "<encrypted_value>" }` immediately
-   - Skip all the posting logic
-3. Otherwise, continue with the existing bot posting flow as-is
+- Remove `truncate` and `max-w-[200px]` from the error cell
+- Replace with an expandable error display: show the first ~80 characters by default, with a "Show more" toggle that expands to show the full error message
+- Format the error text with word-wrap so long JSON strings don't overflow the table
+- Use a collapsible pattern so the table stays clean but full details are one click away
 
-### Technical Detail
+**File: `supabase/functions/instagram-marketing-bot/index.ts`** (Better error messages)
+
+- In `postToInstagram()`, extract the meaningful parts from the Instagram API error response (error message, error type, error code) and format them into a cleaner error string instead of dumping raw JSON
+- Example: `"IG API error (code 2): An unexpected error has occurred. Please retry your request later. (transient)"` instead of `"Failed to create IG media container: {"error":{"message":"An unexpected error..."}}`
+
+### Technical Details
+
+The error cell change:
 
 ```text
-Request body parsing currently:
-  { config_id?, manual? }
-
-Updated to also check:
-  { action?, token?, config_id?, manual? }
-
-New early-return branch:
-  if action === "encrypt_token" AND token is provided:
-    -> encrypt using existing encryptToken() helper
-    -> return { encrypted: "..." }
+Current:  <TableCell className="text-xs text-destructive max-w-[200px] truncate">
+New:      Expandable cell with:
+          - Default: first ~80 chars + "..." + expand button
+          - Expanded: full error with break-words styling
+          - Uses local state per row to toggle
 ```
 
-Also set `next_post_at` when saving a new config so the cron job can pick it up. Currently `next_post_at` stays null because the save mutation doesn't set it -- add it to the upsert in `useMarketingBot.tsx`.
+The edge function error formatting:
+
+```text
+Current:  throw new Error(`Failed to create IG media container: ${JSON.stringify(data)}`)
+New:      Parse data.error object and throw:
+          "IG API error (code X): <message> [type: <type>]"
+          Falls back to full JSON if parsing fails
+```
 
 ### Files to Modify
 
 | File | Change |
 |---|---|
-| `supabase/functions/instagram-marketing-bot/index.ts` | Add `encrypt_token` action handler before main logic |
-| `src/hooks/useMarketingBot.tsx` | Set `next_post_at` in the upsert so cron picks up the config |
+| `src/pages/AlphaDashboard.tsx` | Replace truncated error cell with expandable error display |
+| `supabase/functions/instagram-marketing-bot/index.ts` | Format IG API errors into readable strings |
 
 No database changes needed.
-
