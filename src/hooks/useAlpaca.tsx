@@ -315,8 +315,8 @@ export interface AlpacaBar {
 }
 
 const TIMEFRAME_MAP: Record<string, { barSize: string; daysBack: number }> = {
-  '1D': { barSize: '5Min', daysBack: 1 },
-  '1W': { barSize: '1Hour', daysBack: 7 },
+  '1D': { barSize: '5Min', daysBack: 4 },
+  '1W': { barSize: '1Hour', daysBack: 10 },
   '1M': { barSize: '1Day', daysBack: 30 },
   '3M': { barSize: '1Day', daysBack: 90 },
   '1Y': { barSize: '1Day', daysBack: 365 },
