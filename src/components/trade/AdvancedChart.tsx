@@ -90,12 +90,14 @@ function addIndicators(data: ChartData[]): void {
 function barsToChartData(bars: AlpacaBar[], timeframe: string): ChartData[] {
   const data: ChartData[] = bars.map(b => {
     const d = new Date(b.date);
-    const isIntraday = timeframe === '1D' || timeframe === '1W';
+    const isIntraday = timeframe === '1D';
     return {
       time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
       date: isIntraday
         ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-        : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        : timeframe === '1W'
+          ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+          : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       open: b.open,
       high: b.high,
       low: b.low,
