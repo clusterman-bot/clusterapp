@@ -68,8 +68,8 @@ function ExpandableError({ message }: { message: string }) {
 const CAPTURABLE_PAGES = [
   { path: '/trade', label: 'Trade Dashboard' },
   { path: '/community', label: 'Community Feed' },
-  { path: '/portfolio', label: 'Portfolio' },
-  { path: '/models', label: 'AI Models' },
+  { path: '/trade/portfolio', label: 'Portfolio' },
+  { path: '/trade/orders', label: 'Orders' },
 ];
 
 function MarketingBotTab() {
@@ -82,6 +82,8 @@ function MarketingBotTab() {
   const [isActive, setIsActive] = useState(false);
   const [intervalHours, setIntervalHours] = useState(24);
   const [selectedPages, setSelectedPages] = useState<string[]>(['/trade', '/community']);
+  const [stockTickers, setStockTickers] = useState<string[]>([]);
+  const [tickerInput, setTickerInput] = useState('');
   const [igAccountId, setIgAccountId] = useState('');
   const [igToken, setIgToken] = useState('');
   const [captionTemplate, setCaptionTemplate] = useState('');
@@ -91,7 +93,12 @@ function MarketingBotTab() {
   if (config && !initialized) {
     setIsActive(config.is_active);
     setIntervalHours(config.interval_hours);
-    setSelectedPages(Array.isArray(config.pages_to_capture) ? config.pages_to_capture : ['/trade', '/community']);
+    const savedPages = Array.isArray(config.pages_to_capture) ? config.pages_to_capture as string[] : ['/trade', '/community'];
+    // Separate stock pages from regular pages
+    const stockPages = savedPages.filter((p) => p.startsWith('/trade/stocks/'));
+    const regularPages = savedPages.filter((p) => !p.startsWith('/trade/stocks/'));
+    setSelectedPages(regularPages);
+    setStockTickers(stockPages.map((p) => p.replace('/trade/stocks/', '').toUpperCase()));
     setIgAccountId(config.instagram_account_id || '');
     setCaptionTemplate(config.caption_template || '');
     setInitialized(true);
@@ -103,12 +110,34 @@ function MarketingBotTab() {
     );
   };
 
+  const addTicker = () => {
+    const ticker = tickerInput.trim().toUpperCase();
+    if (ticker && !stockTickers.includes(ticker)) {
+      setStockTickers((prev) => [...prev, ticker]);
+    }
+    setTickerInput('');
+  };
+
+  const removeTicker = (ticker: string) => {
+    setStockTickers((prev) => prev.filter((t) => t !== ticker));
+  };
+
+  // Combine regular pages + stock ticker pages
+  const allPagesToCapture = [
+    ...selectedPages,
+    ...stockTickers.map((t) => `/trade/stocks/${t}`),
+  ];
+
   const handleSave = async () => {
+    if (allPagesToCapture.length === 0) {
+      toast({ title: 'No pages selected', description: 'Select at least one page or stock to capture.', variant: 'destructive' });
+      return;
+    }
     try {
       await saveConfig.mutateAsync({
         is_active: isActive,
         interval_hours: Math.max(1, Math.min(168, intervalHours)),
-        pages_to_capture: selectedPages,
+        pages_to_capture: allPagesToCapture,
         instagram_account_id: igAccountId,
         ig_access_token_plaintext: igToken || undefined,
         caption_template: captionTemplate,
@@ -187,29 +216,38 @@ function MarketingBotTab() {
               {/* Master toggle */}
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="font-medium">Bot Active</Label>
-                  <p className="text-sm text-muted-foreground mt-0.5">Enable automatic posting on schedule</p>
+                  <Label className="font-medium">Automatic Posting</Label>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    {isActive
+                      ? `Bot will auto-post every ${intervalHours}h. You can also post manually anytime.`
+                      : 'Disabled — use "Post Now" to post manually.'}
+                  </p>
                 </div>
                 <Switch checked={isActive} onCheckedChange={setIsActive} />
               </div>
 
-              <Separator />
+              {/* Interval — only visible when auto-posting is on */}
+              {isActive && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <Label>Post every N hours</Label>
+                    <div className="flex items-center gap-3">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={168}
+                        value={intervalHours}
+                        onChange={(e) => setIntervalHours(Number(e.target.value))}
+                        className="w-28"
+                      />
+                      <span className="text-sm text-muted-foreground">hours (1–168)</span>
+                    </div>
+                  </div>
+                </>
+              )}
 
-              {/* Interval */}
-              <div className="space-y-2">
-                <Label>Post every N hours</Label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="number"
-                    min={1}
-                    max={168}
-                    value={intervalHours}
-                    onChange={(e) => setIntervalHours(Number(e.target.value))}
-                    className="w-28"
-                  />
-                  <span className="text-sm text-muted-foreground">hours (1–168)</span>
-                </div>
-              </div>
+              <Separator />
 
               {/* Pages */}
               <div className="space-y-3">
@@ -229,6 +267,41 @@ function MarketingBotTab() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Stock tickers */}
+              <div className="space-y-3">
+                <Label>Stock pages to capture</Label>
+                <p className="text-xs text-muted-foreground">
+                  Add stock symbols to screenshot their detail pages (e.g. AAPL, TSLA)
+                </p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="e.g. AAPL"
+                    value={tickerInput}
+                    onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTicker(); } }}
+                    className="w-36"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={addTicker} disabled={!tickerInput.trim()}>
+                    Add
+                  </Button>
+                </div>
+                {stockTickers.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {stockTickers.map((ticker) => (
+                      <Badge key={ticker} variant="secondary" className="gap-1 pl-2 pr-1 py-1">
+                        {ticker}
+                        <button
+                          onClick={() => removeTicker(ticker)}
+                          className="ml-1 hover:text-destructive rounded-full"
+                        >
+                          <XCircle className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <Separator />
