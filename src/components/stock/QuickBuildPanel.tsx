@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 
 interface QuickBuildPanelProps {
   symbol: string;
+  isCrypto?: boolean;
 }
 
 const STEPS = [
@@ -95,7 +96,7 @@ function ModelComparisonTable({ results }: { results: Record<string, { accuracy:
   );
 }
 
-export function QuickBuildPanel({ symbol }: QuickBuildPanelProps) {
+export function QuickBuildPanel({ symbol, isCrypto }: QuickBuildPanelProps) {
   const navigate = useNavigate();
   const startBuild = useStartQuickBuild();
   const { data: pastRuns } = useQuickBuildRuns(symbol);
@@ -267,7 +268,7 @@ export function QuickBuildPanel({ symbol }: QuickBuildPanelProps) {
             {/* Deploy button */}
             <Button
               className="w-full"
-              onClick={() => navigate(`/trade/stocks/${symbol}/automate`)}
+              onClick={() => navigate(isCrypto ? `/trade/crypto/${symbol.replace('/', '-')}/automate` : `/trade/stocks/${symbol}/automate`)}
             >
               <Rocket className="mr-2 h-4 w-4" /> Deploy This Bot
             </Button>

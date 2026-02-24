@@ -18,6 +18,7 @@ const Auth = lazy(() => import("./pages/Auth"));
 const Trade = lazy(() => import("./pages/Trade"));
 const StockDetail = lazy(() => import("./pages/StockDetail"));
 const CryptoDetail = lazy(() => import("./pages/CryptoDetail"));
+const CryptoAutomationConfig = lazy(() => import("./pages/CryptoAutomationConfig"));
 const StockAutomationConfig = lazy(() => import("./pages/StockAutomationConfig"));
 const Portfolio = lazy(() => import("./pages/Portfolio"));
 const Orders = lazy(() => import("./pages/Orders"));
@@ -65,6 +66,7 @@ const App = () => (
                   <Route path="/trade/stocks/:symbol" element={<ProtectedRoute><StockDetail /></ProtectedRoute>} />
                   <Route path="/trade/crypto/:symbol" element={<ProtectedRoute><CryptoDetail /></ProtectedRoute>} />
                   <Route path="/trade/stocks/:symbol/automate" element={<ProtectedRoute><StockAutomationConfig /></ProtectedRoute>} />
+                  <Route path="/trade/crypto/:symbol/automate" element={<ProtectedRoute><CryptoAutomationConfig /></ProtectedRoute>} />
                   <Route path="/trade/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
                   <Route path="/trade/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
                   <Route path="/trade/ai-builder" element={<ProtectedRoute><AIBotBuilder /></ProtectedRoute>} />
