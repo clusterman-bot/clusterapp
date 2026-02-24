@@ -331,22 +331,21 @@ function localDateString(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function useAlpacaBars(symbol: string | undefined, uiTimeframe: string = '1M') {
+export function useAlpacaBars(symbol: string | undefined, uiTimeframe: string = '1M', isCrypto?: boolean) {
   const { user } = useAuth();
   const { isPaper } = useTradingMode();
 
   const mapping = TIMEFRAME_MAP[uiTimeframe] || TIMEFRAME_MAP['1M'];
 
   return useQuery({
-    queryKey: ['alpaca-bars', symbol, uiTimeframe, isPaper],
+    queryKey: ['alpaca-bars', symbol, uiTimeframe, isPaper, isCrypto],
     queryFn: async () => {
       const start = new Date();
       start.setDate(start.getDate() - mapping.daysBack);
-
-      // Use local date string to avoid UTC boundary shifts
       const startStr = localDateString(start);
 
-      const { data, error } = await supabase.functions.invoke('alpaca-trading/get-bars', {
+      const action = isCrypto ? 'get-crypto-bars' : 'get-bars';
+      const { data, error } = await supabase.functions.invoke(`alpaca-trading/${action}`, {
         body: {
           isPaper,
           symbol,
@@ -364,6 +363,30 @@ export function useAlpacaBars(symbol: string | undefined, uiTimeframe: string = 
     },
     enabled: !!user && !!symbol,
     staleTime: 60000,
+    retry: false,
+  });
+}
+
+// Get real-time crypto quote
+export function useAlpacaCryptoQuote(symbol: string | undefined) {
+  const { user } = useAuth();
+  const { isPaper } = useTradingMode();
+
+  return useQuery({
+    queryKey: ['alpaca-crypto-quote', symbol],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('alpaca-trading/get-crypto-quote', {
+        body: { isPaper, symbol },
+      });
+
+      if (data?.needsConnection) return null;
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      return data.quote as AlpacaQuote;
+    },
+    enabled: !!user && !!symbol,
+    refetchInterval: 10000,
     retry: false,
   });
 }

@@ -286,34 +286,83 @@ export default function Portfolio() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {alpacaPositions.map((position) => (
-                    <div 
-                      key={position.asset_id}
-                      className="flex items-center justify-between p-4 hover:bg-muted/50 rounded-lg cursor-pointer transition-colors"
-                      onClick={() => navigate(`/trade/stocks/${position.symbol}`)}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          <span className="font-bold text-sm text-primary">
-                            {position.symbol.slice(0, 2)}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="font-semibold">{position.symbol}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {Number(position.qty).toFixed(2)} shares @ {formatPrice(Number(position.avg_entry_price))}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold">{formatPrice(Number(position.market_value) || 0)}</p>
-                        <p className={`text-sm ${Number(position.unrealized_pl || 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
-                          {Number(position.unrealized_pl || 0) >= 0 ? '+' : ''}{formatPrice(Number(position.unrealized_pl) || 0)} 
-                          ({(Number(position.unrealized_plpc || 0) * 100).toFixed(2)}%)
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                  {/* Separate stock and crypto positions */}
+                  {(() => {
+                    const stockPositions = alpacaPositions.filter(p => !p.symbol.includes('/'));
+                    const cryptoPositions = alpacaPositions.filter(p => p.symbol.includes('/'));
+
+                    return (
+                      <>
+                        {stockPositions.length > 0 && (
+                          <>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 pt-2">Stocks</p>
+                            {stockPositions.map((position) => (
+                              <div 
+                                key={position.asset_id}
+                                className="flex items-center justify-between p-4 hover:bg-muted/50 rounded-lg cursor-pointer transition-colors"
+                                onClick={() => navigate(`/trade/stocks/${position.symbol}`)}
+                              >
+                                <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                    <span className="font-bold text-sm text-primary">
+                                      {position.symbol.slice(0, 2)}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold">{position.symbol}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {Number(position.qty).toFixed(2)} shares @ {formatPrice(Number(position.avg_entry_price))}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-semibold">{formatPrice(Number(position.market_value) || 0)}</p>
+                                  <p className={`text-sm ${Number(position.unrealized_pl || 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
+                                    {Number(position.unrealized_pl || 0) >= 0 ? '+' : ''}{formatPrice(Number(position.unrealized_pl) || 0)} 
+                                    ({(Number(position.unrealized_plpc || 0) * 100).toFixed(2)}%)
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        )}
+
+                        {cryptoPositions.length > 0 && (
+                          <>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 pt-4">Crypto</p>
+                            {cryptoPositions.map((position) => (
+                              <div 
+                                key={position.asset_id}
+                                className="flex items-center justify-between p-4 hover:bg-muted/50 rounded-lg cursor-pointer transition-colors"
+                                onClick={() => navigate(`/trade/crypto/${position.symbol.replace('/', '-')}`)}
+                              >
+                                <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+                                    <span className="font-bold text-sm text-amber-600">
+                                      {position.symbol.split('/')[0].slice(0, 3)}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold">{position.symbol}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {Number(position.qty).toFixed(6)} @ {formatPrice(Number(position.avg_entry_price))}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-semibold">{formatPrice(Number(position.market_value) || 0)}</p>
+                                  <p className={`text-sm ${Number(position.unrealized_pl || 0) >= 0 ? 'text-profit' : 'text-loss'}`}>
+                                    {Number(position.unrealized_pl || 0) >= 0 ? '+' : ''}{formatPrice(Number(position.unrealized_pl) || 0)} 
+                                    ({(Number(position.unrealized_plpc || 0) * 100).toFixed(2)}%)
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
             </CardContent>

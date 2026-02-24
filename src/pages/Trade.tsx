@@ -12,10 +12,11 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Search, TrendingUp, TrendingDown, Star, 
-  Briefcase, Clock, BarChart3, Settings, Link2, AlertTriangle, Bot
+  Briefcase, Clock, BarChart3, Settings, Link2, AlertTriangle, Bot, Bitcoin
 } from 'lucide-react';
 import { useStocks, useWatchlist, Stock } from '@/hooks/useTrading';
-import { useAlpacaAccount, useAlpacaPositions, useAlpacaSearch, AlpacaAsset } from '@/hooks/useAlpaca';
+import { useCryptoAssets, useCryptoWatchlist, CryptoAsset } from '@/hooks/useCryptoTrading';
+import { useAlpacaAccount, useAlpacaPositions, useAlpacaSearch, AlpacaAsset, useAlpacaCryptoQuote } from '@/hooks/useAlpaca';
 import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
 
 import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
@@ -31,13 +32,6 @@ function formatPrice(price: number): string {
   }).format(price);
 }
 
-function formatLargeNumber(num: number): string {
-  if (num >= 1e12) return `${(num / 1e12).toFixed(2)}T`;
-  if (num >= 1e9) return `${(num / 1e9).toFixed(2)}B`;
-  if (num >= 1e6) return `${(num / 1e6).toFixed(2)}M`;
-  return num.toLocaleString();
-}
-
 function StockRow({ stock, onClick, showChange = false }: { stock: Stock; onClick: () => void; showChange?: boolean }) {
   const priceChange = stock.previous_close 
     ? stock.current_price - stock.previous_close 
@@ -46,7 +40,6 @@ function StockRow({ stock, onClick, showChange = false }: { stock: Stock; onClic
     ? (priceChange / stock.previous_close) * 100 
     : 0;
   const isPositive = priceChange >= 0;
-  // Only show % change if it's within a plausible range (DB data may be stale)
   const isPlausible = Math.abs(priceChangePercent) < 20;
 
   return (
@@ -78,7 +71,32 @@ function StockRow({ stock, onClick, showChange = false }: { stock: Stock; onClic
   );
 }
 
-// Component for Alpaca asset search results
+function CryptoRow({ crypto, onClick }: { crypto: CryptoAsset; onClick: () => void }) {
+  return (
+    <div 
+      className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer border-b last:border-b-0 transition-colors"
+      onClick={onClick}
+    >
+      <div className="flex items-center gap-4">
+        <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+          <Bitcoin className="h-5 w-5 text-amber-500" />
+        </div>
+        <div>
+          <p className="font-semibold">{crypto.symbol}</p>
+          <p className="text-sm text-muted-foreground">{crypto.name}</p>
+        </div>
+      </div>
+      <div className="text-right">
+        {crypto.current_price > 0 ? (
+          <p className="font-semibold">{formatPrice(crypto.current_price)}</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">Click for live price</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AlpacaAssetRow({ asset, onClick }: { asset: AlpacaAsset; onClick: () => void }) {
   return (
     <div 
@@ -111,8 +129,8 @@ export default function Trade() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('explore');
+  const [marketType, setMarketType] = useState<'stocks' | 'crypto'>('stocks');
   
-  // Redirect admins away from trade page
   useEffect(() => {
     if (!roleLoading && userRole?.role === 'admin') {
       navigate('/admin', { replace: true });
@@ -121,23 +139,20 @@ export default function Trade() {
   
   const { data: stocks, isLoading: stocksLoading } = useStocks(searchQuery);
   const { data: watchlist } = useWatchlist();
+  const { data: cryptoAssets, isLoading: cryptoLoading } = useCryptoAssets(searchQuery);
+  const { data: cryptoWatchlist } = useCryptoWatchlist();
   const { data: brokerageAccounts } = useBrokerageAccounts();
   const { data: alpacaAccount } = useAlpacaAccount();
   const { data: alpacaSearchResults, isLoading: alpacaSearchLoading } = useAlpacaSearch(searchQuery);
 
-  // Check if user has connected a brokerage account
   const hasConnectedAccount = brokerageAccounts && brokerageAccounts.length > 0;
-  
-  // Check if credentials need to be reconnected
   const needsReconnect = alpacaAccount && 'needsReconnect' in alpacaAccount && alpacaAccount.needsReconnect;
 
-  // Only show portfolio data if user has connected their own account and credentials are valid
   const portfolioValue = hasConnectedAccount && alpacaAccount && !needsReconnect ? alpacaAccount.portfolio_value : 0;
   const cashAvailable = hasConnectedAccount && alpacaAccount && !needsReconnect ? alpacaAccount.cash : 0;
   const investedValue = hasConnectedAccount && alpacaAccount && !needsReconnect ? alpacaAccount.equity - alpacaAccount.cash : 0;
   const totalValue = hasConnectedAccount && alpacaAccount && !needsReconnect ? alpacaAccount.portfolio_value : 0;
 
-  // Group stocks by sector
   const topGainers = stocks?.filter(s => s.previous_close && s.current_price > s.previous_close)
     .sort((a, b) => {
       const aChange = ((a.current_price - (a.previous_close || 0)) / (a.previous_close || 1));
@@ -152,15 +167,18 @@ export default function Trade() {
       return aChange - bChange;
     }).slice(0, 5) || [];
 
+  const navigateToCrypto = (symbol: string) => {
+    // Convert BTC/USD to BTC-USD for URL
+    navigate(`/trade/crypto/${symbol.replace('/', '-')}`);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <MainNav />
 
       <main className="container py-6">
-        {/* Email verification banner */}
         {user && !isVerified && <EmailVerificationBanner />}
 
-        {/* AI Bot Builder CTA + Trading Mode Toggle */}
         {user && isVerified && (
           <div className="mb-6 flex items-center justify-between">
             <Button onClick={() => navigate('/trade/ai-builder')} variant="outline" className="gap-2">
@@ -170,7 +188,6 @@ export default function Trade() {
           </div>
         )}
 
-        {/* Reconnect Warning */}
         {user && hasConnectedAccount && needsReconnect && (
           <Card className="mb-6 border-2 border-destructive/50 bg-destructive/5">
             <CardContent className="py-6">
@@ -181,7 +198,7 @@ export default function Trade() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-lg">Brokerage Reconnection Required</h3>
-                    <p className="text-muted-foreground">Your brokerage credentials need to be updated. Please reconnect your Alpaca account to continue trading.</p>
+                    <p className="text-muted-foreground">Your brokerage credentials need to be updated.</p>
                   </div>
                 </div>
                 <Button onClick={() => navigate('/settings/brokerage')} variant="destructive" size="lg">
@@ -192,17 +209,14 @@ export default function Trade() {
           </Card>
         )}
 
-        {/* Portfolio Summary or Connect Prompt */}
         {user && !needsReconnect && (
           hasConnectedAccount ? (
             <Card className="mb-6 bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
               <CardContent className="pt-6 space-y-4">
-                {/* Main value */}
                 <div>
                   <p className="text-sm text-muted-foreground">Total Portfolio Value</p>
                   <p className="text-3xl font-bold">{formatPrice(totalValue)}</p>
                 </div>
-                {/* Stats grid — 2 cols on mobile, 3 on md+ */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
                     <p className="text-xs text-muted-foreground">Cash Available</p>
@@ -219,7 +233,6 @@ export default function Trade() {
                     </div>
                   )}
                 </div>
-                {/* Nav buttons — scrollable row on mobile */}
                 <div className="flex gap-2 bg-muted/50 rounded-lg p-1 overflow-x-auto">
                   <Button onClick={() => navigate('/trade/portfolio')} size="sm" className="shrink-0">
                     <Briefcase className="mr-2 h-4 w-4" /> Portfolio
@@ -243,7 +256,7 @@ export default function Trade() {
                     </div>
                     <div>
                       <h3 className="font-semibold text-lg">Connect Your Brokerage</h3>
-                      <p className="text-muted-foreground">Link your Alpaca account to start trading with real or paper money</p>
+                      <p className="text-muted-foreground">Link your Alpaca account to start trading stocks & crypto</p>
                     </div>
                   </div>
                   <Button data-tour="connect-brokerage-btn" onClick={() => navigate('/settings/brokerage')} size="lg">
@@ -255,211 +268,270 @@ export default function Trade() {
           )
         )}
 
+        {/* Market Type Tabs - Stocks / Crypto */}
+        <div className="mb-4">
+          <div className="inline-flex items-center rounded-lg border bg-card p-1">
+            <Button
+              variant={marketType === 'stocks' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setMarketType('stocks')}
+              className="gap-2"
+            >
+              <BarChart3 className="h-4 w-4" /> Stocks
+            </Button>
+            <Button
+              variant={marketType === 'crypto' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setMarketType('crypto')}
+              className="gap-2"
+            >
+              <Bitcoin className="h-4 w-4" /> Crypto
+            </Button>
+          </div>
+        </div>
+
         {/* Search */}
         <div className="relative mb-6">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             data-tour="stock-search-input"
-            placeholder="Search any stock (e.g., AAPL, TSLA, MSFT)..."
+            placeholder={marketType === 'stocks' ? 'Search any stock (e.g., AAPL, TSLA)...' : 'Search crypto (e.g., Bitcoin, ETH)...'}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 h-12 text-lg"
           />
-          {alpacaSearchLoading && (
+          {alpacaSearchLoading && marketType === 'stocks' && (
             <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
           )}
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <Card className="p-1">
-            <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-flex bg-transparent">
-              <TabsTrigger value="explore" className="gap-2">
-                <BarChart3 className="h-4 w-4" /> Explore
-              </TabsTrigger>
-              <TabsTrigger value="watchlist" className="gap-2">
-                <Star className="h-4 w-4" /> Watchlist
-                {watchlist && watchlist.length > 0 && (
-                  <Badge variant="secondary" className="ml-1">{watchlist.length}</Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="movers" className="gap-2">
-                <TrendingUp className="h-4 w-4" /> Movers
-              </TabsTrigger>
-            </TabsList>
-          </Card>
+        {/* STOCKS VIEW */}
+        {marketType === 'stocks' && (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <Card className="p-1">
+              <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-flex bg-transparent">
+                <TabsTrigger value="explore" className="gap-2">
+                  <BarChart3 className="h-4 w-4" /> Explore
+                </TabsTrigger>
+                <TabsTrigger value="watchlist" className="gap-2">
+                  <Star className="h-4 w-4" /> Watchlist
+                  {watchlist && watchlist.length > 0 && (
+                    <Badge variant="secondary" className="ml-1">{watchlist.length}</Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="movers" className="gap-2">
+                  <TrendingUp className="h-4 w-4" /> Movers
+                </TabsTrigger>
+              </TabsList>
+            </Card>
 
-          <TabsContent value="explore" className="space-y-6">
-            {searchQuery ? (
+            <TabsContent value="explore" className="space-y-6">
+              {searchQuery ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      Search Results
+                      {alpacaSearchResults && (
+                        <Badge variant="secondary">{alpacaSearchResults.length} stocks</Badge>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0 max-h-[500px] overflow-y-auto">
+                    {alpacaSearchLoading ? (
+                      <div className="p-8 text-center text-muted-foreground">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                        Searching all markets...
+                      </div>
+                    ) : alpacaSearchResults && alpacaSearchResults.length > 0 ? (
+                      alpacaSearchResults.map(asset => (
+                        <AlpacaAssetRow 
+                          key={asset.symbol} 
+                          asset={asset} 
+                          onClick={() => navigate(`/trade/stocks/${asset.symbol}`)}
+                        />
+                      ))
+                    ) : (
+                      <div className="p-8 text-center text-muted-foreground">
+                        No stocks found for "{searchQuery}"
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  {user && (
+                    <div className="mb-6">
+                      <PortfolioHistoryChart />
+                    </div>
+                  )}
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>All Stocks</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-0 max-h-[500px] overflow-y-auto">
+                        {stocksLoading ? (
+                          <div className="p-8 text-center text-muted-foreground">Loading...</div>
+                        ) : stocks?.map(stock => (
+                          <StockRow
+                            key={stock.id}
+                            stock={stock}
+                            onClick={() => navigate(`/trade/stocks/${stock.symbol}`)}
+                          />
+                        ))}
+                      </CardContent>
+                    </Card>
+                    {user ? (
+                      <RecentTrades />
+                    ) : null}
+                  </div>
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="watchlist">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Your Watchlist</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {!user ? (
+                    <div className="p-8 text-center">
+                      <p className="text-muted-foreground mb-4">Sign in to create a watchlist</p>
+                      <Button onClick={() => navigate('/auth')}>Sign In</Button>
+                    </div>
+                  ) : watchlist && watchlist.length > 0 ? (
+                    watchlist.map(item => item.stocks && (
+                      <StockRow 
+                        key={item.id} 
+                        stock={item.stocks} 
+                        onClick={() => navigate(`/trade/stocks/${item.stocks?.symbol}`)}
+                      />
+                    ))
+                  ) : (
+                    <div className="p-8 text-center text-muted-foreground">
+                      <Star className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>Your watchlist is empty</p>
+                      <p className="text-sm mt-1">Add stocks to track them here</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="movers">
+              <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-profit">
+                      <TrendingUp className="h-5 w-5" /> Top Gainers
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {topGainers.length > 0 ? (
+                      topGainers.map(stock => (
+                        <StockRow key={stock.id} stock={stock} showChange onClick={() => navigate(`/trade/stocks/${stock.symbol}`)} />
+                      ))
+                    ) : (
+                      <div className="p-8 text-center text-muted-foreground">No gainers today</div>
+                    )}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-loss">
+                      <TrendingDown className="h-5 w-5" /> Top Losers
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {topLosers.length > 0 ? (
+                      topLosers.map(stock => (
+                        <StockRow key={stock.id} stock={stock} showChange onClick={() => navigate(`/trade/stocks/${stock.symbol}`)} />
+                      ))
+                    ) : (
+                      <div className="p-8 text-center text-muted-foreground">No losers today</div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
+        )}
+
+        {/* CRYPTO VIEW */}
+        {marketType === 'crypto' && (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <Card className="p-1">
+              <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-flex bg-transparent">
+                <TabsTrigger value="explore" className="gap-2">
+                  <Bitcoin className="h-4 w-4" /> All Crypto
+                </TabsTrigger>
+                <TabsTrigger value="watchlist" className="gap-2">
+                  <Star className="h-4 w-4" /> Watchlist
+                  {cryptoWatchlist && cryptoWatchlist.length > 0 && (
+                    <Badge variant="secondary" className="ml-1">{cryptoWatchlist.length}</Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+            </Card>
+
+            <TabsContent value="explore" className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    Search Results
-                    {alpacaSearchResults && (
-                      <Badge variant="secondary">{alpacaSearchResults.length} stocks</Badge>
-                    )}
+                    <Bitcoin className="h-5 w-5" /> Crypto Assets
+                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20">24/7</Badge>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-0 max-h-[500px] overflow-y-auto">
-                  {alpacaSearchLoading ? (
-                    <div className="p-8 text-center text-muted-foreground">
-                      <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-                      Searching all markets...
-                    </div>
-                  ) : alpacaSearchResults && alpacaSearchResults.length > 0 ? (
-                    alpacaSearchResults.map(asset => (
-                      <AlpacaAssetRow 
-                        key={asset.symbol} 
-                        asset={asset} 
-                        onClick={() => navigate(`/trade/stocks/${asset.symbol}`)}
+                <CardContent className="p-0 max-h-[600px] overflow-y-auto">
+                  {cryptoLoading ? (
+                    <div className="p-8 text-center text-muted-foreground">Loading...</div>
+                  ) : cryptoAssets && cryptoAssets.length > 0 ? (
+                    cryptoAssets.map(crypto => (
+                      <CryptoRow 
+                        key={crypto.id} 
+                        crypto={crypto} 
+                        onClick={() => navigateToCrypto(crypto.symbol)}
                       />
                     ))
                   ) : (
-                    <div className="p-8 text-center text-muted-foreground">
-                      No stocks found for "{searchQuery}"
-                    </div>
+                    <div className="p-8 text-center text-muted-foreground">No crypto assets found</div>
                   )}
                 </CardContent>
               </Card>
-            ) : (
-              <>
-                {/* Portfolio Chart - full width, only for logged in users */}
-                {user && (
-                  <div className="mb-6">
-                    <PortfolioHistoryChart />
-                  </div>
-                )}
+            </TabsContent>
 
-                {/* All Stocks + Recent Trades side by side */}
-                <div className="grid gap-6 md:grid-cols-2">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>All Stocks</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0 max-h-[500px] overflow-y-auto">
-                      {stocksLoading ? (
-                        <div className="p-8 text-center text-muted-foreground">Loading...</div>
-                      ) : stocks?.map(stock => (
-                        <StockRow
-                          key={stock.id}
-                          stock={stock}
-                          onClick={() => navigate(`/trade/stocks/${stock.symbol}`)}
-                        />
-                      ))}
-                    </CardContent>
-                  </Card>
-
-                  {user ? (
-                    <RecentTrades />
-                  ) : (
-                    watchlist && watchlist.length > 0 ? (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm font-medium">Your Watchlist</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                          {watchlist.slice(0, 5).map(item => item.stocks && (
-                            <StockRow
-                              key={item.id}
-                              stock={item.stocks}
-                              onClick={() => navigate(`/trade/stocks/${item.stocks?.symbol}`)}
-                            />
-                          ))}
-                          {watchlist.length > 5 && (
-                            <Button
-                              variant="ghost"
-                              className="w-full"
-                              onClick={() => setActiveTab('watchlist')}
-                            >
-                              View all {watchlist.length} items
-                            </Button>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ) : null
-                  )}
-                </div>
-              </>
-            )}
-          </TabsContent>
-
-          <TabsContent value="watchlist">
-            <Card>
-              <CardHeader>
-                <CardTitle>Your Watchlist</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                {!user ? (
-                  <div className="p-8 text-center">
-                    <p className="text-muted-foreground mb-4">Sign in to create a watchlist</p>
-                    <Button onClick={() => navigate('/auth')}>Sign In</Button>
-                  </div>
-                ) : watchlist && watchlist.length > 0 ? (
-                  watchlist.map(item => item.stocks && (
-                    <StockRow 
-                      key={item.id} 
-                      stock={item.stocks} 
-                      onClick={() => navigate(`/trade/stocks/${item.stocks?.symbol}`)}
-                    />
-                  ))
-                ) : (
-                  <div className="p-8 text-center text-muted-foreground">
-                    <Star className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Your watchlist is empty</p>
-                    <p className="text-sm mt-1">Add stocks to track them here</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="movers">
-            <div className="grid gap-6 md:grid-cols-2">
+            <TabsContent value="watchlist">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-profit">
-                    <TrendingUp className="h-5 w-5" /> Top Gainers
-                  </CardTitle>
+                  <CardTitle>Crypto Watchlist</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  {topGainers.length > 0 ? (
-                    topGainers.map(stock => (
-                      <StockRow 
-                        key={stock.id} 
-                        stock={stock} 
-                        showChange
-                        onClick={() => navigate(`/trade/stocks/${stock.symbol}`)}
+                  {!user ? (
+                    <div className="p-8 text-center">
+                      <p className="text-muted-foreground mb-4">Sign in to create a watchlist</p>
+                      <Button onClick={() => navigate('/auth')}>Sign In</Button>
+                    </div>
+                  ) : cryptoWatchlist && cryptoWatchlist.length > 0 ? (
+                    cryptoWatchlist.map(item => item.crypto_assets && (
+                      <CryptoRow 
+                        key={item.id} 
+                        crypto={item.crypto_assets} 
+                        onClick={() => navigateToCrypto(item.crypto_assets!.symbol)}
                       />
                     ))
                   ) : (
-                    <div className="p-8 text-center text-muted-foreground">No gainers today</div>
+                    <div className="p-8 text-center text-muted-foreground">
+                      <Star className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>Your crypto watchlist is empty</p>
+                      <p className="text-sm mt-1">Add crypto assets to track them here</p>
+                    </div>
                   )}
                 </CardContent>
               </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-loss">
-                    <TrendingDown className="h-5 w-5" /> Top Losers
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {topLosers.length > 0 ? (
-                    topLosers.map(stock => (
-                      <StockRow 
-                        key={stock.id} 
-                        stock={stock} 
-                        showChange
-                        onClick={() => navigate(`/trade/stocks/${stock.symbol}`)}
-                      />
-                    ))
-                  ) : (
-                    <div className="p-8 text-center text-muted-foreground">No losers today</div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
+          </Tabs>
+        )}
       </main>
       <Footer />
     </div>

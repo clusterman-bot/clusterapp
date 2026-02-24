@@ -345,6 +345,174 @@ export type Database = {
           },
         ]
       }
+      crypto_assets: {
+        Row: {
+          current_price: number
+          day_high: number | null
+          day_low: number | null
+          id: string
+          logo_url: string | null
+          market_cap: number | null
+          name: string
+          previous_close: number | null
+          symbol: string
+          updated_at: string
+          volume: number | null
+        }
+        Insert: {
+          current_price?: number
+          day_high?: number | null
+          day_low?: number | null
+          id?: string
+          logo_url?: string | null
+          market_cap?: number | null
+          name: string
+          previous_close?: number | null
+          symbol: string
+          updated_at?: string
+          volume?: number | null
+        }
+        Update: {
+          current_price?: number
+          day_high?: number | null
+          day_low?: number | null
+          id?: string
+          logo_url?: string | null
+          market_cap?: number | null
+          name?: string
+          previous_close?: number | null
+          symbol?: string
+          updated_at?: string
+          volume?: number | null
+        }
+        Relationships: []
+      }
+      crypto_holdings: {
+        Row: {
+          average_cost: number
+          created_at: string
+          crypto_asset_id: string
+          id: string
+          quantity: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          average_cost?: number
+          created_at?: string
+          crypto_asset_id: string
+          id?: string
+          quantity?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          average_cost?: number
+          created_at?: string
+          crypto_asset_id?: string
+          id?: string
+          quantity?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crypto_holdings_crypto_asset_id_fkey"
+            columns: ["crypto_asset_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crypto_orders: {
+        Row: {
+          created_at: string
+          crypto_asset_id: string
+          executed_at: string | null
+          executed_price: number | null
+          id: string
+          limit_price: number | null
+          order_side: Database["public"]["Enums"]["crypto_order_side"]
+          order_type: Database["public"]["Enums"]["crypto_order_type"]
+          price: number | null
+          quantity: number
+          status: Database["public"]["Enums"]["crypto_order_status"]
+          stop_price: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          crypto_asset_id: string
+          executed_at?: string | null
+          executed_price?: number | null
+          id?: string
+          limit_price?: number | null
+          order_side: Database["public"]["Enums"]["crypto_order_side"]
+          order_type?: Database["public"]["Enums"]["crypto_order_type"]
+          price?: number | null
+          quantity: number
+          status?: Database["public"]["Enums"]["crypto_order_status"]
+          stop_price?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          crypto_asset_id?: string
+          executed_at?: string | null
+          executed_price?: number | null
+          id?: string
+          limit_price?: number | null
+          order_side?: Database["public"]["Enums"]["crypto_order_side"]
+          order_type?: Database["public"]["Enums"]["crypto_order_type"]
+          price?: number | null
+          quantity?: number
+          status?: Database["public"]["Enums"]["crypto_order_status"]
+          stop_price?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crypto_orders_crypto_asset_id_fkey"
+            columns: ["crypto_asset_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crypto_watchlist: {
+        Row: {
+          created_at: string
+          crypto_asset_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          crypto_asset_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          crypto_asset_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crypto_watchlist_crypto_asset_id_fkey"
+            columns: ["crypto_asset_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deployed_models: {
         Row: {
           config: Json | null
@@ -2401,6 +2569,9 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "developer" | "retail_trader" | "alpha"
+      crypto_order_side: "buy" | "sell"
+      crypto_order_status: "pending" | "executed" | "cancelled" | "failed"
+      crypto_order_type: "market" | "limit" | "stop_loss"
       order_side: "buy" | "sell"
       order_status: "pending" | "executed" | "cancelled" | "failed"
       order_type: "market" | "limit" | "stop_loss" | "recurring"
@@ -2532,6 +2703,9 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "developer", "retail_trader", "alpha"],
+      crypto_order_side: ["buy", "sell"],
+      crypto_order_status: ["pending", "executed", "cancelled", "failed"],
+      crypto_order_type: ["market", "limit", "stop_loss"],
       order_side: ["buy", "sell"],
       order_status: ["pending", "executed", "cancelled", "failed"],
       order_type: ["market", "limit", "stop_loss", "recurring"],
