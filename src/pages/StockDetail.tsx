@@ -6,12 +6,13 @@ import { MainNav } from '@/components/MainNav';
 import { BackButton } from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Star, StarOff, Activity } from 'lucide-react';
+import { Star, StarOff, Activity, Zap } from 'lucide-react';
 import { useStockBySymbol, useIsInWatchlist, useAddToWatchlist, useRemoveFromWatchlist } from '@/hooks/useTrading';
 import { useAlpacaQuote, useAlpacaAssetInfo } from '@/hooks/useAlpaca';
 import { TradingModeToggle } from '@/components/TradingModeToggle';
 import { AdvancedChart } from '@/components/trade/AdvancedChart';
 import { QuickTradePanel } from '@/components/trade/QuickTradePanel';
+import { QuickBuildPanel } from '@/components/stock/QuickBuildPanel';
 
 export default function StockDetail() {
   const { symbol } = useParams<{ symbol: string }>();
@@ -114,6 +115,14 @@ export default function StockDetail() {
                 <Activity className="mr-2 h-4 w-4" /> Automate
               </Button>
             )}
+            {user && isVerified && (
+              <Button variant="outline" size="sm" onClick={() => {
+                const el = document.getElementById('quick-build-panel');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}>
+                <Zap className="mr-2 h-4 w-4" /> Quick Build
+              </Button>
+            )}
             {user && isVerified && dbStock && (
               <Button variant="outline" size="icon" onClick={toggleWatchlist}>
                 {isInWatchlist ? <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" /> : <StarOff className="h-4 w-4" />}
@@ -149,6 +158,13 @@ export default function StockDetail() {
             </div>
           )}
         </div>
+
+        {/* Quick Build Panel */}
+        {user && isVerified && (
+          <div id="quick-build-panel">
+            <QuickBuildPanel symbol={stock.symbol} />
+          </div>
+        )}
       </main>
     </div>
   );
