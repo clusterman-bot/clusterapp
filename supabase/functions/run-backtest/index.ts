@@ -257,6 +257,8 @@ serve(async (req) => {
       initial_capital = 100000,
       model_id,
       timeframe = '1Day',
+      chunk_mode = false,
+      carry_over = null,
     } = body;
 
     // Map timeframe to annualization factor and warm-up bars
@@ -386,13 +388,15 @@ serve(async (req) => {
     const allCloses = bars.map((b: any) => b.close);
     const INDICATOR_WINDOW = 200; // max lookback needed for any indicator
 
-    let cash = initial_capital;
-    let position = 0; // shares held
-    let entryPrice = 0;
+    // Initialize from carry_over if provided (chunked backtesting)
+    let cash = carry_over ? carry_over.cash : initial_capital;
+    let position = carry_over ? carry_over.position : 0;
+    let entryPrice = carry_over ? carry_over.entryPrice : 0;
+    const effectiveInitialCapital = carry_over ? (carry_over.cash + carry_over.position * (bars[0]?.close || 0)) : initial_capital;
     const trades: any[] = [];
     const rawEquityCurve: { date: string; value: number }[] = [];
     const dailyReturns: number[] = [];
-    let prevEquity = initial_capital;
+    let prevEquity = effectiveInitialCapital;
 
     // Pre-compile custom indicator functions once (avoid new Function() per bar)
     const compiledCustom: Array<{ fn: Function; weight: number }> = [];
@@ -500,8 +504,8 @@ serve(async (req) => {
       }
     }
 
-    // Close any remaining position at the last bar
-    if (position > 0 && bars.length > 0) {
+    // In chunk_mode, DON'T close remaining position — carry it to next chunk
+    if (!chunk_mode && position > 0 && bars.length > 0) {
       const lastBar = bars[bars.length - 1];
       const pnl = (lastBar.close - entryPrice) * position;
       const pnlPct = entryPrice > 0 ? ((lastBar.close - entryPrice) / entryPrice) * 100 : 0;
@@ -517,22 +521,36 @@ serve(async (req) => {
       position = 0;
     }
 
-    // ==================== METRICS ====================
+    // Closed trades only
+    const closedTrades = trades.filter(t => t.side === 'sell');
+
+    // In chunk_mode, return raw data + carry_over state for stitching
+    if (chunk_mode) {
+      const lastPrice = bars.length > 0 ? bars[bars.length - 1].close : 0;
+      const finalEquityChunk = cash + position * lastPrice;
+      console.log(`[Backtest] Chunk complete: ${closedTrades.length} trades, ${bars.length} bars, equity=$${finalEquityChunk.toFixed(2)}`);
+      return new Response(JSON.stringify({
+        success: true,
+        trades: closedTrades,
+        bars_count: bars.length,
+        raw_equity_curve: rawEquityCurve,
+        raw_daily_returns: dailyReturns,
+        carry_over: { cash, position, entryPrice },
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ==================== METRICS (non-chunk mode) ====================
     const finalEquity = cash;
     const totalReturn = ((finalEquity - initial_capital) / initial_capital) * 100;
 
-    // Closed trades only
-    const closedTrades = trades.filter(t => t.side === 'sell');
     const winningTrades = closedTrades.filter(t => (t.pnl || 0) > 0);
     const losingTrades = closedTrades.filter(t => (t.pnl || 0) < 0);
     const winRate = closedTrades.length > 0 ? (winningTrades.length / closedTrades.length) * 100 : 0;
 
-    // Profit factor
     const grossProfit = winningTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
     const grossLoss = Math.abs(losingTrades.reduce((sum, t) => sum + (t.pnl || 0), 0));
     const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : 0;
 
-    // Max drawdown
     let peak = initial_capital;
     let maxDrawdown = 0;
     for (const point of rawEquityCurve) {
@@ -541,7 +559,6 @@ serve(async (req) => {
       if (dd > maxDrawdown) maxDrawdown = dd;
     }
 
-    // Downsample equity curve to max 500 points for response size
     const MAX_CURVE_POINTS = 500;
     let equityCurve = rawEquityCurve;
     if (rawEquityCurve.length > MAX_CURVE_POINTS) {
@@ -549,7 +566,6 @@ serve(async (req) => {
       equityCurve = rawEquityCurve.filter((_, idx) => idx % step === 0 || idx === rawEquityCurve.length - 1);
     }
 
-    // Sharpe & Sortino (annualized based on timeframe)
     const annFactor = tfConfig.annualization;
     const avgReturn = dailyReturns.length > 0 ? dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length : 0;
     const stdDev = dailyReturns.length > 1
@@ -563,7 +579,6 @@ serve(async (req) => {
       : 0;
     const sortinoRatio = downsideDev > 0 ? (avgReturn / downsideDev) * Math.sqrt(annFactor) : 0;
 
-    // CAGR
     const daysDiff = (new Date(end_date).getTime() - new Date(start_date).getTime()) / (1000 * 60 * 60 * 24);
     const years = daysDiff / 365.25;
     const cagr = years > 0 ? (Math.pow(finalEquity / initial_capital, 1 / years) - 1) * 100 : 0;
@@ -583,7 +598,6 @@ serve(async (req) => {
 
     console.log(`[Backtest] Complete: ${closedTrades.length} trades, return=${metrics.total_return}%, sharpe=${metrics.sharpe_ratio}`);
 
-    // Optionally save to DB if model_id provided
     if (model_id) {
       try {
         await supabaseAdmin.from('backtests').insert({
