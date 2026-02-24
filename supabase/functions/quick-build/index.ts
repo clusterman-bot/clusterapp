@@ -60,9 +60,11 @@ function generateSimulatedData(ticker: string, start: string, end: string): OHLC
   const data: OHLCVBar[] = [];
   const seed = ticker.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
   let price = 100 + (seed % 150);
+  const isCrypto = ticker.includes("/");
 
   for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
-    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    // Skip weekends only for stocks, not crypto
+    if (!isCrypto && (d.getDay() === 0 || d.getDay() === 6)) continue;
     const change = (Math.random() - 0.5) * 0.04;
     const open = price;
     const close = price * (1 + change);

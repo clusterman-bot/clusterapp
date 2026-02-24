@@ -110,20 +110,26 @@ function barsToChartData(bars: AlpacaBar[], timeframe: string): ChartData[] {
   return data;
 }
 
-function generateOHLCData(currentPrice: number, previousClose: number, days: number = 60): ChartData[] {
+function generateOHLCData(symbol: string, currentPrice: number, previousClose: number, days: number = 60): ChartData[] {
   const data: ChartData[] = [];
-  let price = previousClose || currentPrice * 0.95;
-  const volatility = currentPrice * 0.02;
+  // Use symbol as seed so different assets get different charts
+  const seed = symbol.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  let price = previousClose || currentPrice || (50 + (seed % 200));
+  // If price is still 0 derive from symbol seed
+  if (price <= 0) price = 50 + (seed % 500) + (seed * 7 % 1000);
+  const volatility = price * 0.02;
   
   for (let i = 0; i < days; i++) {
     const date = new Date();
     date.setDate(date.getDate() - (days - i));
-    const change = (Math.random() - 0.48) * volatility;
+    // Use deterministic-ish noise mixed with seed
+    const pseudoRandom = Math.sin(seed * 9301 + i * 49297) % 1;
+    const change = (pseudoRandom - 0.48) * volatility;
     const open = price;
     const close = price + change;
-    const high = Math.max(open, close) + Math.random() * volatility * 0.5;
-    const low = Math.min(open, close) - Math.random() * volatility * 0.5;
-    const volume = Math.floor(1000000 + Math.random() * 5000000);
+    const high = Math.max(open, close) + Math.abs(Math.sin(seed + i * 3)) * volatility * 0.5;
+    const low = Math.min(open, close) - Math.abs(Math.cos(seed + i * 5)) * volatility * 0.5;
+    const volume = Math.floor(1000000 + Math.abs(Math.sin(i * seed)) * 5000000);
     data.push({
       time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
       date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -131,7 +137,7 @@ function generateOHLCData(currentPrice: number, previousClose: number, days: num
     });
     price = close;
   }
-  if (data.length > 0) {
+  if (data.length > 0 && currentPrice > 0) {
     data[data.length - 1].close = currentPrice;
     data[data.length - 1].high = Math.max(data[data.length - 1].high, currentPrice);
     data[data.length - 1].low = Math.min(data[data.length - 1].low, currentPrice);
@@ -158,8 +164,8 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
     }
     // Fallback to simulated
     const days = timeframe === '1D' ? 1 : timeframe === '1W' ? 7 : timeframe === '1M' ? 30 : timeframe === '3M' ? 90 : timeframe === '1Y' ? 365 : 365;
-    return generateOHLCData(currentPrice, previousClose, days);
-  }, [alpacaBars, isLive, currentPrice, previousClose, timeframe]);
+    return generateOHLCData(symbol, currentPrice, previousClose, days);
+  }, [alpacaBars, isLive, currentPrice, previousClose, timeframe, symbol]);
 
   const minPrice = Math.min(...chartData.map(d => d.low)) * 0.995;
   const maxPrice = Math.max(...chartData.map(d => d.high)) * 1.005;
