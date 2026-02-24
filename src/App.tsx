@@ -60,13 +60,13 @@ const App = () => (
                   <Route path="/sms-consent" element={<SMSConsent />} />
 
                   {/* Protected routes */}
-                  <Route path="/trade" element={<ProtectedRoute><Trade /></ProtectedRoute>} />
-                  <Route path="/trade/stocks/:symbol" element={<ProtectedRoute><StockDetail /></ProtectedRoute>} />
+                  <Route path="/trade" element={<Trade />} />
+                  <Route path="/trade/stocks/:symbol" element={<StockDetail />} />
                   <Route path="/trade/stocks/:symbol/automate" element={<ProtectedRoute><StockAutomationConfig /></ProtectedRoute>} />
                   <Route path="/trade/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
                   <Route path="/trade/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
                   <Route path="/trade/ai-builder" element={<ProtectedRoute><AIBotBuilder /></ProtectedRoute>} />
-                  <Route path="/community" element={<ProtectedRoute><Community /></ProtectedRoute>} />
+                  <Route path="/community" element={<Community />} />
                   <Route path="/settings/brokerage" element={<ProtectedRoute><BrokerageSettings /></ProtectedRoute>} />
                   <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                   <Route path="/profile/:userId" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
