@@ -612,16 +612,14 @@ serve(async (req) => {
       }
 
       case 'get-bars': {
-        // Get historical bars for charting
+        // Get historical bars for charting (stocks)
         const symbol = body.symbol?.toUpperCase();
         const barTimeframe = body.timeframe || '1Day';
         const start = body.start;
         const end = body.end;
         const limit = body.limit || 1000;
 
-        if (!symbol) {
-          throw new Error('Symbol is required');
-        }
+        if (!symbol) throw new Error('Symbol is required');
 
         console.log(`[Alpaca] Getting bars for: ${symbol}, timeframe=${barTimeframe}, start=${start}`);
 
@@ -663,6 +661,139 @@ serve(async (req) => {
         }));
 
         console.log(`[Alpaca] Returned ${bars.length} bars for ${symbol}`);
+
+        return new Response(
+          JSON.stringify({ success: true, bars }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get-crypto-quote': {
+        // Get real-time crypto quote
+        const symbol = body.symbol?.toUpperCase();
+        if (!symbol) throw new Error('Symbol is required');
+
+        console.log(`[Alpaca] Getting crypto quote for: ${symbol}`);
+
+        const response = await fetch(
+          `https://data.alpaca.markets/v1beta3/crypto/us/latest/quotes?symbols=${encodeURIComponent(symbol)}`,
+          {
+            headers: {
+              'APCA-API-KEY-ID': alpacaApiKey,
+              'APCA-API-SECRET-KEY': alpacaApiSecret,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          // Fallback to latest trade
+          const tradeResp = await fetch(
+            `https://data.alpaca.markets/v1beta3/crypto/us/latest/trades?symbols=${encodeURIComponent(symbol)}`,
+            {
+              headers: {
+                'APCA-API-KEY-ID': alpacaApiKey,
+                'APCA-API-SECRET-KEY': alpacaApiSecret,
+              },
+            }
+          );
+
+          if (!tradeResp.ok) throw new Error(`Failed to get crypto quote for ${symbol}`);
+          const tradeData = await tradeResp.json();
+          const trade = tradeData.trades?.[symbol];
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              quote: { symbol, price: trade?.p || 0, timestamp: trade?.t },
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const quoteData = await response.json();
+        const quote = quoteData.quotes?.[symbol];
+        const bp = quote?.bp || 0;
+        const ap = quote?.ap || 0;
+        let price = 0;
+        if (bp > 0 && ap > 0) price = (bp + ap) / 2;
+        else if (bp > 0) price = bp;
+        else if (ap > 0) price = ap;
+
+        if (price === 0) {
+          const tradeResp = await fetch(
+            `https://data.alpaca.markets/v1beta3/crypto/us/latest/trades?symbols=${encodeURIComponent(symbol)}`,
+            {
+              headers: {
+                'APCA-API-KEY-ID': alpacaApiKey,
+                'APCA-API-SECRET-KEY': alpacaApiSecret,
+              },
+            }
+          );
+          if (tradeResp.ok) {
+            const tradeData = await tradeResp.json();
+            price = tradeData.trades?.[symbol]?.p || 0;
+          }
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            quote: { symbol, bid: bp, ask: ap, price, timestamp: quote?.t },
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get-crypto-bars': {
+        // Get historical crypto bars for charting
+        const symbol = body.symbol?.toUpperCase();
+        const barTimeframe = body.timeframe || '1Day';
+        const start = body.start;
+        const end = body.end;
+        const limit = body.limit || 1000;
+
+        if (!symbol) throw new Error('Symbol is required');
+
+        console.log(`[Alpaca] Getting crypto bars for: ${symbol}, timeframe=${barTimeframe}`);
+
+        const params = new URLSearchParams({
+          symbols: symbol,
+          timeframe: barTimeframe,
+          limit: String(limit),
+          sort: 'asc',
+        });
+        if (start) params.set('start', start);
+        if (end) params.set('end', end);
+
+        const response = await fetch(
+          `https://data.alpaca.markets/v1beta3/crypto/us/bars?${params}`,
+          {
+            headers: {
+              'APCA-API-KEY-ID': alpacaApiKey,
+              'APCA-API-SECRET-KEY': alpacaApiSecret,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const errData = await response.json();
+          console.error('[Alpaca] Crypto bars error:', errData);
+          throw new Error(errData.message || 'Failed to fetch crypto bars');
+        }
+
+        const barsData = await response.json();
+        const symbolBars = barsData.bars?.[symbol] || [];
+        const bars = symbolBars.map((b: any) => ({
+          timestamp: new Date(b.t).getTime(),
+          date: b.t,
+          open: b.o,
+          high: b.h,
+          low: b.l,
+          close: b.c,
+          volume: b.v,
+        }));
+
+        console.log(`[Alpaca] Returned ${bars.length} crypto bars for ${symbol}`);
 
         return new Response(
           JSON.stringify({ success: true, bars }),

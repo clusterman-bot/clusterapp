@@ -47,6 +47,7 @@ interface AdvancedChartProps {
   previousClose: number;
   dayHigh?: number | null;
   dayLow?: number | null;
+  isCrypto?: boolean;
 }
 
 function addIndicators(data: ChartData[]): void {
@@ -142,12 +143,12 @@ function generateOHLCData(currentPrice: number, previousClose: number, days: num
 const timeframes = ['1D', '1W', '1M', '3M', '1Y'];
 const indicators = ['SMA', 'EMA', 'BB', 'RSI', 'MACD', 'VOL'];
 
-export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, dayLow }: AdvancedChartProps) {
+export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, dayLow, isCrypto }: AdvancedChartProps) {
   const [timeframe, setTimeframe] = useState('1M');
   const [activeIndicators, setActiveIndicators] = useState<string[]>(['SMA', 'VOL']);
   const [chartType, setChartType] = useState<'line' | 'candle' | 'area'>('area');
 
-  const { data: alpacaBars, isLoading: barsLoading } = useAlpacaBars(symbol, timeframe);
+  const { data: alpacaBars, isLoading: barsLoading } = useAlpacaBars(symbol, timeframe, isCrypto);
 
   const isLive = !!alpacaBars && alpacaBars.length > 0;
 
