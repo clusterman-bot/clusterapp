@@ -258,14 +258,25 @@ serve(async (req) => {
       end_date,
       initial_capital = 100000,
       model_id,
+      timeframe = '1Day',
     } = body;
+
+    // Map timeframe to annualization factor and warm-up bars
+    const timeframeConfig: Record<string, { annualization: number; warmup: number; alpacaTimeframe: string }> = {
+      '1Min':  { annualization: 252 * 6.5 * 60, warmup: 200, alpacaTimeframe: '1Min' },
+      '5Min':  { annualization: 252 * 6.5 * 12, warmup: 200, alpacaTimeframe: '5Min' },
+      '15Min': { annualization: 252 * 6.5 * 4,  warmup: 200, alpacaTimeframe: '15Min' },
+      '1Hour': { annualization: 252 * 6.5,       warmup: 100, alpacaTimeframe: '1Hour' },
+      '1Day':  { annualization: 252,              warmup: 50,  alpacaTimeframe: '1Day' },
+    };
+    const tfConfig = timeframeConfig[timeframe] || timeframeConfig['1Day'];
 
     if (!symbol || !start_date || !end_date) {
       return new Response(JSON.stringify({ error: 'symbol, start_date, and end_date are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    console.log(`[Backtest] Starting for ${symbol} from ${start_date} to ${end_date}, capital=$${initial_capital}`);
+    console.log(`[Backtest] Starting for ${symbol} from ${start_date} to ${end_date}, timeframe=${timeframe}, capital=$${initial_capital}`);
 
     // Get user's brokerage account
     const { data: brokerageAccount, error: accError } = await supabaseAdmin
@@ -297,7 +308,7 @@ serve(async (req) => {
     if (isCrypto) {
       const params = new URLSearchParams({
         symbols: symbol.toUpperCase(),
-        timeframe: '1Day',
+        timeframe: tfConfig.alpacaTimeframe,
         start: start_date,
         end: end_date,
         limit: '10000',
@@ -315,7 +326,7 @@ serve(async (req) => {
       bars = symbolBars.map((b: any) => ({ date: b.t, open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v }));
     } else {
       const params = new URLSearchParams({
-        timeframe: '1Day',
+        timeframe: tfConfig.alpacaTimeframe,
         start: start_date,
         end: end_date,
         limit: '10000',
@@ -350,7 +361,9 @@ serve(async (req) => {
     const dailyReturns: number[] = [];
     let prevEquity = initial_capital;
 
-    for (let i = 50; i < bars.length; i++) { // start at 50 to warm up indicators
+    const warmup = Math.min(tfConfig.warmup, Math.floor(bars.length * 0.1));
+    const startIdx = Math.max(warmup, 50);
+    for (let i = startIdx; i < bars.length; i++) { // start after warm-up period
       const closesUpTo = bars.slice(0, i + 1).map((b: any) => b.close);
       const barsUpTo = bars.slice(0, i + 1);
       const bar = bars[i];
@@ -478,18 +491,19 @@ serve(async (req) => {
       if (dd > maxDrawdown) maxDrawdown = dd;
     }
 
-    // Sharpe & Sortino (annualized, assuming 252 trading days)
+    // Sharpe & Sortino (annualized based on timeframe)
+    const annFactor = tfConfig.annualization;
     const avgReturn = dailyReturns.length > 0 ? dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length : 0;
     const stdDev = dailyReturns.length > 1
       ? Math.sqrt(dailyReturns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / (dailyReturns.length - 1))
       : 0;
-    const sharpeRatio = stdDev > 0 ? (avgReturn / stdDev) * Math.sqrt(252) : 0;
+    const sharpeRatio = stdDev > 0 ? (avgReturn / stdDev) * Math.sqrt(annFactor) : 0;
 
     const downsideReturns = dailyReturns.filter(r => r < 0);
     const downsideDev = downsideReturns.length > 1
       ? Math.sqrt(downsideReturns.reduce((sum, r) => sum + Math.pow(r, 2), 0) / downsideReturns.length)
       : 0;
-    const sortinoRatio = downsideDev > 0 ? (avgReturn / downsideDev) * Math.sqrt(252) : 0;
+    const sortinoRatio = downsideDev > 0 ? (avgReturn / downsideDev) * Math.sqrt(annFactor) : 0;
 
     // CAGR
     const daysDiff = (new Date(end_date).getTime() - new Date(start_date).getTime()) / (1000 * 60 * 60 * 24);

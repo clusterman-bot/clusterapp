@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Play, Loader2, TrendingUp, TrendingDown, BarChart3, Activity } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -61,6 +62,7 @@ export function BacktestPanel({ config }: BacktestPanelProps) {
   const [startDate, setStartDate] = useState('2023-01-01');
   const [endDate, setEndDate] = useState('2024-01-01');
   const [initialCapital, setInitialCapital] = useState('100000');
+  const [timeframe, setTimeframe] = useState('1Day');
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<BacktestResult | null>(null);
 
@@ -86,6 +88,7 @@ export function BacktestPanel({ config }: BacktestPanelProps) {
           start_date: startDate,
           end_date: endDate,
           initial_capital: parseFloat(initialCapital),
+          timeframe,
         },
       });
 
@@ -102,7 +105,7 @@ export function BacktestPanel({ config }: BacktestPanelProps) {
       }
 
       setResult(data);
-      toast({ title: '✅ Backtest Complete', description: `${data.metrics.total_trades} trades simulated.` });
+      toast({ title: '✅ Backtest Complete', description: `${data.metrics.total_trades} trades across ${data.bars_count.toLocaleString()} bars.` });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message || 'Failed to run backtest', variant: 'destructive' });
     } finally {
@@ -135,9 +138,26 @@ export function BacktestPanel({ config }: BacktestPanelProps) {
               <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-8 text-xs" />
             </div>
           </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Initial Capital ($)</Label>
-            <Input type="number" value={initialCapital} onChange={e => setInitialCapital(e.target.value)} min="1000" step="1000" className="h-8 text-xs" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Timeframe</Label>
+              <Select value={timeframe} onValueChange={setTimeframe}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1Min">1 Minute</SelectItem>
+                  <SelectItem value="5Min">5 Minutes</SelectItem>
+                  <SelectItem value="15Min">15 Minutes</SelectItem>
+                  <SelectItem value="1Hour">1 Hour</SelectItem>
+                  <SelectItem value="1Day">1 Day</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Initial Capital ($)</Label>
+              <Input type="number" value={initialCapital} onChange={e => setInitialCapital(e.target.value)} min="1000" step="1000" className="h-8 text-xs" />
+            </div>
           </div>
           <Button onClick={handleRunBacktest} disabled={isRunning} className="w-full" size="sm">
             {isRunning ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Play className="mr-2 h-3.5 w-3.5" />}
@@ -166,7 +186,7 @@ export function BacktestPanel({ config }: BacktestPanelProps) {
               label="Win Rate"
               value={`${result.metrics.win_rate}%`}
               positive={result.metrics.win_rate > 50}
-              sub={`${result.metrics.total_trades} trades`}
+              sub={`${result.metrics.total_trades} trades · ${result.bars_count.toLocaleString()} bars`}
             />
             <MetricCard
               label="Max Drawdown"
