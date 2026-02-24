@@ -1,74 +1,47 @@
 
 
-## Plan: Add Backtesting to AI Bot Builder + Use Alpaca Historical Data
+## Why You're Only Getting ~27 Trades
 
-### Answering your question about data sources
+The low trade count is caused by three compounding factors in the current backtest engine:
 
-Your existing Alpaca keys already support historical bar data for both stocks and crypto — the `get-bars` and `get-crypto-bars` endpoints are already implemented in the `alpaca-trading` edge function. No additional API key is needed. The backtest engine will use the same brokerage credentials the user has linked.
+### Root Causes
 
-### What changes
+**1. Daily bars only (~250 bars/year)**
+The engine hardcodes `timeframe: '1Day'` when fetching from Alpaca. Over a 1-year period, that's only ~250 data points. With 50 bars consumed for indicator warm-up, only ~200 bars are evaluated for signals. Compare this to 15-minute bars which would give ~6,500 bars per year.
 
-Add a "Backtest" tab/button to the AI Bot Builder so users can run a historical simulation of the AI-generated strategy before deploying it. The backtest will fetch real OHLCV data from Alpaca (using the user's linked brokerage account), apply the strategy's indicator logic server-side, simulate trades, and return performance metrics (total return, Sharpe ratio, win rate, max drawdown, equity curve).
+**2. Single position at a time**
+The simulation only allows one open position. While a trade is active (waiting for stop-loss, take-profit, or sell signal), all new buy signals are ignored. A trade held for 20 days means 20 days of missed opportunities.
 
-### Changes
+**3. Composite scoring requires consensus**
+All enabled indicators (RSI, EMA, Bollinger, etc.) are averaged into a single score. The score must exceed `theta` (e.g., 0.05) to trigger a trade. When indicators disagree, the average stays near zero and no trade fires. This is by design for live trading safety, but kills trade frequency in backtests.
 
-**1. New edge function: `supabase/functions/run-backtest/index.ts`**
+### Plan: Add Intraday Timeframe Support
 
-A self-contained backtesting engine that:
-- Accepts a strategy config (indicators, thresholds, risk params, custom code) + date range + initial capital
-- Fetches historical bars from Alpaca Data API (`get-bars` for stocks, `get-crypto-bars` for crypto) using the user's linked brokerage credentials
-- Computes built-in indicator signals (RSI, SMA, EMA, Bollinger, SMA Deviation) from the OHLCV data
-- Evaluates custom indicator code in a sandboxed `new Function()` call
-- Produces a composite score per bar, applies theta threshold to generate BUY/SELL signals
-- Simulates trades with position sizing, stop-loss, and take-profit
-- Calculates metrics: total return, Sharpe ratio, Sortino ratio, max drawdown, win rate, profit factor, CAGR, equity curve
-- Optionally saves results to the `backtests` + `trades` tables (linked to a model if one exists)
-- Returns everything to the frontend for inline display
+The highest-impact fix is letting users select the bar timeframe. Switching from daily to 15-minute bars increases data points from ~250/year to ~6,500/year, dramatically increasing trade opportunities.
 
-**2. Frontend: `src/pages/AIBotBuilder.tsx`**
+**1. Edge function `supabase/functions/run-backtest/index.ts`**
+- Accept a new `timeframe` parameter (default `'1Day'`, options: `'1Min'`, `'5Min'`, `'15Min'`, `'1Hour'`, `'1Day'`)
+- Pass it to the Alpaca bars API call instead of hardcoded `'1Day'`
+- Adjust Sharpe/Sortino annualization factor based on timeframe (252 for daily, 252*6.5*4 for 15min, etc.)
+- Reduce warm-up window proportionally for intraday (e.g., start at bar 50 for daily, bar 200 for 15min to cover equivalent indicator warm-up)
+- Note: Alpaca free tier limits intraday data to the last 5-7 years for stocks; crypto has broader availability
 
-- Add a "Backtest" button next to "Deploy Bot" in the action buttons area
-- Add a "Backtest" tab alongside "Generated Config" and "Upload Model"
-- Backtest tab contains:
-  - Date range picker (start/end)
-  - Initial capital input
-  - "Run Backtest" button
-  - Results display: key metrics cards (Total Return, Sharpe, Win Rate, Max Drawdown) + equity curve chart (using Recharts) + trade log table
-- While running, show a progress indicator
-- Results persist in the tab until a new strategy is generated
+**2. Frontend `src/components/backtest/BacktestPanel.tsx`**
+- Add a "Timeframe" dropdown selector with options: 1 Min, 5 Min, 15 Min, 1 Hour, 1 Day
+- Pass the selected timeframe to the edge function call
+- Show bar count in results (already returned as `bars_count`)
+- Default to `'1Day'` for backward compatibility
 
-**3. Update `supabase/config.toml`**
+**3. No database changes needed**
 
-- Add `[functions.run-backtest]` with `verify_jwt = false` (auth validated in code)
+### Technical Details
 
-### Architecture flow
+- Alpaca's bars endpoint supports these timeframes natively via the `timeframe` query parameter
+- Intraday data returns significantly more bars: a 1-year range at 15Min resolution yields ~6,500 bars for stocks (6.5 hours * 4 bars/hour * 252 trading days)
+- The warm-up period (currently fixed at 50 bars) should scale: 50 for daily, but the longest indicator window (e.g., EMA 48) determines the real minimum
+- Annualization factor for Sharpe ratio changes: daily uses sqrt(252), hourly uses sqrt(252*6.5), 15-min uses sqrt(252*6.5*4)
 
-```text
-AIBotBuilder (frontend)
-  │
-  ├─ User generates strategy via AI chat
-  ├─ User clicks "Backtest"
-  │     │
-  │     ▼
-  │   run-backtest edge function
-  │     ├─ Fetches user's Alpaca credentials from user_brokerage_accounts
-  │     ├─ Calls Alpaca Data API for historical bars
-  │     ├─ Computes indicator signals (RSI, EMA, etc.)
-  │     ├─ Evaluates custom indicator code
-  │     ├─ Simulates trades (entries, exits, stop-loss, take-profit)
-  │     ├─ Calculates performance metrics
-  │     └─ Returns { metrics, equity_curve, trades }
-  │
-  └─ Displays results inline in Backtest tab
-```
+### Expected Impact
 
-### Technical details
-
-**Indicator computation (server-side):** The edge function will implement the same RSI/SMA/EMA/Bollinger/SMA Deviation calculations that `run-automations` uses, but applied to historical daily bars rather than live minute bars. Custom indicators receive the full bars array and return +1/-1/0 signals.
-
-**Composite scoring:** Each enabled indicator produces a signal (-1, 0, +1). Signals are averaged (weighted for custom indicators). If the composite score exceeds `theta`, a BUY is triggered; below `-theta`, a SELL. This mirrors the live automation logic.
-
-**Trade simulation:** Tracks a single position per asset. Applies `position_size_percent` to determine quantity. Monitors stop-loss and take-profit on each subsequent bar. Tracks entry/exit prices and PnL per trade.
-
-**Data source:** Uses Alpaca's historical bars API — the same endpoint already working in the `alpaca-trading` function. No new API key needed. For users without a brokerage account linked, the function will return an error prompting them to connect one.
+With 15-minute bars over 1 year, users should see hundreds to thousands of signal evaluations and significantly more trades, matching the volume expected from platforms like QuantConnect.
 
