@@ -261,11 +261,11 @@ serve(async (req) => {
 
     // Map timeframe to annualization factor and warm-up bars
     const timeframeConfig: Record<string, { annualization: number; warmup: number; alpacaTimeframe: string }> = {
-      '1Min':  { annualization: 252 * 6.5 * 60, warmup: 200, alpacaTimeframe: '1Min' },
-      '5Min':  { annualization: 252 * 6.5 * 12, warmup: 200, alpacaTimeframe: '5Min' },
-      '15Min': { annualization: 252 * 6.5 * 4,  warmup: 200, alpacaTimeframe: '15Min' },
-      '1Hour': { annualization: 252 * 6.5,       warmup: 100, alpacaTimeframe: '1Hour' },
-      '1Day':  { annualization: 252,              warmup: 50,  alpacaTimeframe: '1Day' },
+      '1Min':  { annualization: 252 * 6.5 * 60, warmup: 200, alpacaTimeframe: '1Min', signalEvery: 5 },
+      '5Min':  { annualization: 252 * 6.5 * 12, warmup: 200, alpacaTimeframe: '5Min', signalEvery: 2 },
+      '15Min': { annualization: 252 * 6.5 * 4,  warmup: 200, alpacaTimeframe: '15Min', signalEvery: 1 },
+      '1Hour': { annualization: 252 * 6.5,       warmup: 100, alpacaTimeframe: '1Hour', signalEvery: 1 },
+      '1Day':  { annualization: 252,              warmup: 50,  alpacaTimeframe: '1Day', signalEvery: 1 },
     };
     const tfConfig = timeframeConfig[timeframe] || timeframeConfig['1Day'];
 
@@ -457,6 +457,10 @@ serve(async (req) => {
           continue;
         }
       }
+
+      // Only evaluate expensive indicators every N bars (stop-loss/take-profit still checked every bar above)
+      const signalEvery = tfConfig.signalEvery || 1;
+      if ((i - startIdx) % signalEvery !== 0) continue;
 
       // Generate composite signal
       const compositeScore = generateSignalForBar(closesWindow, barsWindow, indicators, rsi_oversold, rsi_overbought, compiledCustom);
