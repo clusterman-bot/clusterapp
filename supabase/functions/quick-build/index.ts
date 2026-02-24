@@ -128,7 +128,7 @@ function computeDataStats(bars: OHLCVBar[]) {
 
 // Call Lovable AI to determine optimal indicators and hyperparameters
 async function aiAnalyze(ticker: string, stats: any) {
-  const systemPrompt = `You are an expert quantitative analyst. Given summary statistics of a stock's historical price data, determine the optimal technical indicators, their parameters, and ML model hyperparameters for building a trading signal model. You must respond using the suggest_config tool.`;
+  const systemPrompt = `You are an expert quantitative analyst. Given summary statistics of a stock's historical price data, determine the optimal technical indicators, their parameters, and ML model hyperparameters for building a trading signal model. You may also generate custom JavaScript indicators using the signature \`(bars) => number\` where bars is an array of \`{date, open, high, low, close, volume}\`. Use these for calculations not covered by the native indicators — e.g., VWAP, ATR, custom momentum, volume-price patterns, or stock-specific signals. You must respond using the suggest_config tool.`;
 
   const userPrompt = `Analyze ${ticker} with these characteristics:
 - ${stats.total_bars} trading days of data (${stats.start_date} to ${stats.end_date})
@@ -251,6 +251,19 @@ Determine which indicators to enable and their optimal parameters. Also set hype
               horizon: { type: "number" },
               theta: { type: "number" },
               reasoning: { type: "string" },
+              custom_indicators: {
+                type: "array",
+                description: "Optional custom JavaScript indicators using the (bars) => number signature. Each bar has {date, open, high, low, close, volume}. Use for calculations not covered by native indicators like VWAP, ATR, momentum oscillators, volume-price patterns.",
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string", description: "Short snake_case name for the indicator, e.g. vwap_ratio" },
+                    description: { type: "string", description: "Brief explanation of what this indicator measures" },
+                    code: { type: "string", description: "JavaScript function body as a string, must follow (bars) => number signature" },
+                  },
+                  required: ["name", "description", "code"],
+                },
+              },
             },
             required: [
               "indicators",
@@ -393,13 +406,19 @@ serve(async (req) => {
       };
     }
 
+    // Merge custom indicators into the indicators config
+    const indicatorsWithCustom = {
+      ...aiConfig.indicators,
+      ...(aiConfig.custom_indicators?.length ? { custom_indicators: aiConfig.custom_indicators } : {}),
+    };
+
     // Update run with AI analysis
     await supabase
       .from("quick_build_runs")
       .update({
         status: "training",
         ai_analysis: { reasoning: aiConfig.reasoning, stats },
-        indicators_config: aiConfig.indicators,
+        indicators_config: indicatorsWithCustom,
         hyperparameters: aiConfig.hyperparameters,
         training_period: `${aiConfig.training_date_range.start} to ${aiConfig.training_date_range.end}`,
         validation_period: `${aiConfig.validation_date_range.start} to ${aiConfig.validation_date_range.end}`,
@@ -414,7 +433,7 @@ serve(async (req) => {
         ticker: upperSymbol,
         start_date: aiConfig.training_date_range.start,
         end_date: aiConfig.training_date_range.end,
-        indicators_enabled: aiConfig.indicators,
+        indicators_enabled: indicatorsWithCustom,
         hyperparameters: {
           ...aiConfig.hyperparameters,
           horizon_minutes: aiConfig.horizon,
