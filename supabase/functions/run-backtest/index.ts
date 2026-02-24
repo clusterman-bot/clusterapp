@@ -353,19 +353,25 @@ serve(async (req) => {
     }
 
     // ==================== TRADE SIMULATION ====================
+    // Pre-compute all closes once to avoid repeated .map() calls
+    const allCloses = bars.map((b: any) => b.close);
+    const INDICATOR_WINDOW = 200; // max lookback needed for any indicator
+
     let cash = initial_capital;
     let position = 0; // shares held
     let entryPrice = 0;
     const trades: any[] = [];
-    const equityCurve: { date: string; value: number }[] = [];
+    const rawEquityCurve: { date: string; value: number }[] = [];
     const dailyReturns: number[] = [];
     let prevEquity = initial_capital;
 
     const warmup = Math.min(tfConfig.warmup, Math.floor(bars.length * 0.1));
     const startIdx = Math.max(warmup, 50);
     for (let i = startIdx; i < bars.length; i++) { // start after warm-up period
-      const closesUpTo = bars.slice(0, i + 1).map((b: any) => b.close);
-      const barsUpTo = bars.slice(0, i + 1);
+      // Use sliding window instead of slicing from 0 every time
+      const windowStart = Math.max(0, i + 1 - INDICATOR_WINDOW);
+      const closesWindow = allCloses.slice(windowStart, i + 1);
+      const barsWindow = bars.slice(windowStart, i + 1);
       const bar = bars[i];
       const price = bar.close;
 
@@ -375,7 +381,7 @@ serve(async (req) => {
       dailyReturns.push(dailyReturn);
       prevEquity = equity;
 
-      equityCurve.push({ date: bar.date, value: parseFloat(equity.toFixed(2)) });
+      rawEquityCurve.push({ date: bar.date, value: parseFloat(equity.toFixed(2)) });
 
       // Check stop-loss / take-profit if in position
       if (position > 0 && entryPrice > 0) {
@@ -413,7 +419,7 @@ serve(async (req) => {
       }
 
       // Generate composite signal
-      const compositeScore = generateSignalForBar(closesUpTo, barsUpTo, indicators, rsi_oversold, rsi_overbought);
+      const compositeScore = generateSignalForBar(closesWindow, barsWindow, indicators, rsi_oversold, rsi_overbought);
 
       // BUY signal
       if (compositeScore >= theta && position === 0) {
@@ -485,10 +491,18 @@ serve(async (req) => {
     // Max drawdown
     let peak = initial_capital;
     let maxDrawdown = 0;
-    for (const point of equityCurve) {
+    for (const point of rawEquityCurve) {
       if (point.value > peak) peak = point.value;
       const dd = ((peak - point.value) / peak) * 100;
       if (dd > maxDrawdown) maxDrawdown = dd;
+    }
+
+    // Downsample equity curve to max 500 points for response size
+    const MAX_CURVE_POINTS = 500;
+    let equityCurve = rawEquityCurve;
+    if (rawEquityCurve.length > MAX_CURVE_POINTS) {
+      const step = Math.ceil(rawEquityCurve.length / MAX_CURVE_POINTS);
+      equityCurve = rawEquityCurve.filter((_, idx) => idx % step === 0 || idx === rawEquityCurve.length - 1);
     }
 
     // Sharpe & Sortino (annualized based on timeframe)
