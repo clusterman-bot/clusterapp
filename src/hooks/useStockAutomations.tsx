@@ -30,6 +30,12 @@ export interface StockAutomation {
   last_signal_at: string | null;
   total_signals: number;
   total_trades: number;
+  self_improve_enabled: boolean;
+  min_win_rate: number;
+  max_drawdown_threshold: number;
+  max_consecutive_losses: number;
+  last_optimization_at: string | null;
+  optimization_generation: number;
   created_at: string;
   updated_at: string;
 }
@@ -187,5 +193,37 @@ export function useAutomationSignals(automationId?: string) {
     },
     enabled: !!automationId,
     refetchInterval: 30000,
+  });
+}
+
+export interface OptimizationLog {
+  id: string;
+  automation_id: string;
+  user_id: string;
+  trigger_reason: string;
+  stage: string;
+  old_config: any;
+  new_config: any;
+  old_metrics: any;
+  new_metrics: any;
+  status: string;
+  created_at: string;
+}
+
+export function useOptimizationLogs(automationId?: string) {
+  return useQuery({
+    queryKey: ['optimization-logs', automationId],
+    queryFn: async () => {
+      if (!automationId) return [];
+      const { data, error } = await supabase
+        .from('bot_optimization_logs')
+        .select('*')
+        .eq('automation_id', automationId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return (data || []) as OptimizationLog[];
+    },
+    enabled: !!automationId,
   });
 }
