@@ -205,6 +205,28 @@ export function QuickBuildPanel({ symbol }: QuickBuildPanelProps) {
               </Collapsible>
             )}
 
+            {/* Custom Indicators */}
+            {run.indicators_config?.custom_indicators?.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
+                  <Code className="h-3.5 w-3.5 text-primary" />
+                  Custom Indicators ({run.indicators_config.custom_indicators.length})
+                </h4>
+                <div className="space-y-2">
+                  {run.indicators_config.custom_indicators.map((ind: { name: string; description: string; code: string }, i: number) => (
+                    <div key={i} className="bg-muted/50 rounded-md p-2.5 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs font-medium text-foreground">{ind.name}</span>
+                        <Badge variant="secondary" className="text-[10px]">AI Generated</Badge>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{ind.description}</p>
+                      <pre className="bg-background rounded p-2 text-[11px] font-mono overflow-x-auto">{ind.code}</pre>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Model Comparison */}
             {trainingResults && (
               <div>
