@@ -68,7 +68,8 @@ function generateSignalForBar(
   barsUpToBar: any[],
   indicators: any,
   rsiOversold: number,
-  rsiOverbought: number
+  rsiOverbought: number,
+  compiledCustomIndicators?: Array<{ fn: Function; weight: number }>
 ): number {
   const votes: number[] = [];
 
@@ -128,17 +129,14 @@ function generateSignalForBar(
     }
   }
 
-  // Custom indicators
-  const customIndicators = (indicators?.custom || []) as Array<any>;
-  for (const ci of customIndicators) {
-    if (!ci.enabled || !ci.code) continue;
+  // Custom indicators (pre-compiled functions passed in)
+  const compiledCustom = (compiledCustomIndicators || []) as Array<{ fn: Function; weight: number }>;
+  for (const ci of compiledCustom) {
     try {
-      const fn = new Function('bars', ci.code);
-      const rawResult = fn(barsUpToBar);
+      const rawResult = ci.fn(barsUpToBar);
       if (typeof rawResult === 'number' && isFinite(rawResult)) {
         const signal = rawResult > 0 ? 1 : rawResult < 0 ? -1 : 0;
-        const weight = Math.max(0.1, Math.min(5.0, ci.weight ?? 1.0));
-        votes.push(signal * weight);
+        votes.push(signal * ci.weight);
       }
     } catch (_) { /* skip bad custom indicator */ }
   }
@@ -304,7 +302,7 @@ serve(async (req) => {
     // Fetch historical bars with pagination
     const isCrypto = symbol.includes('/');
     let bars: any[] = [];
-    const MAX_BARS = 50000;
+    const MAX_BARS = 25000;
 
     if (isCrypto) {
       let pageToken: string | null = null;
@@ -396,6 +394,17 @@ serve(async (req) => {
     const dailyReturns: number[] = [];
     let prevEquity = initial_capital;
 
+    // Pre-compile custom indicator functions once (avoid new Function() per bar)
+    const compiledCustom: Array<{ fn: Function; weight: number }> = [];
+    const customIndicators = (indicators?.custom || []) as Array<any>;
+    for (const ci of customIndicators) {
+      if (!ci.enabled || !ci.code) continue;
+      try {
+        const fn = new Function('bars', ci.code);
+        compiledCustom.push({ fn, weight: Math.max(0.1, Math.min(5.0, ci.weight ?? 1.0)) });
+      } catch (_) { /* skip bad custom indicator */ }
+    }
+
     const warmup = Math.min(tfConfig.warmup, Math.floor(bars.length * 0.1));
     const startIdx = Math.max(warmup, 50);
     for (let i = startIdx; i < bars.length; i++) { // start after warm-up period
@@ -450,7 +459,7 @@ serve(async (req) => {
       }
 
       // Generate composite signal
-      const compositeScore = generateSignalForBar(closesWindow, barsWindow, indicators, rsi_oversold, rsi_overbought);
+      const compositeScore = generateSignalForBar(closesWindow, barsWindow, indicators, rsi_oversold, rsi_overbought, compiledCustom);
 
       // BUY signal
       if (compositeScore >= theta && position === 0) {
