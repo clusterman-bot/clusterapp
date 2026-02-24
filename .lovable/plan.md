@@ -1,55 +1,81 @@
 
 
-## Root Cause: Alpaca's 10,000-bar limit without pagination
+## Plan: Chunked Backtesting for 100k+ Bars
 
-The problem is clear. At **1-minute resolution**, TSLA generates ~390 bars per trading day (6.5 hours × 60 minutes). With `limit: '10000'` hardcoded in the Alpaca API call, the engine fetches at most **10,000 bars**, which covers only ~25.6 trading days (about 5 weeks). That's why your data stops at 02-13-2025 — it ran out of bars, not out of date range.
+The approach is to split the work between the **frontend** (orchestrator) and the **edge function** (worker). The edge function stays lean and fast, while the frontend chains multiple calls and stitches results together.
 
-The Alpaca bars API supports **pagination** via a `next_page_token` in the response, but the current code makes a single request and stops.
+### Architecture
 
-### Math breakdown
-- Your range: 01/06/2025 → 02/24/2026 (~290 trading days)
-- At 1Min: 290 × 390 = **~113,000 bars** needed
-- Current fetch: **10,000 bars** (only ~25 days worth)
+```text
+Frontend (BacktestPanel)                    Edge Function (run-backtest)
+─────────────────────────────────────────   ────────────────────────────────
+1. Calculate chunk date ranges              Unchanged core logic
+   e.g. 3-month windows                    (25k bar cap stays)
+                                            
+2. Call run-backtest for chunk 1            NEW: Accept "chunk_mode" flag
+   → get trades, equity, metrics              → returns partial results
+                                               + final cash/position state
+3. Call run-backtest for chunk 2            
+   with carry_over state from chunk 1       Accept carry_over: {
+   → get trades, equity, metrics              cash, position, entryPrice
+                                            }
+4. ... repeat for all chunks                
 
-### Plan: Add pagination loop to fetch all bars
+5. Stitch all results together:
+   - Concatenate trades arrays
+   - Concatenate equity curves
+   - Recompute aggregate metrics
+   (sharpe, sortino, drawdown, etc.)
+```
+
+### Changes
 
 **1. Edge function `supabase/functions/run-backtest/index.ts`**
 
-Replace the single-fetch logic (for both stocks and crypto) with a **pagination loop** that:
-- Makes repeated requests using Alpaca's `next_page_token`
-- Accumulates bars across pages until all data in the date range is retrieved
-- Caps at a reasonable maximum (e.g., 50,000–100,000 bars) to stay within edge function compute limits
-- Logs progress so you can see how many pages were fetched
+Add support for two new optional request fields:
+- `carry_over`: `{ cash: number, position: number, entryPrice: number }` — lets the engine resume from where the previous chunk left off instead of starting fresh
+- `chunk_mode`: `boolean` — when true, the response includes a `carry_over` object with the ending state (cash, position, entryPrice) so the next chunk can continue
 
-The stock bars endpoint returns a `next_page_token` field in the response JSON when more data is available. The loop continues fetching with that token appended as a query parameter until it's `null` or the cap is reached.
+When `carry_over` is provided, initialize `cash`, `position`, and `entryPrice` from it instead of from `initial_capital`. The rest of the simulation logic stays identical.
 
-**2. Performance guard rails**
-
-Since fetching 100,000+ 1-minute bars is feasible but heavy:
-- Set a max bar cap (~50,000) to prevent timeouts — this covers ~128 trading days at 1Min, or the full range at coarser timeframes
-- If the cap is hit, log a warning and proceed with partial data, noting in the response how much of the date range was covered
-- The existing sliding-window optimization and equity curve downsampling already handle large datasets efficiently
-
-**3. No frontend changes needed**
-
-The UI already displays `bars_count` in the results. Users will see a much higher bar count and fuller date coverage automatically.
-
-### Technical details
-
-Alpaca pagination pattern:
-```text
-GET /v2/stocks/TSLA/bars?start=...&end=...&limit=10000&sort=asc
-→ response: { bars: [...], next_page_token: "abc123" }
-
-GET /v2/stocks/TSLA/bars?start=...&end=...&limit=10000&sort=asc&page_token=abc123
-→ response: { bars: [...], next_page_token: "def456" }
-
-... repeat until next_page_token is null
+The response in chunk mode adds:
+```json
+{
+  "carry_over": { "cash": 95230.50, "position": 12, "entryPrice": 402.30 },
+  "raw_daily_returns": [0.001, -0.002, ...],
+  "raw_equity_curve": [{ "date": "...", "value": ... }, ...]
+}
 ```
 
-The same pattern applies to the crypto bars endpoint (`/v1beta3/crypto/us/bars`), using `next_page_token` in the response.
+The raw (un-downsampled) equity curve and daily returns are needed so the frontend can compute accurate aggregate Sharpe/Sortino/drawdown across all chunks.
+
+**2. Frontend `src/components/backtest/BacktestPanel.tsx`**
+
+Replace the single `supabase.functions.invoke('run-backtest', ...)` call with a chunking orchestrator:
+
+- Split the user's date range into ~60-day windows (configurable, tuned so each chunk stays well under 25k bars at 1Min)
+- Loop through chunks sequentially, passing `carry_over` from each response into the next request
+- Show a progress bar: "Processing chunk 2 of 5..."
+- After all chunks complete, stitch together:
+  - **Trades**: concatenate all `trades` arrays
+  - **Equity curve**: concatenate all `raw_equity_curve` arrays, then downsample to 500 points for display
+  - **Metrics**: recompute from the full concatenated daily returns (Sharpe, Sortino, max drawdown, win rate, profit factor, CAGR, total return)
+- Display results exactly as before — no UI layout changes needed, just the orchestration logic
+
+**3. Chunk size calculation**
+
+A helper function determines chunk window size based on timeframe:
+- `1Min`: 60 calendar days per chunk (~23 trading days × 390 = ~9,000 bars, safely under 25k)
+- `5Min`: 150 calendar days per chunk
+- `15Min`: 300 calendar days per chunk  
+- `1Hour` / `1Day`: entire range in one chunk (no splitting needed)
+
+### What stays the same
+- All indicator logic, signal generation, stop-loss/take-profit
+- The 25k bar cap per call (proven to work within CPU limits)
+- Equity curve downsampling (now done on the frontend after stitching)
+- DB save logic (final aggregated result saved once after all chunks)
 
 ### Expected result
-
-With pagination, a 1-minute backtest from 01/06/2025 to 02/24/2026 should fetch **50,000+ bars** (capped for safety) covering several months of data instead of just 25 days, producing significantly more trades across the full date range.
+A 1-minute TSLA backtest from 01/06/2025 to 02/24/2026 would split into ~7 chunks of 60 days each, fetching ~9,000 bars per chunk for a total of ~63,000 bars processed. The user sees a progress indicator and gets full date-range coverage.
 
