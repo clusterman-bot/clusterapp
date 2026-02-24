@@ -282,6 +282,66 @@ export type Database = {
           },
         ]
       }
+      bot_optimization_logs: {
+        Row: {
+          automation_id: string | null
+          created_at: string
+          id: string
+          model_id: string | null
+          new_config: Json | null
+          new_metrics: Json | null
+          old_config: Json | null
+          old_metrics: Json | null
+          stage: string
+          status: string
+          trigger_reason: string
+          user_id: string
+        }
+        Insert: {
+          automation_id?: string | null
+          created_at?: string
+          id?: string
+          model_id?: string | null
+          new_config?: Json | null
+          new_metrics?: Json | null
+          old_config?: Json | null
+          old_metrics?: Json | null
+          stage: string
+          status?: string
+          trigger_reason: string
+          user_id: string
+        }
+        Update: {
+          automation_id?: string | null
+          created_at?: string
+          id?: string
+          model_id?: string | null
+          new_config?: Json | null
+          new_metrics?: Json | null
+          old_config?: Json | null
+          old_metrics?: Json | null
+          stage?: string
+          status?: string
+          trigger_reason?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_optimization_logs_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "stock_automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_optimization_logs_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           content: string
@@ -1483,12 +1543,18 @@ export type Database = {
           indicators: Json
           is_active: boolean | null
           last_checked_at: string | null
+          last_optimization_at: string | null
           last_signal_at: string | null
+          max_consecutive_losses: number
+          max_drawdown_threshold: number
           max_investment_amount: number | null
           max_quantity: number | null
+          min_win_rate: number
+          optimization_generation: number
           position_size_percent: number | null
           rsi_overbought: number | null
           rsi_oversold: number | null
+          self_improve_enabled: boolean
           stop_loss_percent: number | null
           symbol: string
           take_profit_percent: number | null
@@ -1507,12 +1573,18 @@ export type Database = {
           indicators?: Json
           is_active?: boolean | null
           last_checked_at?: string | null
+          last_optimization_at?: string | null
           last_signal_at?: string | null
+          max_consecutive_losses?: number
+          max_drawdown_threshold?: number
           max_investment_amount?: number | null
           max_quantity?: number | null
+          min_win_rate?: number
+          optimization_generation?: number
           position_size_percent?: number | null
           rsi_overbought?: number | null
           rsi_oversold?: number | null
+          self_improve_enabled?: boolean
           stop_loss_percent?: number | null
           symbol: string
           take_profit_percent?: number | null
@@ -1531,12 +1603,18 @@ export type Database = {
           indicators?: Json
           is_active?: boolean | null
           last_checked_at?: string | null
+          last_optimization_at?: string | null
           last_signal_at?: string | null
+          max_consecutive_losses?: number
+          max_drawdown_threshold?: number
           max_investment_amount?: number | null
           max_quantity?: number | null
+          min_win_rate?: number
+          optimization_generation?: number
           position_size_percent?: number | null
           rsi_overbought?: number | null
           rsi_oversold?: number | null
+          self_improve_enabled?: boolean
           stop_loss_percent?: number | null
           symbol?: string
           take_profit_percent?: number | null

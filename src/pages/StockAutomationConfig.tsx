@@ -13,11 +13,12 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { PostToMarketplaceDialog } from '@/components/automation/PostToMarketplaceDialog';
 import { 
   Activity, BarChart3, Settings2, History, Save, Power, PowerOff, 
   TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle2, XCircle, Loader2, Store, RotateCcw, DollarSign,
-  Clock
+  Clock, Brain, ChevronDown, Zap, RefreshCw
 } from 'lucide-react';
 
 // Market hours helper (9AM–4PM ET, Mon–Fri, DST-aware)
@@ -53,7 +54,7 @@ function useMarketStatus() {
 import { Progress } from '@/components/ui/progress';
 import { 
   useStockAutomation, useUpsertAutomation, useToggleAutomation, 
-  useAutomationSignals, useResetInvestedAmount, type StockAutomation 
+  useAutomationSignals, useResetInvestedAmount, useOptimizationLogs, type StockAutomation 
 } from '@/hooks/useStockAutomations';
 import { toast } from '@/hooks/use-toast';
 
@@ -73,6 +74,7 @@ export default function StockAutomationConfig() {
 
   const { data: automation, isLoading } = useStockAutomation(upperSymbol);
   const { data: signals } = useAutomationSignals(automation?.id);
+  const { data: optimizationLogs } = useOptimizationLogs(automation?.id);
   const upsertMutation = useUpsertAutomation();
   const toggleMutation = useToggleAutomation();
   const resetInvestedMutation = useResetInvestedAmount();
@@ -91,6 +93,11 @@ export default function StockAutomationConfig() {
   const [allowShorting, setAllowShorting] = useState(false);
   const [showMarketplaceDialog, setShowMarketplaceDialog] = useState(false);
   const [maxInvestmentAmount, setMaxInvestmentAmount] = useState<string>('');
+  const [selfImproveEnabled, setSelfImproveEnabled] = useState(false);
+  const [minWinRate, setMinWinRate] = useState(40);
+  const [maxDrawdownThreshold, setMaxDrawdownThreshold] = useState(15);
+  const [maxConsecutiveLosses, setMaxConsecutiveLosses] = useState(5);
+  const [selfImproveOpen, setSelfImproveOpen] = useState(false);
 
   // Raw text states for comma-separated inputs to allow free typing
   const [rsiPeriodsText, setRsiPeriodsText] = useState('14');
@@ -112,6 +119,10 @@ export default function StockAutomationConfig() {
       setTakeProfitPercent(automation.take_profit_percent);
       setAllowShorting(automation.allow_shorting ?? false);
       setMaxInvestmentAmount(automation.max_investment_amount != null ? String(automation.max_investment_amount) : '');
+      setSelfImproveEnabled(automation.self_improve_enabled ?? false);
+      setMinWinRate((automation.min_win_rate ?? 0.40) * 100);
+      setMaxDrawdownThreshold(automation.max_drawdown_threshold ?? 15);
+      setMaxConsecutiveLosses(automation.max_consecutive_losses ?? 5);
       setRsiPeriodsText((ind.rsi?.periods || [14]).join(', '));
       setSmaWindowsText((ind.sma?.windows || [5, 20]).join(', '));
       setEmaWindowsText((ind.ema?.windows || [5, 20]).join(', '));
@@ -149,6 +160,10 @@ export default function StockAutomationConfig() {
       take_profit_percent: takeProfitPercent,
       allow_shorting: allowShorting,
       max_investment_amount: (parsedMax && parsedMax > 0) ? parsedMax : null,
+      self_improve_enabled: selfImproveEnabled,
+      min_win_rate: minWinRate / 100,
+      max_drawdown_threshold: maxDrawdownThreshold,
+      max_consecutive_losses: maxConsecutiveLosses,
       is_active: true,
     } as any);
   };
@@ -486,6 +501,141 @@ export default function StockAutomationConfig() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Self-Improving Bot */}
+            <Collapsible open={selfImproveOpen} onOpenChange={setSelfImproveOpen}>
+              <Card>
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Brain className="h-5 w-5 text-primary" />
+                        <div>
+                          <CardTitle className="text-base">Self-Improving Bot</CardTitle>
+                          <CardDescription className="text-xs mt-0.5">Automatically optimize parameters when performance degrades</CardDescription>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {automation && selfImproveEnabled && (
+                          <Badge variant="outline" className="text-xs">
+                            Gen {automation.optimization_generation ?? 0}
+                          </Badge>
+                        )}
+                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${selfImproveOpen ? 'rotate-180' : ''}`} />
+                      </div>
+                    </div>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="space-y-6 pt-0">
+                    <div className="flex items-center justify-between p-4 rounded-lg border border-primary/30 bg-primary/5">
+                      <div>
+                        <Label className="text-base font-semibold">Enable Self-Improvement</Label>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          When enabled, the bot monitors its own win rate, drawdown, and consecutive losses. If thresholds are breached, 
+                          it automatically optimizes parameters or rewrites the strategy using AI.
+                        </p>
+                      </div>
+                      <Switch checked={selfImproveEnabled} onCheckedChange={setSelfImproveEnabled} />
+                    </div>
+
+                    {selfImproveEnabled && (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <Label className="text-sm">Min Win Rate (%)</Label>
+                            <div className="flex items-center gap-2">
+                              <Slider value={[minWinRate]} onValueChange={v => setMinWinRate(v[0])} min={10} max={80} step={5} />
+                              <span className="text-sm font-mono w-10">{minWinRate}%</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">Trigger optimization if win rate drops below this</p>
+                          </div>
+                          <div>
+                            <Label className="text-sm">Max Drawdown (%)</Label>
+                            <div className="flex items-center gap-2">
+                              <Slider value={[maxDrawdownThreshold]} onValueChange={v => setMaxDrawdownThreshold(v[0])} min={5} max={50} step={1} />
+                              <span className="text-sm font-mono w-10">{maxDrawdownThreshold}%</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">Trigger if drawdown exceeds this</p>
+                          </div>
+                          <div>
+                            <Label className="text-sm">Max Consecutive Losses</Label>
+                            <Input
+                              type="number" min={2} max={20}
+                              value={maxConsecutiveLosses}
+                              onChange={e => setMaxConsecutiveLosses(parseInt(e.target.value) || 5)}
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">Trigger after N losses in a row</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground p-3 rounded-lg bg-muted/30">
+                          <Zap className="h-4 w-4 text-primary shrink-0" />
+                          <span>
+                            <strong>How it works:</strong> Every hour, the bot checks its performance. If thresholds are breached, 
+                            it first tries parameter optimization (±20% variations with backtests). If that fails, it uses AI to rewrite the entire strategy. 
+                            Changes are only applied if the new config outperforms the old one.
+                          </span>
+                        </div>
+
+                        {automation && (
+                          <div className="flex flex-wrap gap-4 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Generation: </span>
+                              <span className="font-semibold">{automation.optimization_generation ?? 0} / 50</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Last Optimized: </span>
+                              <span>{automation.last_optimization_at ? new Date(automation.last_optimization_at).toLocaleString() : 'Never'}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Optimization History */}
+                        {optimizationLogs && optimizationLogs.length > 0 && (
+                          <div>
+                            <Label className="text-sm font-semibold mb-2 block">Optimization History</Label>
+                            <div className="space-y-2 max-h-64 overflow-y-auto">
+                              {optimizationLogs.map(log => (
+                                <div key={log.id} className="p-3 rounded-lg border border-border bg-card text-sm">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant={log.stage === 'ai_rewrite' ? 'default' : 'secondary'} className="text-xs">
+                                        {log.stage === 'ai_rewrite' ? <><Brain className="h-3 w-3 mr-1" />AI Rewrite</> : <><RefreshCw className="h-3 w-3 mr-1" />Param Opt</>}
+                                      </Badge>
+                                      <Badge variant={log.status === 'applied' ? 'default' : 'destructive'} className="text-xs">
+                                        {log.status}
+                                      </Badge>
+                                    </div>
+                                    <span className="text-xs text-muted-foreground">{new Date(log.created_at).toLocaleString()}</span>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">Trigger: {log.trigger_reason}</p>
+                                  {log.old_metrics && (
+                                    <details className="text-xs mt-1">
+                                      <summary className="cursor-pointer text-muted-foreground">View config changes</summary>
+                                      <div className="grid grid-cols-2 gap-2 mt-2">
+                                        <div>
+                                          <p className="font-medium text-muted-foreground">Before</p>
+                                          <pre className="text-xs bg-muted/50 p-2 rounded overflow-auto max-h-24">{JSON.stringify(log.old_config, null, 1)}</pre>
+                                        </div>
+                                        <div>
+                                          <p className="font-medium text-muted-foreground">After</p>
+                                          <pre className="text-xs bg-muted/50 p-2 rounded overflow-auto max-h-24">{JSON.stringify(log.new_config, null, 1)}</pre>
+                                        </div>
+                                      </div>
+                                    </details>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
 
             {/* Action Buttons */}
             <div className="flex flex-wrap gap-3 justify-end">

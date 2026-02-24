@@ -555,6 +555,109 @@ serve(async (req) => {
           automationResults.push({ automationId: automation.id, symbol: automation.symbol, error: err instanceof Error ? err.message : 'Unknown error' });
         }
       }
+
+      // ── SELF-IMPROVEMENT CHECK ──
+      // Fetch full automation data for self-improve-enabled bots
+      const { data: fullAutomations } = await supabaseAdmin
+        .from('stock_automations')
+        .select('id, symbol, user_id, self_improve_enabled, last_optimization_at, optimization_generation, min_win_rate, max_drawdown_threshold, max_consecutive_losses')
+        .eq('is_active', true)
+        .eq('self_improve_enabled', true);
+
+      if (fullAutomations && fullAutomations.length > 0) {
+        for (const auto of fullAutomations) {
+          try {
+            // Cooldown: skip if optimized within last hour
+            const lastOpt = auto.last_optimization_at ? new Date(auto.last_optimization_at).getTime() : 0;
+            const oneHourAgo = Date.now() - 3600 * 1000;
+            if (lastOpt > oneHourAgo) {
+              console.log(`[RunAutomations] Self-improve cooldown active for ${auto.symbol}, skipping`);
+              continue;
+            }
+
+            // Generation cap
+            if ((auto.optimization_generation ?? 0) >= 50) {
+              console.log(`[RunAutomations] Generation cap reached for ${auto.symbol}, skipping`);
+              continue;
+            }
+
+            const optimizerUrl = `${supabaseUrl}/functions/v1/bot-optimizer`;
+
+            // Stage 1: Check health
+            const healthResp = await fetch(optimizerUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+              body: JSON.stringify({ action: 'check-health', automation_id: auto.id }),
+            });
+            const healthResult = await healthResp.json();
+
+            if (!healthResult.breached) {
+              console.log(`[RunAutomations] ${auto.symbol} health OK, no optimization needed`);
+              continue;
+            }
+
+            console.log(`[RunAutomations] ${auto.symbol} threshold breached: ${healthResult.triggerReason}`);
+
+            // Stage 2: Parameter optimization
+            const paramResp = await fetch(optimizerUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+              body: JSON.stringify({ action: 'optimize-params', automation_id: auto.id }),
+            });
+            const paramResult = await paramResp.json();
+
+            if (paramResult.improved) {
+              // Apply optimized params
+              await fetch(optimizerUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+                body: JSON.stringify({
+                  action: 'apply',
+                  automation_id: auto.id,
+                  new_config: paramResult.new_config,
+                  trigger_reason: healthResult.triggerReason,
+                  stage: 'parameter_optimization',
+                  old_metrics: healthResult.metrics,
+                  new_metrics: { sharpe_ratio: paramResult.new_sharpe },
+                }),
+              });
+              console.log(`[RunAutomations] ${auto.symbol} param optimization applied (Sharpe: ${paramResult.old_sharpe} → ${paramResult.new_sharpe})`);
+              continue;
+            }
+
+            // Stage 3: AI rewrite (only if param optimization didn't help)
+            console.log(`[RunAutomations] ${auto.symbol} param optimization insufficient, trying AI rewrite`);
+            const aiResp = await fetch(optimizerUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+              body: JSON.stringify({ action: 'ai-rewrite', automation_id: auto.id }),
+            });
+            const aiResult = await aiResp.json();
+
+            if (aiResult.improved) {
+              await fetch(optimizerUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+                body: JSON.stringify({
+                  action: 'apply',
+                  automation_id: auto.id,
+                  new_config: aiResult.new_config,
+                  trigger_reason: healthResult.triggerReason,
+                  stage: 'ai_rewrite',
+                  old_metrics: healthResult.metrics,
+                  new_metrics: aiResult.new_metrics || null,
+                }),
+              });
+              console.log(`[RunAutomations] ${auto.symbol} AI rewrite applied`);
+            } else {
+              // Log failed attempt
+              console.log(`[RunAutomations] ${auto.symbol} AI rewrite did not improve, no changes applied`);
+            }
+          } catch (selfImproveErr) {
+            console.error(`[RunAutomations] Self-improve error for ${auto.symbol}:`, selfImproveErr);
+          }
+        }
+      }
     }
 
     // ── PIPELINE 2: Deployed Model Signal Generation + Trade Mirroring ──
