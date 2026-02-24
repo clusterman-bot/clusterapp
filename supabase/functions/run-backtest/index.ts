@@ -301,48 +301,79 @@ serve(async (req) => {
       'APCA-API-SECRET-KEY': alpacaApiSecret,
     };
 
-    // Fetch historical bars
+    // Fetch historical bars with pagination
     const isCrypto = symbol.includes('/');
     let bars: any[] = [];
+    const MAX_BARS = 50000;
 
     if (isCrypto) {
-      const params = new URLSearchParams({
-        symbols: symbol.toUpperCase(),
-        timeframe: tfConfig.alpacaTimeframe,
-        start: start_date,
-        end: end_date,
-        limit: '10000',
-        sort: 'asc',
-      });
-      const resp = await fetch(`https://data.alpaca.markets/v1beta3/crypto/us/bars?${params}`, { headers: alpacaHeaders });
-      if (!resp.ok) {
-        const err = await resp.text();
-        console.error('[Backtest] Crypto bars error:', err);
-        return new Response(JSON.stringify({ error: 'Failed to fetch historical data from Alpaca' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      let pageToken: string | null = null;
+      let page = 0;
+      while (bars.length < MAX_BARS) {
+        const params = new URLSearchParams({
+          symbols: symbol.toUpperCase(),
+          timeframe: tfConfig.alpacaTimeframe,
+          start: start_date,
+          end: end_date,
+          limit: '10000',
+          sort: 'asc',
+        });
+        if (pageToken) params.set('page_token', pageToken);
+        const resp = await fetch(`https://data.alpaca.markets/v1beta3/crypto/us/bars?${params}`, { headers: alpacaHeaders });
+        if (!resp.ok) {
+          const err = await resp.text();
+          console.error('[Backtest] Crypto bars error:', err);
+          if (bars.length === 0) {
+            return new Response(JSON.stringify({ error: 'Failed to fetch historical data from Alpaca' }),
+              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          break;
+        }
+        const data = await resp.json();
+        const symbolBars = data.bars?.[symbol.toUpperCase()] || [];
+        bars.push(...symbolBars.map((b: any) => ({ date: b.t, open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v })));
+        page++;
+        console.log(`[Backtest] Crypto page ${page}: fetched ${symbolBars.length} bars, total=${bars.length}`);
+        pageToken = data.next_page_token || null;
+        if (!pageToken || symbolBars.length === 0) break;
       }
-      const data = await resp.json();
-      const symbolBars = data.bars?.[symbol.toUpperCase()] || [];
-      bars = symbolBars.map((b: any) => ({ date: b.t, open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v }));
     } else {
-      const params = new URLSearchParams({
-        timeframe: tfConfig.alpacaTimeframe,
-        start: start_date,
-        end: end_date,
-        limit: '10000',
-        adjustment: 'raw',
-        feed: 'iex',
-        sort: 'asc',
-      });
-      const resp = await fetch(`https://data.alpaca.markets/v2/stocks/${symbol.toUpperCase()}/bars?${params}`, { headers: alpacaHeaders });
-      if (!resp.ok) {
-        const err = await resp.text();
-        console.error('[Backtest] Stock bars error:', err);
-        return new Response(JSON.stringify({ error: 'Failed to fetch historical data from Alpaca' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      let pageToken: string | null = null;
+      let page = 0;
+      while (bars.length < MAX_BARS) {
+        const params = new URLSearchParams({
+          timeframe: tfConfig.alpacaTimeframe,
+          start: start_date,
+          end: end_date,
+          limit: '10000',
+          adjustment: 'raw',
+          feed: 'iex',
+          sort: 'asc',
+        });
+        if (pageToken) params.set('page_token', pageToken);
+        const resp = await fetch(`https://data.alpaca.markets/v2/stocks/${symbol.toUpperCase()}/bars?${params}`, { headers: alpacaHeaders });
+        if (!resp.ok) {
+          const err = await resp.text();
+          console.error('[Backtest] Stock bars error:', err);
+          if (bars.length === 0) {
+            return new Response(JSON.stringify({ error: 'Failed to fetch historical data from Alpaca' }),
+              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          break;
+        }
+        const data = await resp.json();
+        const pageBars = (data.bars || []).map((b: any) => ({ date: b.t, open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v }));
+        bars.push(...pageBars);
+        page++;
+        console.log(`[Backtest] Stock page ${page}: fetched ${pageBars.length} bars, total=${bars.length}`);
+        pageToken = data.next_page_token || null;
+        if (!pageToken || pageBars.length === 0) break;
       }
-      const data = await resp.json();
-      bars = (data.bars || []).map((b: any) => ({ date: b.t, open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v }));
+    }
+
+    if (bars.length >= MAX_BARS) {
+      bars = bars.slice(0, MAX_BARS);
+      console.log(`[Backtest] Hit ${MAX_BARS} bar cap, proceeding with partial data`);
     }
 
     console.log(`[Backtest] Fetched ${bars.length} bars for ${symbol}`);
