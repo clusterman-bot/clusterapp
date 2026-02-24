@@ -1,53 +1,37 @@
 
 
-## Fix: Full Error Visibility in Marketing Bot Logs
+## Plan: Explorable Landing Page with Public Navigation
 
-### Two Issues
+### What changes
 
-1. **Truncated error in UI**: The error column has `max-w-[200px] truncate`, so long error messages like `Failed to create IG media container: {"error":{"message":"An unexpected error...` get cut off and are unreadable.
+The landing page will get the main navigation bar between the hero and community sections, and key browsing routes will become publicly accessible. Actions like trading, posting, or managing portfolios will still require login.
 
-2. **The IG error itself**: The Instagram API returned a transient `OAuthException` (code 2, `is_transient: true`) which means Instagram's servers had a temporary issue. This is not a bug in your code -- retrying should work. But making the full error visible will help you diagnose future issues.
+### Changes
 
-### Plan
+**1. Add MainNav to the landing page (`src/pages/Index.tsx`)**
+- Insert `<MainNav />` between the hero section and the community feed section (right after the `border-b` divider)
+- This gives visitors immediate access to explore Trade, Community, etc.
 
-**File: `src/pages/AlphaDashboard.tsx`** (Error column in logs table)
+**2. Make browsing routes public (`src/App.tsx`)**
+- Remove `<ProtectedRoute>` wrapper from these routes:
+  - `/trade` — stock explorer, search, movers
+  - `/trade/stocks/:symbol` — individual stock detail pages
+  - `/community` — community feed and models
+- Keep `<ProtectedRoute>` on action-oriented routes:
+  - `/trade/portfolio`, `/trade/orders`, `/trade/ai-builder`
+  - `/settings/brokerage`, `/profile`, `/profile/:userId`
+  - `/alpha`, `/models/new`, `/models/:id`
+  - `/trade/stocks/:symbol/automate`
 
-- Remove `truncate` and `max-w-[200px]` from the error cell
-- Replace with an expandable error display: show the first ~80 characters by default, with a "Show more" toggle that expands to show the full error message
-- Format the error text with word-wrap so long JSON strings don't overflow the table
-- Use a collapsible pattern so the table stays clean but full details are one click away
+**3. No changes needed to Trade.tsx or Community.tsx**
+- Trade already shows "Sign in to create a watchlist" for guests and hides portfolio/order sections behind `{user && ...}` checks
+- Community already shows "Sign in to post" prompts and hides the create-post box for unauthenticated users
+- StockDetail will need a quick check — any trade actions should prompt login
 
-**File: `supabase/functions/instagram-marketing-bot/index.ts`** (Better error messages)
+**4. Handle auto-redirect on Index.tsx**
+- Keep the existing `useEffect` that redirects authenticated users to `/trade` — logged-in users skip the landing page as before
 
-- In `postToInstagram()`, extract the meaningful parts from the Instagram API error response (error message, error type, error code) and format them into a cleaner error string instead of dumping raw JSON
-- Example: `"IG API error (code 2): An unexpected error has occurred. Please retry your request later. (transient)"` instead of `"Failed to create IG media container: {"error":{"message":"An unexpected error..."}}`
+### Technical detail
 
-### Technical Details
+The `MainNav` component already handles the unauthenticated state — it shows a "Sign In" button instead of the avatar dropdown. The nav links (Trade, Portfolio, Orders, Community, Settings) will be visible. Portfolio, Orders, and Settings still route through `ProtectedRoute`, so clicking them will redirect to `/auth`. Trade and Community will load directly.
 
-The error cell change:
-
-```text
-Current:  <TableCell className="text-xs text-destructive max-w-[200px] truncate">
-New:      Expandable cell with:
-          - Default: first ~80 chars + "..." + expand button
-          - Expanded: full error with break-words styling
-          - Uses local state per row to toggle
-```
-
-The edge function error formatting:
-
-```text
-Current:  throw new Error(`Failed to create IG media container: ${JSON.stringify(data)}`)
-New:      Parse data.error object and throw:
-          "IG API error (code X): <message> [type: <type>]"
-          Falls back to full JSON if parsing fails
-```
-
-### Files to Modify
-
-| File | Change |
-|---|---|
-| `src/pages/AlphaDashboard.tsx` | Replace truncated error cell with expandable error display |
-| `supabase/functions/instagram-marketing-bot/index.ts` | Format IG API errors into readable strings |
-
-No database changes needed.
