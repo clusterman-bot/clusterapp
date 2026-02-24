@@ -301,8 +301,19 @@ serve(async (req) => {
       'APCA-API-SECRET-KEY': alpacaApiSecret,
     };
 
+    // Known crypto tickers — auto-append /USD if bare symbol provided
+    const KNOWN_CRYPTO = new Set(['BTC','ETH','SOL','DOGE','AVAX','MATIC',
+      'LINK','UNI','AAVE','DOT','ADA','XRP','LTC','SHIB','ALGO','ATOM',
+      'FIL','NEAR','APE','ARB','OP','CRV','MKR','SUSHI','PEPE','BCH']);
+
+    let normalizedSymbol = symbol.toUpperCase();
+    if (!normalizedSymbol.includes('/') && KNOWN_CRYPTO.has(normalizedSymbol)) {
+      normalizedSymbol = `${normalizedSymbol}/USD`;
+      console.log(`[Backtest] Auto-detected crypto symbol, normalized to ${normalizedSymbol}`);
+    }
+
     // Fetch historical bars with pagination
-    const isCrypto = symbol.includes('/');
+    const isCrypto = normalizedSymbol.includes('/');
     let bars: any[] = [];
     const MAX_BARS = 25000;
 
@@ -311,7 +322,7 @@ serve(async (req) => {
       let page = 0;
       while (bars.length < MAX_BARS) {
         const params = new URLSearchParams({
-          symbols: symbol.toUpperCase(),
+          symbols: normalizedSymbol,
           timeframe: tfConfig.alpacaTimeframe,
           start: start_date,
           end: end_date,
@@ -330,7 +341,7 @@ serve(async (req) => {
           break;
         }
         const data = await resp.json();
-        const symbolBars = data.bars?.[symbol.toUpperCase()] || [];
+        const symbolBars = data.bars?.[normalizedSymbol] || [];
         bars.push(...symbolBars.map((b: any) => ({ date: b.t, open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v })));
         page++;
         console.log(`[Backtest] Crypto page ${page}: fetched ${symbolBars.length} bars, total=${bars.length}`);
@@ -351,7 +362,7 @@ serve(async (req) => {
           sort: 'asc',
         });
         if (pageToken) params.set('page_token', pageToken);
-        const resp = await fetch(`https://data.alpaca.markets/v2/stocks/${symbol.toUpperCase()}/bars?${params}`, { headers: alpacaHeaders });
+        const resp = await fetch(`https://data.alpaca.markets/v2/stocks/${normalizedSymbol}/bars?${params}`, { headers: alpacaHeaders });
         if (!resp.ok) {
           const err = await resp.text();
           console.error('[Backtest] Stock bars error:', err);
@@ -376,10 +387,10 @@ serve(async (req) => {
       console.log(`[Backtest] Hit ${MAX_BARS} bar cap, proceeding with partial data`);
     }
 
-    console.log(`[Backtest] Fetched ${bars.length} bars for ${symbol}`);
+    console.log(`[Backtest] Fetched ${bars.length} bars for ${normalizedSymbol}`);
 
     if (bars.length < 10) {
-      return new Response(JSON.stringify({ error: `Insufficient data: only ${bars.length} bars found for ${symbol} in the selected date range.` }),
+      return new Response(JSON.stringify({ error: `Insufficient data: only ${bars.length} bars found for ${normalizedSymbol} in the selected date range.` }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
