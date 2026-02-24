@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.instagram-marketing-bot]
 verify_jwt = false
+
+[functions.quick-build]
+verify_jwt = false

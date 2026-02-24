@@ -1190,6 +1190,85 @@ export type Database = {
         }
         Relationships: []
       }
+      quick_build_runs: {
+        Row: {
+          ai_analysis: Json | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          hyperparameters: Json | null
+          id: string
+          indicators_config: Json | null
+          model_id: string | null
+          results: Json | null
+          status: string
+          symbol: string
+          training_period: string | null
+          training_run_id: string | null
+          user_id: string
+          validation_period: string | null
+          validation_run_id: string | null
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          hyperparameters?: Json | null
+          id?: string
+          indicators_config?: Json | null
+          model_id?: string | null
+          results?: Json | null
+          status?: string
+          symbol: string
+          training_period?: string | null
+          training_run_id?: string | null
+          user_id: string
+          validation_period?: string | null
+          validation_run_id?: string | null
+        }
+        Update: {
+          ai_analysis?: Json | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          hyperparameters?: Json | null
+          id?: string
+          indicators_config?: Json | null
+          model_id?: string | null
+          results?: Json | null
+          status?: string
+          symbol?: string
+          training_period?: string | null
+          training_run_id?: string | null
+          user_id?: string
+          validation_period?: string | null
+          validation_run_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_build_runs_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quick_build_runs_training_run_id_fkey"
+            columns: ["training_run_id"]
+            isOneToOne: false
+            referencedRelation: "training_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quick_build_runs_validation_run_id_fkey"
+            columns: ["validation_run_id"]
+            isOneToOne: false
+            referencedRelation: "validation_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reposts: {
         Row: {
           created_at: string
