@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Footer } from '@/components/Footer';
+import { MainNav } from '@/components/MainNav';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect } from 'react';
 import { usePublicFeed, useLikePost, useUnlikePost, useLikesForPosts } from '@/hooks/useSocial';
@@ -96,6 +97,9 @@ export default function Index() {
           </div>
         </div>
       </div>
+
+      {/* Navigation Bar */}
+      <MainNav />
 
       {/* Community Feed Section */}
       <div className="container max-w-2xl py-8 px-4">
