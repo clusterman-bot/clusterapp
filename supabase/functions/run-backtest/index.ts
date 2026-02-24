@@ -322,7 +322,6 @@ serve(async (req) => {
       let page = 0;
       while (bars.length < MAX_BARS) {
         const params = new URLSearchParams({
-          symbols: normalizedSymbol,
           timeframe: tfConfig.alpacaTimeframe,
           start: start_date,
           end: end_date,
@@ -330,7 +329,10 @@ serve(async (req) => {
           sort: 'asc',
         });
         if (pageToken) params.set('page_token', pageToken);
-        const resp = await fetch(`https://data.alpaca.markets/v1beta3/crypto/us/bars?${params}`, { headers: alpacaHeaders });
+        // Don't let URLSearchParams encode the / in crypto symbols like SOL/USD
+        const cryptoUrl = `https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=${encodeURIComponent(normalizedSymbol).replace('%2F', '/')}&${params}`;
+        console.log(`[Backtest] Crypto URL: ${cryptoUrl}`);
+        const resp = await fetch(cryptoUrl, { headers: alpacaHeaders });
         if (!resp.ok) {
           const err = await resp.text();
           console.error('[Backtest] Crypto bars error:', err);
@@ -341,7 +343,8 @@ serve(async (req) => {
           break;
         }
         const data = await resp.json();
-        const symbolBars = data.bars?.[normalizedSymbol] || [];
+        console.log(`[Backtest] Crypto response keys: ${JSON.stringify(Object.keys(data))}, bars keys: ${JSON.stringify(Object.keys(data.bars || {}))}`);
+        const symbolBars = data.bars?.[normalizedSymbol] || data.bars?.[symbol.toUpperCase()] || [];
         bars.push(...symbolBars.map((b: any) => ({ date: b.t, open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v })));
         page++;
         console.log(`[Backtest] Crypto page ${page}: fetched ${symbolBars.length} bars, total=${bars.length}`);
