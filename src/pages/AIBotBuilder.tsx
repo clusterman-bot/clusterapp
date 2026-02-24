@@ -23,6 +23,7 @@ import { useUpsertAutomation } from '@/hooks/useStockAutomations';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { PostToMarketplaceDialog } from '@/components/automation/PostToMarketplaceDialog';
+import { BacktestPanel } from '@/components/backtest/BacktestPanel';
 
 interface CustomIndicator {
   name: string;
@@ -93,7 +94,7 @@ export default function AIBotBuilder() {
   const [expandedCodeBlocks, setExpandedCodeBlocks] = useState<Set<number>>(new Set());
   const [uploadedConfig, setUploadedConfig] = useState<StrategyConfig | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [rightPanelTab, setRightPanelTab] = useState<'config' | 'upload'>('config');
+  const [rightPanelTab, setRightPanelTab] = useState<'config' | 'upload' | 'backtest'>('config');
   const [showMarketplaceDialog, setShowMarketplaceDialog] = useState(false);
 
   const sendPrompt = async (text: string) => {
@@ -344,13 +345,16 @@ export default function AIBotBuilder() {
 
           {/* Right Panel — Config + Upload Tabs */}
           <div className="space-y-4">
-            <Tabs value={rightPanelTab} onValueChange={(v) => setRightPanelTab(v as 'config' | 'upload')}>
+            <Tabs value={rightPanelTab} onValueChange={(v) => setRightPanelTab(v as 'config' | 'upload' | 'backtest')}>
               <TabsList className="w-full">
                 <TabsTrigger value="config" className="flex-1 flex items-center gap-2">
-                  <Settings2 className="h-3.5 w-3.5" /> Generated Config
+                  <Settings2 className="h-3.5 w-3.5" /> Config
+                </TabsTrigger>
+                <TabsTrigger value="backtest" className="flex-1 flex items-center gap-2" disabled={!config}>
+                  <BarChart3 className="h-3.5 w-3.5" /> Backtest
                 </TabsTrigger>
                 <TabsTrigger value="upload" className="flex-1 flex items-center gap-2">
-                  <Upload className="h-3.5 w-3.5" /> Upload Model
+                  <Upload className="h-3.5 w-3.5" /> Upload
                 </TabsTrigger>
               </TabsList>
 
@@ -539,6 +543,9 @@ export default function AIBotBuilder() {
                         {isDeploying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
                         Deploy Bot
                       </Button>
+                      <Button variant="secondary" onClick={() => setRightPanelTab('backtest')} size="lg">
+                        <BarChart3 className="h-4 w-4 mr-2" /> Backtest
+                      </Button>
                       <Button variant="outline" onClick={() => setShowMarketplaceDialog(true)} size="lg">
                         <Store className="h-4 w-4 mr-2" /> Marketplace
                       </Button>
@@ -574,6 +581,20 @@ export default function AIBotBuilder() {
                       <BarChart3 className="h-12 w-12 text-muted-foreground/30 mx-auto" />
                       <p className="text-muted-foreground text-sm">Your generated strategy config will appear here</p>
                       <p className="text-muted-foreground/60 text-xs">Describe a strategy in the chat to get started</p>
+                    </div>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* Backtest Tab */}
+              <TabsContent value="backtest" className="mt-3">
+                {config ? (
+                  <BacktestPanel config={config} />
+                ) : (
+                  <Card className="h-[400px] flex items-center justify-center">
+                    <div className="text-center space-y-3 p-6">
+                      <BarChart3 className="h-12 w-12 text-muted-foreground/30 mx-auto" />
+                      <p className="text-muted-foreground text-sm">Generate a strategy first to run a backtest</p>
                     </div>
                   </Card>
                 )}

@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.quick-build]
 verify_jwt = false
+
+[functions.run-backtest]
+verify_jwt = false
