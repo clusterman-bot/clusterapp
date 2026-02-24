@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getOptimizedAvatarUrl } from '@/lib/avatar-utils';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -144,7 +145,7 @@ export function SocialPostCard({
             className="h-12 w-12 cursor-pointer ring-2 ring-transparent hover:ring-primary/20 transition-all"
             onClick={() => navigate(`/profile/${post.profiles?.id}`)}
           >
-            <AvatarImage src={post.profiles?.avatar_url || undefined} />
+            <AvatarImage src={getOptimizedAvatarUrl(post.profiles?.avatar_url, 96)} />
             <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-semibold">
               {post.profiles?.display_name?.[0] || post.profiles?.username?.[0] || '?'}
             </AvatarFallback>
