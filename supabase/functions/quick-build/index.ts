@@ -30,8 +30,10 @@ async function fetchMarketData(ticker: string): Promise<OHLCVBar[]> {
   const start = startDate.toISOString().split("T")[0];
   const end = endDate.toISOString().split("T")[0];
 
-  if (!POLYGON_API_KEY) {
-    console.log("[QuickBuild] No Polygon API key, generating simulated data");
+  const isCrypto = ticker.includes("/");
+
+  if (!POLYGON_API_KEY || isCrypto) {
+    console.log(`[QuickBuild] ${isCrypto ? 'Crypto ticker' : 'No Polygon API key'}, generating simulated data`);
     return generateSimulatedData(ticker, start, end);
   }
 
