@@ -136,6 +136,46 @@ const STRATEGY_TOOL = {
   },
 };
 
+// Fetch platform intelligence for a symbol
+async function fetchPlatformKnowledge(symbol: string): Promise<{ prompt_section: string; total: number } | null> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) return null;
+
+    const resp = await fetch(`${supabaseUrl}/functions/v1/strategy-knowledge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+      body: JSON.stringify({ action: "query", symbol: symbol.toUpperCase() }),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (!data || data.total_entries === 0) return null;
+
+    const s = data.summary;
+    const parts: string[] = [];
+    parts.push(`\nPLATFORM INTELLIGENCE for ${symbol.toUpperCase()}:`);
+    parts.push(`- ${data.total_entries} strategies have been built for this symbol on the platform`);
+    if (s?.avg_sharpe != null) parts.push(`- Average Sharpe of successful strategies: ${s.avg_sharpe}`);
+    if (s?.avg_win_rate != null) parts.push(`- Average win rate: ${(s.avg_win_rate * 100).toFixed(1)}%`);
+    if (s?.best_indicator_combo) {
+      const top = Object.entries(s.best_indicator_combo).sort(([,a]: any,[,b]: any) => b - a).slice(0,3).map(([k]) => k);
+      parts.push(`- Top-performing indicator combinations: ${top.join(", ")}`);
+    }
+    if (s?.common_pitfalls?.length > 0) parts.push(`- Common pitfalls to avoid: ${s.common_pitfalls.join("; ")}`);
+    if (data.top_entries?.length > 0) {
+      const configs = data.top_entries.slice(0, 3).map((e: any) => JSON.stringify(e.risk_params)).join(", ");
+      parts.push(`- Recent high-performing configs: ${configs}`);
+    }
+    parts.push(`\nUse this data to inform your strategy generation. Prefer indicator combinations and parameter ranges that have historically performed well on this platform.`);
+
+    return { prompt_section: parts.join("\n"), total: data.total_entries };
+  } catch (e) {
+    console.error("[ai-strategy-builder] Platform knowledge fetch failed:", e);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -146,6 +186,21 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
+    // Extract symbol from user messages for platform knowledge lookup
+    const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
+    const symbolMatch = lastUserMsg.match(/\b([A-Z]{1,5})\b/);
+    const detectedSymbol = symbolMatch?.[1];
+
+    let systemPromptFinal = SYSTEM_PROMPT;
+    let platformTotal = 0;
+    if (detectedSymbol) {
+      const knowledge = await fetchPlatformKnowledge(detectedSymbol);
+      if (knowledge) {
+        systemPromptFinal += "\n" + knowledge.prompt_section;
+        platformTotal = knowledge.total;
+      }
+    }
+
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -155,7 +210,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPromptFinal },
           ...messages,
         ],
         tools: [STRATEGY_TOOL],
@@ -222,7 +277,33 @@ serve(async (req) => {
       config.custom_indicators = [];
     }
 
-    return new Response(JSON.stringify({ type: "strategy", config }), {
+    // Ingest this strategy into the knowledge base (fire-and-forget)
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (supabaseUrl && serviceKey) {
+        fetch(`${supabaseUrl}/functions/v1/strategy-knowledge`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+          body: JSON.stringify({
+            action: "ingest",
+            symbol: config.symbol,
+            source_type: "ai_builder",
+            indicators_used: config.indicators,
+            risk_params: {
+              theta: config.theta,
+              stop_loss: config.stop_loss_percent,
+              take_profit: config.take_profit_percent,
+              position_size: config.position_size_percent,
+              horizon: config.horizon_minutes,
+            },
+            custom_indicator_names: (config.custom_indicators || []).map((ci: any) => ci.name),
+          }),
+        }).catch(() => {});
+      }
+    } catch {}
+
+    return new Response(JSON.stringify({ type: "strategy", config, platform_strategies: platformTotal }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

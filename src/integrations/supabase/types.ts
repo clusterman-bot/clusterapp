@@ -767,6 +767,45 @@ export type Database = {
           },
         ]
       }
+      knowledge_summaries: {
+        Row: {
+          avg_sharpe: number | null
+          avg_win_rate: number | null
+          best_indicator_combo: Json | null
+          best_params: Json | null
+          common_pitfalls: string[] | null
+          id: string
+          summary_text: string | null
+          symbol: string
+          total_strategies: number
+          updated_at: string
+        }
+        Insert: {
+          avg_sharpe?: number | null
+          avg_win_rate?: number | null
+          best_indicator_combo?: Json | null
+          best_params?: Json | null
+          common_pitfalls?: string[] | null
+          id?: string
+          summary_text?: string | null
+          symbol: string
+          total_strategies?: number
+          updated_at?: string
+        }
+        Update: {
+          avg_sharpe?: number | null
+          avg_win_rate?: number | null
+          best_indicator_combo?: Json | null
+          best_params?: Json | null
+          common_pitfalls?: string[] | null
+          id?: string
+          summary_text?: string | null
+          symbol?: string
+          total_strategies?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       market_data_cache: {
         Row: {
           created_at: string | null
@@ -1668,6 +1707,45 @@ export type Database = {
           symbol?: string
           updated_at?: string
           volume?: number | null
+        }
+        Relationships: []
+      }
+      strategy_knowledge: {
+        Row: {
+          created_at: string
+          custom_indicator_names: string[] | null
+          id: string
+          indicators_used: Json | null
+          optimization_delta: Json | null
+          outcome_metrics: Json | null
+          risk_params: Json | null
+          source_type: string
+          symbol: string
+          tags: string[] | null
+        }
+        Insert: {
+          created_at?: string
+          custom_indicator_names?: string[] | null
+          id?: string
+          indicators_used?: Json | null
+          optimization_delta?: Json | null
+          outcome_metrics?: Json | null
+          risk_params?: Json | null
+          source_type: string
+          symbol: string
+          tags?: string[] | null
+        }
+        Update: {
+          created_at?: string
+          custom_indicator_names?: string[] | null
+          id?: string
+          indicators_used?: Json | null
+          optimization_delta?: Json | null
+          outcome_metrics?: Json | null
+          risk_params?: Json | null
+          source_type?: string
+          symbol?: string
+          tags?: string[] | null
         }
         Relationships: []
       }
