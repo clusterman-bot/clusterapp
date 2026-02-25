@@ -323,6 +323,16 @@ const TIMEFRAME_MAP: Record<string, { barSize: string; daysBack: number }> = {
   'ALL': { barSize: '1Day', daysBack: 730 },
 };
 
+// Crypto trades 24/7 — no extra lookback needed for weekends/holidays
+const CRYPTO_TIMEFRAME_MAP: Record<string, { barSize: string; daysBack: number }> = {
+  '1D': { barSize: '5Min', daysBack: 1 },
+  '1W': { barSize: '1Hour', daysBack: 7 },
+  '1M': { barSize: '1Day', daysBack: 30 },
+  '3M': { barSize: '1Day', daysBack: 90 },
+  '1Y': { barSize: '1Day', daysBack: 365 },
+  'ALL': { barSize: '1Day', daysBack: 730 },
+};
+
 // Format a local date as YYYY-MM-DD without UTC conversion
 function localDateString(date: Date): string {
   const year = date.getFullYear();
@@ -335,7 +345,8 @@ export function useAlpacaBars(symbol: string | undefined, uiTimeframe: string = 
   const { user } = useAuth();
   const { isPaper } = useTradingMode();
 
-  const mapping = TIMEFRAME_MAP[uiTimeframe] || TIMEFRAME_MAP['1M'];
+  const tfMap = isCrypto ? CRYPTO_TIMEFRAME_MAP : TIMEFRAME_MAP;
+  const mapping = tfMap[uiTimeframe] || tfMap['1M'];
 
   return useQuery({
     queryKey: ['alpaca-bars', symbol, uiTimeframe, isPaper, isCrypto],
