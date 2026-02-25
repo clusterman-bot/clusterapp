@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { PostToMarketplaceDialog } from '@/components/automation/PostToMarketplaceDialog';
+import { useTradingMode } from '@/hooks/useTradingMode';
 import { 
   Activity, BarChart3, Settings2, History, Save, Power, PowerOff, 
   TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle2, XCircle, Loader2, Store, RotateCcw, DollarSign,
@@ -69,6 +70,7 @@ const DEFAULT_INDICATORS = {
 export default function StockAutomationConfig() {
   const { symbol } = useParams<{ symbol: string }>();
   const { user } = useAuth();
+  const { isPaper } = useTradingMode();
   const navigate = useNavigate();
   const upperSymbol = symbol?.toUpperCase() || '';
 
@@ -643,10 +645,11 @@ export default function StockAutomationConfig() {
                 size="lg"
                 variant="outline"
                 onClick={() => setShowMarketplaceDialog(true)}
-                disabled={upsertMutation.isPending}
+                disabled={upsertMutation.isPending || isPaper}
+                title={isPaper ? 'Switch to live trading to post to marketplace' : undefined}
               >
                 <Store className="mr-2 h-4 w-4" />
-                Post to Marketplace
+                {isPaper ? 'Live Only' : 'Post to Marketplace'}
               </Button>
               <Button size="lg" onClick={handleSave} disabled={upsertMutation.isPending}>
                 {upsertMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}

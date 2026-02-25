@@ -23,6 +23,7 @@ import { useUpsertAutomation } from '@/hooks/useStockAutomations';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { PostToMarketplaceDialog } from '@/components/automation/PostToMarketplaceDialog';
+import { useTradingMode } from '@/hooks/useTradingMode';
 import { BacktestPanel } from '@/components/backtest/BacktestPanel';
 
 interface CustomIndicator {
@@ -87,6 +88,7 @@ function isValidStrategyConfig(obj: any): obj is StrategyConfig {
 
 export default function AIBotBuilder() {
   const { user } = useAuth();
+  const { isPaper } = useTradingMode();
   const navigate = useNavigate();
   const upsertMutation = useUpsertAutomation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -596,8 +598,8 @@ export default function AIBotBuilder() {
                       <Button variant="secondary" onClick={() => setRightPanelTab('backtest')} size="lg">
                         <BarChart3 className="h-4 w-4 mr-2" /> Backtest
                       </Button>
-                      <Button variant="outline" onClick={() => setShowMarketplaceDialog(true)} size="lg">
-                        <Store className="h-4 w-4 mr-2" /> Marketplace
+                      <Button variant="outline" onClick={() => setShowMarketplaceDialog(true)} size="lg" disabled={isPaper} title={isPaper ? 'Switch to live trading to post to marketplace' : undefined}>
+                        <Store className="h-4 w-4 mr-2" /> {isPaper ? 'Live Only' : 'Marketplace'}
                       </Button>
                       <Button variant="outline" onClick={handleExportConfig} size="lg">
                         <FileJson className="h-4 w-4 mr-2" /> Export
