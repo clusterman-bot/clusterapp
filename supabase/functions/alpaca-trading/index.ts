@@ -187,11 +187,16 @@ serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const url = new URL(req.url);
-    const action = url.pathname.split('/').pop();
+    const pathAction = url.pathname.split('/').pop();
 
     // Determine paper/live mode from request body
     const body = req.method === 'POST' ? await req.json() : {};
+
+    // Support action from URL path OR body.action (fallback for invoke without sub-path)
+    const action = (pathAction === 'alpaca-trading' && body.action) ? body.action : pathAction;
+
     const isPaper = body.isPaper !== false; // Default to paper trading
+    const accountType = isPaper ? 'paper' : 'live';
     const accountType = isPaper ? 'paper' : 'live';
 
     console.log(`[Alpaca] Action: ${action}, Mode: ${accountType}, User: ${userId}`);
