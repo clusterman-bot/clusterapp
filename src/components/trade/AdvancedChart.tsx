@@ -112,24 +112,33 @@ function barsToChartData(bars: AlpacaBar[], timeframe: string): ChartData[] {
 
 function generateOHLCData(symbol: string, currentPrice: number, previousClose: number, days: number = 60): ChartData[] {
   const data: ChartData[] = [];
-  // Use symbol as seed so different assets get different charts
-  const seed = symbol.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  // Use symbol characters + length as seed so different assets get visually distinct charts
+  const seed = symbol.split('').reduce((a, c, idx) => a + c.charCodeAt(0) * (idx + 1), 0);
   let price = previousClose || currentPrice || (50 + (seed % 200));
   // If price is still 0 derive from symbol seed
   if (price <= 0) price = 50 + (seed % 500) + (seed * 7 % 1000);
-  const volatility = price * 0.02;
+  // Vary volatility per asset using seed
+  const baseVolatility = price * (0.012 + (seed % 30) * 0.001);
   
   for (let i = 0; i < days; i++) {
     const date = new Date();
     date.setDate(date.getDate() - (days - i));
-    // Use deterministic-ish noise mixed with seed
-    const pseudoRandom = Math.sin(seed * 9301 + i * 49297) % 1;
-    const change = (pseudoRandom - 0.48) * volatility;
+    // Use a better pseudo-random hash that creates visually distinct patterns per symbol
+    const hash1 = Math.sin(seed * 127.1 + i * 311.7) * 43758.5453;
+    const hash2 = Math.sin(seed * 269.5 + i * 183.3) * 28001.8384;
+    const hash3 = Math.sin(seed * 419.2 + i * 571.1) * 17593.2917;
+    const pseudoRandom = hash1 - Math.floor(hash1);
+    const pseudoRandom2 = hash2 - Math.floor(hash2);
+    const pseudoRandom3 = hash3 - Math.floor(hash3);
+    // Add trend bias unique per asset
+    const trendBias = ((seed % 7) - 3) * 0.001 * price;
+    const volatility = baseVolatility * (0.5 + pseudoRandom3);
+    const change = (pseudoRandom - 0.48) * volatility + trendBias;
     const open = price;
     const close = price + change;
-    const high = Math.max(open, close) + Math.abs(Math.sin(seed + i * 3)) * volatility * 0.5;
-    const low = Math.min(open, close) - Math.abs(Math.cos(seed + i * 5)) * volatility * 0.5;
-    const volume = Math.floor(1000000 + Math.abs(Math.sin(i * seed)) * 5000000);
+    const high = Math.max(open, close) + pseudoRandom2 * volatility * 0.8;
+    const low = Math.min(open, close) - (1 - pseudoRandom2) * volatility * 0.8;
+    const volume = Math.floor(1000000 + pseudoRandom3 * 8000000);
     data.push({
       time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
       date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -151,7 +160,7 @@ const indicators = ['SMA', 'EMA', 'BB', 'RSI', 'MACD', 'VOL'];
 
 export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, dayLow, isCrypto }: AdvancedChartProps) {
   const [timeframe, setTimeframe] = useState('1M');
-  const [activeIndicators, setActiveIndicators] = useState<string[]>(['SMA', 'VOL']);
+  const [activeIndicators, setActiveIndicators] = useState<string[]>([]);
   const [chartType, setChartType] = useState<'line' | 'candle' | 'area'>('area');
 
   const { data: alpacaBars, isLoading: barsLoading } = useAlpacaBars(symbol, timeframe, isCrypto);

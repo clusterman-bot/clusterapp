@@ -54,6 +54,11 @@ interface StrategyConfig {
   stop_loss_percent: number;
   take_profit_percent: number;
   allow_shorting: boolean;
+  // Self-improving bot settings
+  self_improve_enabled?: boolean;
+  min_win_rate?: number;
+  max_drawdown_threshold?: number;
+  max_consecutive_losses?: number;
 }
 
 interface ChatMessage {
@@ -163,6 +168,10 @@ export default function AIBotBuilder() {
         take_profit_percent: cfg.take_profit_percent,
         allow_shorting: cfg.allow_shorting,
         is_active: true,
+        self_improve_enabled: cfg.self_improve_enabled ?? false,
+        min_win_rate: cfg.min_win_rate ?? 0.40,
+        max_drawdown_threshold: cfg.max_drawdown_threshold ?? 15,
+        max_consecutive_losses: cfg.max_consecutive_losses ?? 5,
       });
       toast({ title: '🚀 Bot Deployed!', description: `${cfg.symbol} automation is now active.` });
       navigate(`/trade/stocks/${cfg.symbol}/automate`);
@@ -533,6 +542,47 @@ export default function AIBotBuilder() {
                             <p className="text-xs text-muted-foreground">Enable selling without owning shares</p>
                           </div>
                           <Switch checked={config.allow_shorting} onCheckedChange={v => updateConfig('allow_shorting', v)} />
+                        </div>
+
+                        <Separator />
+
+                        {/* Self-Improving Bot */}
+                        <div>
+                          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            <Sparkles className="h-3 w-3" /> Self-Improving Bot
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-1 mb-3">Bot will auto-optimize when performance degrades past thresholds</p>
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm">Enable Self-Improvement</span>
+                              <Switch checked={config.self_improve_enabled ?? false} onCheckedChange={v => updateConfig('self_improve_enabled', v)} />
+                            </div>
+                            {config.self_improve_enabled && (
+                              <div className="space-y-3 pl-1">
+                                <div>
+                                  <Label className="text-xs">Min Win Rate</Label>
+                                  <div className="flex items-center gap-2">
+                                    <Slider value={[(config.min_win_rate ?? 0.40) * 100]} onValueChange={v => updateConfig('min_win_rate', v[0] / 100)} min={10} max={80} step={1} />
+                                    <span className="text-xs font-mono w-8">{((config.min_win_rate ?? 0.40) * 100).toFixed(0)}%</span>
+                                  </div>
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Max Drawdown</Label>
+                                  <div className="flex items-center gap-2">
+                                    <Slider value={[config.max_drawdown_threshold ?? 15]} onValueChange={v => updateConfig('max_drawdown_threshold', v[0])} min={5} max={50} step={1} />
+                                    <span className="text-xs font-mono w-8">{config.max_drawdown_threshold ?? 15}%</span>
+                                  </div>
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Max Consecutive Losses</Label>
+                                  <div className="flex items-center gap-2">
+                                    <Slider value={[config.max_consecutive_losses ?? 5]} onValueChange={v => updateConfig('max_consecutive_losses', v[0])} min={2} max={15} step={1} />
+                                    <span className="text-xs font-mono w-8">{config.max_consecutive_losses ?? 5}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </CardContent>
                     </Card>

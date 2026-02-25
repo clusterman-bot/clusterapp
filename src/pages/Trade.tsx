@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmailVerified } from '@/hooks/useEmailVerified';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -127,9 +127,12 @@ export default function Trade() {
   const { isVerified } = useEmailVerified();
   const { data: userRole, isLoading: roleLoading } = useUserRole();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('explore');
-  const [marketType, setMarketType] = useState<'stocks' | 'crypto'>('stocks');
+  const [marketType, setMarketType] = useState<'stocks' | 'crypto'>(
+    searchParams.get('market') === 'crypto' ? 'crypto' : 'stocks'
+  );
   
   useEffect(() => {
     if (!roleLoading && userRole?.role === 'admin') {
