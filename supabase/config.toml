@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.bot-optimizer]
 verify_jwt = false
+
+[functions.strategy-knowledge]
+verify_jwt = false

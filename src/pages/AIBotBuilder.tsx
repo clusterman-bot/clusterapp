@@ -25,6 +25,7 @@ import { toast } from '@/hooks/use-toast';
 import { PostToMarketplaceDialog } from '@/components/automation/PostToMarketplaceDialog';
 import { useTradingMode } from '@/hooks/useTradingMode';
 import { BacktestPanel } from '@/components/backtest/BacktestPanel';
+import { PlatformInsights, PlatformInsightsBadge } from '@/components/PlatformInsights';
 
 interface CustomIndicator {
   name: string;
@@ -103,6 +104,7 @@ export default function AIBotBuilder() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'config' | 'upload' | 'backtest'>('config');
   const [showMarketplaceDialog, setShowMarketplaceDialog] = useState(false);
+  const [platformStrategies, setPlatformStrategies] = useState(0);
 
   const sendPrompt = async (text: string) => {
     if (!text.trim() || isLoading) return;
@@ -128,13 +130,17 @@ export default function AIBotBuilder() {
       } else if (data.type === 'strategy') {
         setConfig(data.config);
         setRightPanelTab('config');
+        if (data.platform_strategies) setPlatformStrategies(data.platform_strategies);
         const customCount = data.config.custom_indicators?.length ?? 0;
         const customNote = customCount > 0
           ? ` I've also generated **${customCount} custom indicator${customCount > 1 ? 's' : ''}** with executable code for non-native calculations.`
           : '';
+        const platformNote = data.platform_strategies > 0
+          ? ` _(Enhanced with insights from ${data.platform_strategies} strategies built for ${data.config.symbol})_`
+          : '';
         setMessages(prev => [...prev, { 
           role: 'assistant', 
-          content: `✅ Generated a **${data.config.strategy_summary}** for **${data.config.symbol}**.${customNote} Review the configuration and deploy when ready!` 
+          content: `✅ Generated a **${data.config.strategy_summary}** for **${data.config.symbol}**.${customNote} Review the configuration and deploy when ready!${platformNote}` 
         }]);
       }
     } catch (err: any) {
@@ -292,6 +298,8 @@ export default function AIBotBuilder() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col overflow-hidden p-4 pt-0">
+                {/* Platform Insights */}
+                <PlatformInsights symbol={config?.symbol} />
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto space-y-3 mb-4">
                   {messages.length === 0 && (

@@ -296,10 +296,33 @@ serve(async (req) => {
         horizon_minutes: automation.horizon_minutes,
       };
 
+      // Fetch platform knowledge for this symbol
+      let platformContext = "";
+      try {
+        const pkResp = await fetch(`${supabaseUrl}/functions/v1/strategy-knowledge`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
+          body: JSON.stringify({ action: "query", symbol: automation.symbol }),
+        });
+        if (pkResp.ok) {
+          const pkData = await pkResp.json();
+          if (pkData.total_entries > 0 && pkData.summary) {
+            const s = pkData.summary;
+            platformContext = `\n\nPLATFORM INTELLIGENCE: ${pkData.total_entries} strategies built for ${automation.symbol}.`;
+            if (s.avg_sharpe != null) platformContext += ` Avg Sharpe: ${s.avg_sharpe}.`;
+            if (s.best_indicator_combo) platformContext += ` Top indicators: ${Object.keys(s.best_indicator_combo).slice(0,3).join(", ")}.`;
+            if (s.common_pitfalls?.length > 0) platformContext += ` Avoid: ${s.common_pitfalls.join("; ")}.`;
+          }
+        }
+      } catch (e) {
+        console.warn("[BotOptimizer] Platform knowledge fetch failed:", e);
+      }
+
       const prompt = `This trading strategy for ${automation.symbol} has been underperforming. 
 Here's its recent trade history (most recent first): ${JSON.stringify(tradeHistory.slice(0, 20))}
 Current config: ${JSON.stringify(currentConfig)}
 Generation: ${automation.optimization_generation || 0}
+${platformContext}
 
 Generate an improved strategy for ${automation.symbol} that addresses the weaknesses shown in the trade history. 
 Focus on adjusting indicators, thresholds, and risk parameters to improve the Sharpe ratio.`;
@@ -498,6 +521,35 @@ Focus on adjusting indicators, thresholds, and risk parameters to improve the Sh
       });
 
       console.log(`[BotOptimizer] Applied optimization gen ${currentGen + 1} for ${automation.symbol}`);
+
+      // Ingest optimization result into strategy knowledge (fire-and-forget)
+      try {
+        fetch(`${supabaseUrl}/functions/v1/strategy-knowledge`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
+          body: JSON.stringify({
+            action: "ingest",
+            symbol: automation.symbol,
+            source_type: "optimization",
+            indicators_used: new_config.indicators || automation.indicators,
+            risk_params: {
+              theta: new_config.theta ?? automation.theta,
+              stop_loss: new_config.stop_loss_percent ?? automation.stop_loss_percent,
+              take_profit: new_config.take_profit_percent ?? automation.take_profit_percent,
+              position_size: new_config.position_size_percent ?? automation.position_size_percent,
+            },
+            outcome_metrics: new_metrics || null,
+            optimization_delta: {
+              old_sharpe: old_metrics?.sharpe_ratio || null,
+              new_sharpe: new_metrics?.sharpe_ratio || null,
+              improvement_pct: old_metrics?.sharpe_ratio && new_metrics?.sharpe_ratio
+                ? ((new_metrics.sharpe_ratio - old_metrics.sharpe_ratio) / Math.abs(old_metrics.sharpe_ratio || 1) * 100)
+                : null,
+              stage: stage || "parameter_optimization",
+            },
+          }),
+        }).catch(() => {});
+      } catch {}
 
       return new Response(JSON.stringify({ applied: true, generation: currentGen + 1 }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

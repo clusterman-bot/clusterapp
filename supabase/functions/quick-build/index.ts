@@ -131,8 +131,8 @@ function computeDataStats(bars: OHLCVBar[]) {
 }
 
 // Call Lovable AI to determine optimal indicators and hyperparameters
-async function aiAnalyze(ticker: string, stats: any) {
-  const systemPrompt = `You are an expert quantitative analyst. Given summary statistics of a stock's historical price data, determine the optimal technical indicators, their parameters, and ML model hyperparameters for building a trading signal model. You may also generate custom JavaScript indicators using the signature \`(bars) => number\` where bars is an array of \`{date, open, high, low, close, volume}\`. Use these for calculations not covered by the native indicators — e.g., VWAP, ATR, custom momentum, volume-price patterns, or stock-specific signals. You must respond using the suggest_config tool.`;
+async function aiAnalyze(ticker: string, stats: any, platformContext: string = "") {
+  const systemPrompt = `You are an expert quantitative analyst. Given summary statistics of a stock's historical price data, determine the optimal technical indicators, their parameters, and ML model hyperparameters for building a trading signal model. You may also generate custom JavaScript indicators using the signature \`(bars) => number\` where bars is an array of \`{date, open, high, low, close, volume}\`. Use these for calculations not covered by the native indicators — e.g., VWAP, ATR, custom momentum, volume-price patterns, or stock-specific signals. You must respond using the suggest_config tool.${platformContext}`;
 
   const userPrompt = `Analyze ${ticker} with these characteristics:
 - ${stats.total_bars} trading days of data (${stats.start_date} to ${stats.end_date})
@@ -377,13 +377,35 @@ serve(async (req) => {
       });
     }
 
-    // 3. Compute stats and run AI analysis
+    // 3. Compute stats, fetch platform knowledge, and run AI analysis
     const stats = computeDataStats(bars);
     console.log(`[QuickBuild] Stats:`, JSON.stringify(stats));
 
+    // Fetch platform knowledge for this symbol
+    let platformContext = "";
+    try {
+      const pkResp = await fetch(`${SUPABASE_URL}/functions/v1/strategy-knowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ action: "query", symbol: upperSymbol }),
+      });
+      if (pkResp.ok) {
+        const pkData = await pkResp.json();
+        if (pkData.total_entries > 0 && pkData.summary) {
+          const s = pkData.summary;
+          platformContext = `\n\nPLATFORM INTELLIGENCE: ${pkData.total_entries} strategies built for ${upperSymbol}.`;
+          if (s.avg_sharpe != null) platformContext += ` Avg Sharpe: ${s.avg_sharpe}.`;
+          if (s.avg_win_rate != null) platformContext += ` Avg win rate: ${(s.avg_win_rate * 100).toFixed(1)}%.`;
+          if (s.common_pitfalls?.length > 0) platformContext += ` Pitfalls: ${s.common_pitfalls.join("; ")}.`;
+        }
+      }
+    } catch (e) {
+      console.warn("[QuickBuild] Platform knowledge fetch failed:", e);
+    }
+
     let aiConfig: any;
     try {
-      aiConfig = await aiAnalyze(upperSymbol, stats);
+      aiConfig = await aiAnalyze(upperSymbol, stats, platformContext);
       console.log(`[QuickBuild] AI config received`);
     } catch (aiErr: any) {
       console.error("[QuickBuild] AI analysis failed:", aiErr.message);
@@ -618,4 +640,23 @@ async function simulateTrainingAndValidation(
     .eq("id", quickBuildId);
 
   console.log(`[QuickBuild] Simulation complete for ${quickBuildId}`);
+
+  // Ingest into strategy knowledge (fire-and-forget)
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (supabaseUrl && serviceKey) {
+      fetch(`${supabaseUrl}/functions/v1/strategy-knowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+        body: JSON.stringify({
+          action: "ingest",
+          symbol: aiConfig.training_date_range ? aiConfig.symbol || "UNKNOWN" : "UNKNOWN",
+          source_type: "quick_build",
+          indicators_used: aiConfig.indicators || {},
+          risk_params: { theta: aiConfig.theta, horizon: aiConfig.horizon },
+        }),
+      }).catch(() => {});
+    }
+  } catch {}
 }
