@@ -1,148 +1,164 @@
 
 
-## Plan: Self-Improving Trading Bot
+## Plan: Platform-Wide Strategy Knowledge Base
 
-A closed-loop system where the bot monitors its own performance and, when metrics degrade past thresholds, automatically optimizes its parameters and — if that fails — rewrites the entire strategy using AI.
+A shared learning system that captures insights from every bot built, optimized, or backtested on the platform and feeds that collective intelligence back into future AI strategy generation.
+
+### Concept
+
+Every time a user builds a bot (AI Bot Builder, Quick Build, or manual automation), the system anonymously logs what worked and what didn't — indicator combinations, parameter ranges, asset-specific patterns, backtest outcomes, and optimization results. When the next user asks AI to build a strategy, the system retrieves relevant historical knowledge and injects it into the AI prompt as context, making every new bot smarter than the last.
 
 ### Architecture
 
 ```text
-Every 1-minute run-automations cycle:
-                                          
-  ┌─────────────────────────┐             
-  │  Run normal signals     │             
-  │  (existing logic)       │             
-  └──────────┬──────────────┘             
-             │                            
-             ▼                            
-  ┌─────────────────────────┐             
-  │  Check performance      │  NEW        
-  │  thresholds             │             
-  │  (win_rate, drawdown,   │             
-  │   consecutive losses)   │             
-  └──────────┬──────────────┘             
-             │ threshold breached?        
-             ▼                            
-  ┌─────────────────────────┐             
-  │  STAGE 1: Parameter     │  NEW        
-  │  Optimization           │             
-  │  - Run mini backtests   │             
-  │    with param variations│             
-  │  - Pick best config     │             
-  │  - Hot-swap on bot      │             
-  └──────────┬──────────────┘             
-             │ still degraded?            
-             ▼                            
-  ┌─────────────────────────┐             
-  │  STAGE 2: AI Strategy   │  NEW        
-  │  Rewrite                │             
-  │  - Feed trade history   │             
-  │    + market context to  │             
-  │    Lovable AI           │             
-  │  - Generate new config  │             
-  │  - Backtest & validate  │             
-  │  - Hot-swap if better   │             
-  └─────────────────────────┘             
+Data Collection (passive, on every bot event):
+
+  Bot Created / Config Changed / Backtest Completed / Optimization Applied
+         │
+         ▼
+  ┌──────────────────────────┐
+  │  strategy_knowledge      │  NEW TABLE
+  │  (anonymized insights)   │
+  │  - asset, indicators,    │
+  │    params, outcomes,     │
+  │    what improved/failed  │
+  └──────────┬───────────────┘
+             │
+             ▼
+Data Retrieval (active, on every AI call):
+
+  User asks AI to build a bot for AAPL
+         │
+         ▼
+  ┌──────────────────────────┐
+  │  Query strategy_knowledge│
+  │  for AAPL + similar      │
+  │  assets, top performers  │
+  └──────────┬───────────────┘
+             │
+             ▼
+  ┌──────────────────────────┐
+  │  Inject into AI system   │
+  │  prompt as context       │
+  │  "Platform data shows    │
+  │   RSI(14)+EMA(12,26)     │
+  │   had 62% win rate on    │
+  │   AAPL over 47 bots..."  │
+  └──────────────────────────┘
 ```
 
 ### Database Changes
 
-**New table: `bot_optimization_logs`**
-Tracks every self-improvement attempt so users can see what the bot changed and why.
+**New table: `strategy_knowledge`**
+Stores anonymized, aggregated insights from every bot interaction on the platform.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | id | uuid | PK |
-| automation_id | uuid | FK → stock_automations (nullable) |
-| model_id | uuid | FK → models (nullable) |
-| user_id | uuid | Owner |
-| trigger_reason | text | e.g. "win_rate_below_40", "max_drawdown_exceeded", "consecutive_losses_5" |
-| stage | text | "parameter_optimization" or "ai_rewrite" |
-| old_config | jsonb | Snapshot of config before change |
-| new_config | jsonb | The optimized/rewritten config |
-| old_metrics | jsonb | { win_rate, drawdown, consecutive_losses } at trigger time |
-| new_metrics | jsonb | Backtest results of the new config (if validated) |
-| status | text | "pending", "applied", "rejected", "failed" |
+| symbol | text | Ticker the strategy targets |
+| source_type | text | "ai_builder", "quick_build", "manual_automation", "optimization", "backtest" |
+| indicators_used | jsonb | Which indicators were enabled and their params |
+| risk_params | jsonb | { theta, stop_loss, take_profit, position_size, horizon } |
+| custom_indicator_names | text[] | Names of any custom indicators used (no code stored for IP protection) |
+| outcome_metrics | jsonb | { sharpe_ratio, win_rate, total_return, max_drawdown } — null if no backtest |
+| optimization_delta | jsonb | If from optimization: { old_sharpe, new_sharpe, improvement_pct, stage } |
+| tags | text[] | AI-derived tags like "momentum", "mean_reversion", "high_volatility" |
 | created_at | timestamptz | |
 
-RLS: Users can view their own optimization logs.
+RLS: No user_id column — this is fully anonymized. All authenticated users can SELECT. Only service role can INSERT (via edge functions).
 
-**New columns on `stock_automations`:**
-- `self_improve_enabled` boolean DEFAULT false — opt-in toggle
-- `min_win_rate` numeric DEFAULT 0.40 — trigger if win rate drops below this
-- `max_drawdown_threshold` numeric DEFAULT 15 — trigger if drawdown exceeds this %
-- `max_consecutive_losses` integer DEFAULT 5 — trigger after N losses in a row
-- `last_optimization_at` timestamptz — cooldown tracking (min 1 hour between attempts)
-- `optimization_generation` integer DEFAULT 0 — tracks how many times the bot has self-improved
+**New table: `knowledge_summaries`**
+Pre-computed per-symbol summaries refreshed periodically to keep AI prompt injection fast.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | PK |
+| symbol | text | UNIQUE — one summary per ticker |
+| total_strategies | integer | How many bots have been built for this symbol |
+| avg_sharpe | numeric | Average Sharpe across all strategies with outcomes |
+| avg_win_rate | numeric | Average win rate |
+| best_indicator_combo | jsonb | Most common indicator set among top-performing strategies |
+| best_params | jsonb | Average params of top 20% strategies |
+| common_pitfalls | text[] | AI-generated list of what tends to fail |
+| summary_text | text | Pre-formatted text block ready for prompt injection |
+| updated_at | timestamptz | |
+
+RLS: All authenticated users can SELECT. Only service role can INSERT/UPDATE.
 
 ### Edge Function Changes
 
-**1. New function: `supabase/functions/bot-optimizer/index.ts`**
+**1. New function: `supabase/functions/strategy-knowledge/index.ts`**
 
-A dedicated function called by `run-automations` when thresholds are breached. Keeps the main automation loop lean.
+Actions:
+- `ingest`: Called internally by other edge functions after bot creation, backtest completion, or optimization. Receives the anonymized data and inserts into `strategy_knowledge`. Also tags the entry using AI (quick classification call).
+- `query`: Given a symbol, returns the `knowledge_summaries` row plus the top 10 most relevant recent entries from `strategy_knowledge`. Used by `ai-strategy-builder` and `quick-build` before calling AI.
+- `refresh-summaries`: Recomputes `knowledge_summaries` for symbols that have new data. Can be called on a schedule or after N new entries.
 
-**Actions:**
-- `check-health`: Analyzes recent signals from `automation_signals` for a given automation. Returns current metrics (win_rate, drawdown, consecutive_losses) and whether thresholds are breached.
-- `optimize-params`: Generates 5-10 parameter variations (RSI thresholds ±5, SMA windows ±2, theta ±0.005, stop-loss/take-profit ±2%). Runs quick backtests (last 30 days, 5Min bars to keep it fast) for each variation using the existing run-backtest chunked engine. Picks the config with the best Sharpe ratio. Returns the winning config.
-- `ai-rewrite`: Sends the bot's recent trade history, current config, and performance summary to Lovable AI (via `ai-strategy-builder` pattern) with a prompt like: "This trading strategy has been underperforming. Here's its recent history: [trades]. Current config: [config]. Win rate: X%, drawdown: Y%. Generate an improved strategy for [symbol] that addresses these weaknesses." Parses the AI response into a valid automation config. Runs a quick backtest to validate the new strategy beats the old one.
-- `apply`: Hot-swaps the automation's config (indicators, thresholds, risk params) with the optimized one. Logs the change in `bot_optimization_logs`.
+**2. Update `supabase/functions/ai-strategy-builder/index.ts`**
 
-**2. Update `run-automations/index.ts`**
+Before calling the AI gateway, query `strategy-knowledge/query` for the target symbol. Append a "Platform Intelligence" section to the system prompt:
 
-After processing each stock automation's signal, add a performance health check:
 ```
-if (automation.self_improve_enabled) {
-  // Cooldown: skip if optimized within last hour
-  if (lastOptimizedMoreThan1HourAgo) {
-    call bot-optimizer/check-health
-    if (thresholds breached) {
-      call bot-optimizer/optimize-params
-      if (new config beats old) → apply
-      else → call bot-optimizer/ai-rewrite
-      if (ai config beats old) → apply
-    }
-  }
-}
+PLATFORM INTELLIGENCE for {SYMBOL}:
+- {N} strategies have been built for this symbol on the platform
+- Top-performing indicator combinations: {best_indicator_combo}
+- Average Sharpe of successful strategies: {avg_sharpe}
+- Common pitfalls to avoid: {common_pitfalls}
+- Recent high-performing configs: {top_entries}
+
+Use this data to inform your strategy generation. Prefer indicator
+combinations and parameter ranges that have historically performed
+well on this platform.
 ```
 
-This runs inside the existing 1-minute cron, but with a 1-hour cooldown so it doesn't optimize on every tick.
+**3. Update `supabase/functions/quick-build/index.ts`**
 
-**3. Frontend: `src/pages/StockAutomationConfig.tsx`**
+Same pattern: before `aiAnalyze()`, fetch platform knowledge for the symbol and pass it as additional context in the AI prompt.
 
-Add a "Self-Improving Bot" settings section (collapsed by default):
-- Toggle: "Enable self-improvement"
-- Threshold inputs: Min win rate %, Max drawdown %, Max consecutive losses
-- Read-only "Generation" counter showing how many times the bot has self-improved
-- Optimization history log (from `bot_optimization_logs`) showing what changed and when, with before/after configs
+**4. Update `supabase/functions/bot-optimizer/index.ts`**
 
-### How each stage works in detail
+In the `ai-rewrite` action, include platform knowledge as additional context so the AI rewriter benefits from collective intelligence. Also, after a successful `apply`, call `strategy-knowledge/ingest` to log the optimization result.
 
-**Stage 1 — Parameter Optimization:**
-- Takes current config as baseline
-- Generates variations by adjusting numeric params within ±20% bounds
-- For each variation, calls `run-backtest` with last 30 calendar days of data (uses existing chunked backtest, typically 1 chunk at 5Min)
-- Ranks by Sharpe ratio; if best variation improves Sharpe by >10% over current, apply it
-- Total time: ~5-10 seconds (5-10 quick backtests)
+**5. Update `supabase/functions/run-automations/index.ts`**
 
-**Stage 2 — AI Strategy Rewrite:**
-- Only triggered if Stage 1 didn't produce a meaningful improvement
-- Sends to Lovable AI: recent 50 trades, current config, market conditions
-- Uses the same `generate_strategy` tool schema from `ai-strategy-builder`
-- Validates the AI output with a 30-day backtest
-- Only applies if the new strategy's Sharpe > old strategy's Sharpe
-- Logs the full rewrite in `bot_optimization_logs` for transparency
+After deploying a new automation (first signal generation), call `strategy-knowledge/ingest` to log the initial configuration.
+
+**6. Hook into backtest completion**
+
+The existing `sync_model_metrics_from_backtest` trigger fires on backtest completion. Add a new edge function call (or extend the trigger) to ingest backtest results into `strategy_knowledge`.
+
+### Frontend Changes
+
+**`src/pages/AIBotBuilder.tsx`** — Add a small "Platform Intelligence" badge/indicator next to the chat that shows when platform knowledge is being used. When the AI response comes back, if platform data was consulted, show a subtle note like "Enhanced with insights from 47 strategies built for AAPL."
+
+**New component: `src/components/PlatformInsights.tsx`** — A small card shown on the AI Bot Builder and Quick Build pages displaying aggregate stats for the selected symbol (e.g., "23 strategies built for TSLA, avg Sharpe: 1.2, most popular: RSI + MACD").
+
+### Data Flow Summary
+
+1. **Collection points** (passive — no user action needed):
+   - AI Bot Builder deploys a strategy → ingest config + symbol
+   - Quick Build completes → ingest AI analysis + training results
+   - Backtest finishes → ingest outcome metrics
+   - Bot optimizer applies changes → ingest old/new config + improvement delta
+   - Manual automation created/updated → ingest indicator + risk config
+
+2. **Consumption points** (active — enriches AI prompts):
+   - AI Bot Builder chat → query before AI call
+   - Quick Build analysis → query before AI call
+   - Bot optimizer AI rewrite → query before AI call
+
+### Privacy and Safety
+
+- No user IDs stored in `strategy_knowledge` — fully anonymized
+- No custom indicator code stored (only names) — protects intellectual property
+- Only aggregate metrics, not individual trade data
+- Service role only for writes — users cannot inject false data
+- Knowledge summaries are read-only for users
 
 ### What stays the same
-- Normal signal generation and trade execution logic
-- The 1-minute cron schedule
-- All existing indicator logic
-- Deployed model pipeline (this only applies to stock automations initially)
-- User must explicitly opt in via the toggle
 
-### Safety guardrails
-- 1-hour cooldown between optimization attempts
-- New config must beat old config in backtest before applying
-- All changes logged with before/after snapshots
-- Generation counter caps at 50 (prevents infinite rewrite loops)
-- User can disable self-improvement at any time and manually revert via the log
+- All existing bot building, deployment, and trading logic
+- User-facing workflows unchanged — intelligence is injected silently
+- No new user-facing configuration required — it just works
+- Existing AI prompts remain the foundation; platform knowledge is additive context
 
