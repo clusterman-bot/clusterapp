@@ -88,7 +88,7 @@ function addIndicators(data: ChartData[]): void {
   }
 }
 
-function barsToChartData(bars: AlpacaBar[], timeframe: string): ChartData[] {
+function barsToChartData(bars: AlpacaBar[], timeframe: string, livePrice?: number): ChartData[] {
   const data: ChartData[] = bars.map(b => {
     const d = new Date(b.date);
     const isIntraday = timeframe === '1D';
@@ -106,6 +106,39 @@ function barsToChartData(bars: AlpacaBar[], timeframe: string): ChartData[] {
       volume: b.volume,
     };
   });
+
+  // Append a "now" data point using the live price so the chart line
+  // extends to the current price instead of ending at yesterday's close.
+  if (livePrice && livePrice > 0 && data.length > 0) {
+    const lastBar = data[data.length - 1];
+    const lastBarDate = bars[bars.length - 1]?.date;
+    const lastBarTime = lastBarDate ? new Date(lastBarDate).getTime() : 0;
+    const now = Date.now();
+    // Only add if the last bar is more than 1 hour old (avoids duplicate for intraday)
+    if (now - lastBarTime > 3600000) {
+      const nowDate = new Date();
+      const isIntraday = timeframe === '1D';
+      data.push({
+        time: nowDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        date: isIntraday
+          ? nowDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+          : timeframe === '1W'
+            ? nowDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : nowDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        open: lastBar.close,
+        high: Math.max(lastBar.close, livePrice),
+        low: Math.min(lastBar.close, livePrice),
+        close: livePrice,
+        volume: 0,
+      });
+    } else {
+      // Update the last bar's close to reflect live price
+      data[data.length - 1].close = livePrice;
+      data[data.length - 1].high = Math.max(data[data.length - 1].high, livePrice);
+      data[data.length - 1].low = Math.min(data[data.length - 1].low, livePrice);
+    }
+  }
+
   addIndicators(data);
   return data;
 }
@@ -169,7 +202,7 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
 
   const chartData = useMemo(() => {
     if (isLive) {
-      return barsToChartData(alpacaBars!, timeframe);
+      return barsToChartData(alpacaBars!, timeframe, currentPrice);
     }
     // Fallback to simulated
     const days = timeframe === '1D' ? 1 : timeframe === '1W' ? 7 : timeframe === '1M' ? 30 : timeframe === '3M' ? 90 : timeframe === '1Y' ? 365 : 365;
@@ -187,18 +220,11 @@ export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, da
     ? (timeframe === '1D' ? chartData[0].open : chartData[0].close)
     : (previousClose || currentPrice);
 
-  // End price: for intraday (1D) use last bar at/before 21:00 UTC (4 PM ET = market close).
-  // For daily bars (1W, 1M, etc.) just use the last bar's close.
+  // End price: always use live currentPrice when available since bars may not
+  // include today's movement (daily bars close at end of previous day).
   const periodEndPrice = (() => {
+    if (currentPrice > 0) return currentPrice;
     if (!isLive || !latestData) return currentPrice;
-    if (timeframe === '1D' && alpacaBars && alpacaBars.length > 0) {
-      // Find last bar at or before 21:00 UTC (4 PM ET) to exclude after-hours
-      const marketBars = alpacaBars.filter(b => {
-        const d = new Date(b.date);
-        return d.getUTCHours() < 21;
-      });
-      if (marketBars.length > 0) return marketBars[marketBars.length - 1].close;
-    }
     return latestData.close;
   })();
 

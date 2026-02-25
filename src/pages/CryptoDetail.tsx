@@ -114,7 +114,7 @@ export default function CryptoDetail() {
             <AdvancedChart
               symbol={displaySymbol}
               currentPrice={livePrice}
-              previousClose={dbCrypto?.previous_close || livePrice}
+              previousClose={dbCrypto?.previous_close || 0}
               dayHigh={dbCrypto?.day_high}
               dayLow={dbCrypto?.day_low}
               isCrypto
