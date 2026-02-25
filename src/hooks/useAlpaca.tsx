@@ -125,8 +125,8 @@ export function useAlpacaSearch(query: string) {
     queryFn: async () => {
       if (!query || query.length < 1) return [];
       
-      const { data, error } = await supabase.functions.invoke('alpaca-trading/search-assets', {
-        body: { isPaper, query, limit: 30 },
+      const { data, error } = await supabase.functions.invoke('alpaca-trading', {
+        body: { action: 'search-assets', isPaper, query, limit: 30 },
       });
       
       // If no brokerage connected, return empty array instead of throwing
@@ -285,8 +285,8 @@ export function useAlpacaAssetInfo(symbol: string | undefined) {
   return useQuery({
     queryKey: ['alpaca-asset-info', symbol],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('alpaca-trading/search-assets', {
-        body: { isPaper, query: symbol, limit: 5 },
+      const { data, error } = await supabase.functions.invoke('alpaca-trading', {
+        body: { action: 'search-assets', isPaper, query: symbol, limit: 5 },
       });
 
       if (data?.needsConnection) return null;
