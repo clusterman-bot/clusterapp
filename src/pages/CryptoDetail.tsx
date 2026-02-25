@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useEmailVerified } from '@/hooks/useEmailVerified';
 import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import { MainNav } from '@/components/MainNav';
-import { BackButton } from '@/components/BackButton';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Star, StarOff, Bitcoin, Activity, Zap } from 'lucide-react';
@@ -65,7 +65,10 @@ export default function CryptoDetail() {
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
-            <BackButton fallbackPath="/trade?market=crypto" />
+            <Button variant="ghost" size="sm" onClick={() => navigate('/trade?market=crypto')}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
                 <Bitcoin className="h-5 w-5 text-amber-500" />
