@@ -197,7 +197,6 @@ serve(async (req) => {
 
     const isPaper = body.isPaper !== false; // Default to paper trading
     const accountType = isPaper ? 'paper' : 'live';
-    const accountType = isPaper ? 'paper' : 'live';
 
     console.log(`[Alpaca] Action: ${action}, Mode: ${accountType}, User: ${userId}`);
 
