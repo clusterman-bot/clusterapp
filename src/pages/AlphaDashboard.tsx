@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { SystemBotsTab } from '@/components/alpha/SystemBotsTab';
+import { FeedbackTab } from '@/components/alpha/FeedbackTab';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAlpha, useAllUsersForAlpha, useMuteUser, useFreezeTrading, usePlatformSettings, useUpdatePlatformSetting, useSetRoleForUser } from '@/hooks/useAlpha';
@@ -36,6 +37,7 @@ import {
   Lock, Unlock, UserX, Users, MessageSquareOff, MessageSquare,
   ArrowLeft, AlertTriangle, CheckCircle, UserCog, Instagram,
   Bot, Play, Save, Clock, Calendar, CheckCircle2, XCircle, RefreshCw,
+  MessageSquarePlus,
 } from 'lucide-react';
 import {
   Select,
@@ -633,6 +635,10 @@ export default function AlphaDashboard() {
               <Instagram className="h-3.5 w-3.5 mr-1.5" />
               Marketing Bot
             </TabsTrigger>
+            <TabsTrigger value="feedback">
+              <MessageSquarePlus className="h-3.5 w-3.5 mr-1.5" />
+              Feedback
+            </TabsTrigger>
           </TabsList>
 
           {/* User Moderation */}
@@ -1007,6 +1013,11 @@ export default function AlphaDashboard() {
           {/* Marketing Bot */}
           <TabsContent value="marketing-bot">
             <MarketingBotTab />
+          </TabsContent>
+
+          {/* Feedback */}
+          <TabsContent value="feedback">
+            <FeedbackTab />
           </TabsContent>
         </Tabs>
       </main>
