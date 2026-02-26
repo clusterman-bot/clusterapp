@@ -543,23 +543,53 @@ async function executeTradeForOwnerAndSubscribers(
             continue; // Skip executing this trade
           }
 
-          // Calculate proportional qty based on allocation exposure limit
+          // Calculate proportional qty based on allocation exposure limit (fractional)
           if (signal.price_at_signal && signal.price_at_signal > 0) {
-            const maxAffordableQty = Math.floor(Math.min(maxTradeValue, buyingPower) / signal.price_at_signal);
-            tradeQty = Math.max(1, Math.min(signal.quantity, maxAffordableQty));
+            const maxAffordableQty = parseFloat((Math.min(maxTradeValue, buyingPower) / signal.price_at_signal).toFixed(4));
+            tradeQty = Math.max(0.01, Math.min(signal.quantity, maxAffordableQty));
           }
         }
       }
 
+      // Check if asset supports fractional trading
+      let assetFractionable = false;
+      try {
+        const assetResp = await fetch(`${alpacaBase}/v2/assets/${encodeURIComponent(signal.ticker)}`, {
+          headers: {
+            'APCA-API-KEY-ID': alpacaApiKey,
+            'APCA-API-SECRET-KEY': alpacaApiSecret,
+          },
+        });
+        if (assetResp.ok) {
+          const assetData = await assetResp.json();
+          assetFractionable = assetData.fractionable === true;
+        }
+      } catch (e) {
+        console.log(`[TradingBot] Could not check fractionable status for ${signal.ticker}, defaulting to whole shares`);
+      }
+
+      // Round to whole shares if asset doesn't support fractional trading
+      if (!assetFractionable && tradeQty < 1) {
+        tradeQty = 1;
+      } else if (!assetFractionable) {
+        tradeQty = Math.floor(tradeQty);
+      }
+
       // Place order via Alpaca
       const alpacaUrl = `${alpacaBase}/v2/orders`;
-      const orderPayload = {
+      const orderPayload: Record<string, any> = {
         symbol: signal.ticker,
-        qty: tradeQty,
         side,
         type: 'market',
         time_in_force: 'day',
       };
+
+      // Use notional (dollar amount) for fractional quantities, qty for whole shares
+      if (assetFractionable && tradeQty % 1 !== 0) {
+        orderPayload.notional = parseFloat((tradeQty * (signal.price_at_signal || 100)).toFixed(2));
+      } else {
+        orderPayload.qty = tradeQty;
+      }
 
       const response = await fetch(alpacaUrl, {
         method: 'POST',

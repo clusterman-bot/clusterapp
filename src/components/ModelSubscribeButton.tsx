@@ -276,12 +276,17 @@ export function ModelSubscribeButton({
         </Button>
       )}
 
-      {/* Show allocated amount for subscribed users */}
+      {/* Show allocated amount for subscribed users — click to edit */}
       {isSubscribed && allocation && (
-        <Badge variant="secondary" className="ml-2">
-          <Wallet className="h-3 w-3 mr-1" />
+        <Button
+          variant="secondary"
+          size={size}
+          className="ml-2 gap-1"
+          onClick={() => setShowAllocationDialog(true)}
+        >
+          <Wallet className="h-3 w-3" />
           ${allocation.current_value.toLocaleString()} allocated
-        </Badge>
+        </Button>
       )}
     </>
   );

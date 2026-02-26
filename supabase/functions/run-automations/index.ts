@@ -372,14 +372,40 @@ async function executeModelTrades(
         }
       }
 
+      // Check if asset supports fractional trading
+      let assetFractionable = false;
+      try {
+        const assetResp = await fetch(`${alpacaBase}/v2/assets/${encodeURIComponent(signal.ticker)}`, {
+          headers: alpacaHeaders,
+        });
+        if (assetResp.ok) {
+          const assetData = await assetResp.json();
+          assetFractionable = assetData.fractionable === true;
+        }
+      } catch (e) {
+        console.log(`[RunAutomations] Could not check fractionable for ${signal.ticker}`);
+      }
+
+      // Round to whole shares if not fractionable
+      if (!assetFractionable && tradeQty < 1) {
+        tradeQty = 1;
+      } else if (!assetFractionable) {
+        tradeQty = Math.floor(tradeQty);
+      }
+
       // Place order via Alpaca
-      const orderPayload = {
+      const orderPayload: Record<string, any> = {
         symbol: signal.ticker,
-        qty: tradeQty,
         side,
         type: 'market',
         time_in_force: 'day',
       };
+
+      if (assetFractionable && tradeQty % 1 !== 0) {
+        orderPayload.notional = parseFloat((tradeQty * (signal.price_at_signal || 100)).toFixed(2));
+      } else {
+        orderPayload.qty = tradeQty;
+      }
 
       const orderResp = await fetch(`${alpacaBase}/v2/orders`, {
         method: 'POST',

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { usePaperBalance, useCreateAllocation } from '@/hooks/useAllocations';
+import { useState, useEffect } from 'react';
+import { usePaperBalance, useCreateAllocation, useUpdateAllocation, useAllocationForSubscription } from '@/hooks/useAllocations';
 import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -31,20 +31,34 @@ export function AllocationDialog({
   const { data: balance } = usePaperBalance();
   const { data: brokerageAccounts, isLoading: loadingAccounts } = useBrokerageAccounts();
   const createAllocation = useCreateAllocation();
+  const updateAllocation = useUpdateAllocation();
+  const { data: existingAllocation } = useAllocationForSubscription(subscriptionId);
   const navigate = useNavigate();
 
+  const isEditing = !!existingAllocation;
+
   const hasLiveAccount = brokerageAccounts?.some(a => a.account_type === 'live' && a.is_active);
+  const hasPaperAccount = brokerageAccounts?.some(a => a.account_type === 'paper' && a.is_active);
   const hasAnyAccount = brokerageAccounts?.some(a => a.is_active);
   
-  const availableBalance = (balance?.paper_balance ?? 100000) - (balance?.allocated_balance ?? 0);
+  const availableBalance = (balance?.paper_balance ?? 100000) - (balance?.allocated_balance ?? 0) + (isEditing ? existingAllocation.allocated_amount : 0);
   const effectiveMin = Math.min(minAllocation, availableBalance);
   const effectiveMax = Math.min(maxAllocation, availableBalance);
   const clampAmount = (v: number) => Math.max(effectiveMin, Math.min(v, effectiveMax));
   
-  const [amount, setAmount] = useState(() => clampAmount(effectiveMin));
+  const [amount, setAmount] = useState(() => clampAmount(isEditing ? existingAllocation.allocated_amount : effectiveMin));
   const [percentage, setPercentage] = useState(() =>
-    effectiveMax > 0 ? Math.round((clampAmount(effectiveMin) / effectiveMax) * 100) : 0
+    effectiveMax > 0 ? Math.round((clampAmount(isEditing ? existingAllocation.allocated_amount : effectiveMin) / effectiveMax) * 100) : 0
   );
+
+  // Sync when dialog opens with existing allocation
+  useEffect(() => {
+    if (open && existingAllocation) {
+      const amt = clampAmount(existingAllocation.allocated_amount);
+      setAmount(amt);
+      setPercentage(effectiveMax > 0 ? Math.round((amt / effectiveMax) * 100) : 0);
+    }
+  }, [open, existingAllocation?.id]);
 
   const handlePercentageChange = (value: number[]) => {
     const pct = value[0];
@@ -59,11 +73,20 @@ export function AllocationDialog({
   };
 
   const handleAllocate = () => {
-    createAllocation.mutate(
-      { subscriptionId, modelId, amount },
-      { onSuccess: () => onOpenChange(false) }
-    );
+    if (isEditing) {
+      updateAllocation.mutate(
+        { allocationId: existingAllocation.id, newAmount: amount },
+        { onSuccess: () => onOpenChange(false) }
+      );
+    } else {
+      createAllocation.mutate(
+        { subscriptionId, modelId, amount },
+        { onSuccess: () => onOpenChange(false) }
+      );
+    }
   };
+
+  const isPending = createAllocation.isPending || updateAllocation.isPending;
 
   const isBelowMin = amount < effectiveMin;
   const isAboveMax = amount > effectiveMax;
@@ -75,10 +98,12 @@ export function AllocationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wallet className="h-5 w-5" />
-            Allocate Funds to {modelName}
+            {isEditing ? 'Update Allocation' : 'Allocate Funds'} — {modelName}
           </DialogTitle>
           <DialogDescription>
-            Choose how much to allocate from your paper balance to mirror this model's trades.
+            {isEditing 
+              ? 'Adjust how much capital is allocated to mirror this model\'s trades.'
+              : 'Choose how much to allocate from your paper balance to mirror this model\'s trades.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -106,26 +131,18 @@ export function AllocationDialog({
             </div>
           )}
 
-          {/* No live account warning (has paper only) */}
-          {!loadingAccounts && hasAnyAccount && !hasLiveAccount && (
-            <div className="flex flex-col gap-3 p-4 bg-warning/10 border border-warning/20 rounded-lg">
+          {/* Paper-only info (not blocking) */}
+          {!loadingAccounts && hasPaperAccount && !hasLiveAccount && (
+            <div className="flex flex-col gap-3 p-4 bg-muted/50 border border-border rounded-lg">
               <div className="flex items-start gap-2">
-                <AlertCircle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
+                <AlertCircle className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-warning">No Live Account</p>
+                  <p className="text-sm font-medium">Paper Account Connected</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    You only have a paper account connected. Trades will execute on paper. Connect a live account for real trading.
+                    Trades will execute on your paper account. You can connect a live account later for real trading.
                   </p>
                 </div>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => { onOpenChange(false); navigate('/settings/brokerage'); }}
-              >
-                <LinkIcon className="h-4 w-4 mr-2" />
-                Connect Live Account
-              </Button>
             </div>
           )}
 
@@ -214,9 +231,9 @@ export function AllocationDialog({
           </Button>
           <Button 
             onClick={handleAllocate} 
-            disabled={isInvalid || createAllocation.isPending}
+            disabled={isInvalid || isPending}
           >
-            {createAllocation.isPending ? 'Allocating...' : `Allocate $${amount.toLocaleString()}`}
+            {isPending ? (isEditing ? 'Updating...' : 'Allocating...') : `${isEditing ? 'Update' : 'Allocate'} $${amount.toLocaleString()}`}
           </Button>
         </DialogFooter>
       </DialogContent>
