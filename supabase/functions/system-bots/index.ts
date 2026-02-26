@@ -382,9 +382,81 @@ serve(async (req) => {
           results.sort((a, b) => b.sharpe - a.sharpe);
           const best = results[0];
 
+          // Try AI-generated custom indicators
+          let updatedIndicators = { ...indicators };
+          const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+          if (LOVABLE_API_KEY) {
+            try {
+              // Fetch platform knowledge for this ticker
+              let knowledgeHint = '';
+              try {
+                const pkResp = await fetch(`${supabaseUrl}/functions/v1/strategy-knowledge`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseServiceKey}` },
+                  body: JSON.stringify({ action: 'query', symbol: ticker }),
+                });
+                if (pkResp.ok) {
+                  const pkData = await pkResp.json();
+                  if (pkData.summary) {
+                    knowledgeHint = `Platform knowledge for ${ticker}: avg Sharpe ${pkData.summary.avg_sharpe}, avg win rate ${pkData.summary.avg_win_rate}. Best indicator combo: ${JSON.stringify(pkData.summary.best_indicator_combo)}.`;
+                  }
+                }
+              } catch (_) {}
+
+              const aiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${LOVABLE_API_KEY}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  model: 'google/gemini-2.5-flash',
+                  messages: [
+                    {
+                      role: 'system',
+                      content: `You are a quantitative trading indicator developer. Generate 1-2 custom JavaScript indicator functions for trading ${ticker} in the ${cfg.sector} sector. Each function receives an array of OHLCV bars ({o, h, l, c, v, t}) and must return a number: positive for buy signal, negative for sell, 0 for neutral. Return ONLY valid JSON array of objects with fields: name (string), code (string - the JS function body as "(bars) => { ... }"), weight (number 0.5-2.0), enabled (boolean true). No markdown, no explanation.`,
+                    },
+                    {
+                      role: 'user',
+                      content: `Current native indicators: ${JSON.stringify(Object.keys(indicators).filter(k => indicators[k]?.enabled))}. Current best Sharpe from param sweep: ${best.sharpe.toFixed(4)}. ${knowledgeHint} Generate complementary custom indicators that capture patterns the native indicators miss (e.g., volume-price divergence, momentum acceleration, volatility breakout).`,
+                    },
+                  ],
+                }),
+              });
+
+              if (aiResp.ok) {
+                const aiData = await aiResp.json();
+                const content = aiData.choices?.[0]?.message?.content?.trim();
+                if (content) {
+                  try {
+                    // Strip markdown code fences if present
+                    const cleaned = content.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+                    const customIndicators = JSON.parse(cleaned);
+                    if (Array.isArray(customIndicators) && customIndicators.length > 0) {
+                      updatedIndicators = {
+                        ...indicators,
+                        custom: customIndicators.map((ci: any) => ({
+                          name: ci.name || 'Custom',
+                          code: ci.code || '',
+                          weight: Math.max(0.1, Math.min(5.0, ci.weight ?? 1.0)),
+                          enabled: true,
+                        })),
+                      };
+                      console.log(`[SystemBots] Generated ${customIndicators.length} custom indicators for ${cfg.sector}`);
+                    }
+                  } catch (parseErr) {
+                    console.warn(`[SystemBots] Failed to parse AI custom indicators:`, parseErr);
+                  }
+                }
+              }
+            } catch (aiErr) {
+              console.warn(`[SystemBots] AI indicator generation failed:`, aiErr);
+            }
+          }
+
           // Apply best config to model
           await supabaseAdmin.from('models').update({
-            indicators_config: indicators,
+            indicators_config: updatedIndicators,
             theta: best.config.theta,
             stop_loss_percent: best.config.stop_loss_percent,
             take_profit_percent: best.config.take_profit_percent,
@@ -400,15 +472,15 @@ serve(async (req) => {
           await supabaseAdmin.from('bot_optimization_logs').insert({
             model_id: cfg.model_id,
             user_id: seifUserId,
-            stage: 'param_sweep',
+            stage: 'param_sweep_with_custom_indicators',
             status: 'applied',
             trigger_reason: 'scheduled_optimization',
             old_config: baseConfig,
-            new_config: best.config,
+            new_config: { ...best.config, custom_indicators: updatedIndicators.custom || [] },
             new_metrics: { sharpe: best.sharpe },
           });
 
-          optimized.push({ sector: cfg.sector, best_sharpe: best.sharpe, generation: cfg.optimization_generation + 1 });
+          optimized.push({ sector: cfg.sector, best_sharpe: best.sharpe, generation: cfg.optimization_generation + 1, custom_indicators: (updatedIndicators.custom || []).length });
         } else {
           optimized.push({ sector: cfg.sector, status: 'insufficient_data' });
         }

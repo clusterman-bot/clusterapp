@@ -23,22 +23,47 @@ import { formatDistanceToNow } from 'date-fns';
 
 function IndicatorDisplay({ config }: { config: any }) {
   if (!config) return <span className="text-muted-foreground text-xs">No indicators</span>;
-  const entries = Object.entries(config).filter(([_, v]: any) => v?.enabled);
-  if (!entries.length) return <span className="text-muted-foreground text-xs">No active indicators</span>;
+  const nativeEntries = Object.entries(config).filter(([k, v]: any) => k !== 'custom' && v?.enabled);
+  const customIndicators = Array.isArray(config.custom) ? config.custom.filter((c: any) => c.enabled) : [];
+
+  if (!nativeEntries.length && !customIndicators.length) return <span className="text-muted-foreground text-xs">No active indicators</span>;
 
   return (
-    <div className="grid grid-cols-2 gap-2">
-      {entries.map(([key, val]: any) => (
-        <div key={key} className="bg-muted/50 rounded p-2 text-xs">
-          <span className="font-mono font-semibold uppercase">{key}</span>
-          <div className="text-muted-foreground mt-0.5">
-            {val.periods && <span>Periods: {val.periods.join(', ')}</span>}
-            {val.windows && <span>Windows: {val.windows.join(', ')}</span>}
-            {val.window && !val.windows && <span>Window: {val.window}</span>}
-            {val.std && <span> · Std: {val.std}</span>}
+    <div className="space-y-3">
+      {nativeEntries.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-1.5">Native Indicators</p>
+          <div className="grid grid-cols-2 gap-2">
+            {nativeEntries.map(([key, val]: any) => (
+              <div key={key} className="bg-muted/50 rounded p-2 text-xs">
+                <span className="font-mono font-semibold uppercase">{key}</span>
+                <div className="text-muted-foreground mt-0.5">
+                  {val.periods && <span>Periods: {val.periods.join(', ')}</span>}
+                  {val.windows && <span>Windows: {val.windows.join(', ')}</span>}
+                  {val.window && !val.windows && <span>Window: {val.window}</span>}
+                  {val.std && <span> · Std: {val.std}</span>}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      ))}
+      )}
+      {customIndicators.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-1.5">AI-Generated Custom Indicators</p>
+          <div className="grid grid-cols-1 gap-2">
+            {customIndicators.map((ci: any, i: number) => (
+              <div key={i} className="bg-accent/30 border border-accent/50 rounded p-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-semibold">{ci.name}</span>
+                  <Badge variant="outline" className="text-[10px] h-4">weight: {ci.weight?.toFixed(1) ?? '1.0'}</Badge>
+                </div>
+                <pre className="text-muted-foreground mt-1 text-[10px] max-h-20 overflow-auto whitespace-pre-wrap break-all">{ci.code}</pre>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
