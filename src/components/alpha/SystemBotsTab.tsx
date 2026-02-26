@@ -198,7 +198,7 @@ function BotCard({ bot }: { bot: SystemBot }) {
           <div className="text-center">
             <p className="text-xs text-muted-foreground">Return</p>
             <p className={`font-mono font-bold text-lg ${isPositive ? 'text-profit' : 'text-loss'}`}>
-              {isPositive ? '+' : ''}{(totalReturn * 100).toFixed(1)}%
+              {isPositive ? '+' : ''}{totalReturn.toFixed(1)}%
             </p>
           </div>
           <div className="text-center">
