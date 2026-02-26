@@ -17,6 +17,7 @@ import {
 '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
+import { FeedbackDialog } from '@/components/FeedbackDialog';
 
 export function MainNav() {
   const { user, signOut } = useAuth();
@@ -164,7 +165,8 @@ export function MainNav() {
           </nav>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <FeedbackDialog />
           {user ?
           <DropdownMenu>
               <DropdownMenuTrigger asChild>
