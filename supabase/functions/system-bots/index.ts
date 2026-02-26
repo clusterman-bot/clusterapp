@@ -461,9 +461,8 @@ serve(async (req) => {
           variations.push(variant);
         }
 
-        const results: Array<{ config: any; sharpe: number }> = [];
-
-        for (const variant of variations) {
+        // --- Phase 1: Parameter sweep with CURRENT indicators ---
+        const runBacktest = async (variantConfig: any, indicatorSet: any) => {
           try {
             const btResp = await fetch(`${supabaseUrl}/functions/v1/run-backtest`, {
               method: 'POST',
@@ -473,8 +472,8 @@ serve(async (req) => {
               },
               body: JSON.stringify({
                 symbol: ticker,
-                indicators,
-                ...variant,
+                indicators: indicatorSet,
+                ...variantConfig,
                 start_date: thirtyDaysAgo.toISOString().slice(0, 10),
                 end_date: now.toISOString().slice(0, 10),
                 initial_capital: 10000,
@@ -482,86 +481,126 @@ serve(async (req) => {
                 model_id: null,
               }),
             });
-
             if (btResp.ok) {
               const btResult = await btResp.json();
               if (btResult.sharpe_ratio !== undefined) {
-                results.push({ config: variant, sharpe: btResult.sharpe_ratio || 0 });
+                return {
+                  config: variantConfig,
+                  indicators: indicatorSet,
+                  sharpe: btResult.sharpe_ratio || 0,
+                  total_return: btResult.total_return || 0,
+                  win_rate: btResult.win_rate || 0,
+                  max_drawdown: btResult.max_drawdown || 0,
+                };
               }
             }
           } catch (e) {
             console.error(`[SystemBots] Backtest variation failed:`, e);
           }
+          return null;
+        };
+
+        const results: Array<{ config: any; indicators: any; sharpe: number; total_return: number; win_rate: number; max_drawdown: number }> = [];
+
+        for (const variant of variations) {
+          const r = await runBacktest(variant, indicators);
+          if (r) results.push(r);
           await new Promise(r => setTimeout(r, 300));
         }
 
-        if (results.length >= 2) {
+        // --- Phase 2: Ask AI for NEW indicator configuration (native + custom) ---
+        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+        let aiIndicators: any = null;
+        const currentBestSharpe = results.length > 0 ? Math.max(...results.map(r => r.sharpe)) : 0;
+
+        if (LOVABLE_API_KEY) {
+          try {
+            const aiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${LOVABLE_API_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'google/gemini-2.5-flash',
+                messages: [
+                  {
+                    role: 'system',
+                    content: `You are a quantitative trading system optimizer for the ${cfg.sector.replace('_', ' ')} sector. You must output a COMPLETE indicator configuration as a single JSON object. This includes BOTH native indicators and optional custom JavaScript indicators. Native indicators available: rsi, sma, ema, bollinger, sma_deviation, volatility. Each native indicator has: enabled (bool), and params like periods/windows/window/std. Custom indicators go in a "custom" array, each with: name, code (JS function "(bars) => { ... }" returning number: +buy/-sell/0neutral), weight (0.5-2.0), enabled (bool). The output must be a single JSON object. No markdown. No explanation.`,
+                  },
+                  {
+                    role: 'user',
+                    content: `Ticker: ${ticker}. Sector: ${cfg.sector}.
+Current indicators config: ${JSON.stringify(indicators)}
+Current best Sharpe from param sweep: ${currentBestSharpe.toFixed(4)}.
+
+PLATFORM INTELLIGENCE:
+${knowledgeContext}
+
+Design an IMPROVED indicator configuration for ${ticker}. You may:
+- Change native indicator params (windows, periods, std, enable/disable)
+- Add 1-3 custom JS indicators for patterns native ones miss
+- Sector focus: ${cfg.sector === 'tech_growth' ? 'institutional accumulation, earnings momentum, sector rotation' : cfg.sector === 'tech_momentum' ? 'gap-and-go, volume spikes, momentum exhaustion, breakout detection' : 'safe-haven flows, inverse equity correlation, volatility regime shifts'}
+
+Return the FULL indicators_config JSON object.`,
+                  },
+                ],
+              }),
+            });
+
+            if (aiResp.ok) {
+              const aiData = await aiResp.json();
+              const content = aiData.choices?.[0]?.message?.content?.trim();
+              if (content) {
+                try {
+                  const cleaned = content.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+                  const parsed = JSON.parse(cleaned);
+                  // Validate it has at least one enabled indicator
+                  const hasEnabled = Object.entries(parsed).some(([k, v]: any) => k !== 'custom' && v?.enabled);
+                  if (hasEnabled) {
+                    aiIndicators = parsed;
+                    console.log(`[SystemBots] AI proposed new indicator config for ${cfg.sector}/${ticker}`);
+                  }
+                } catch (parseErr) {
+                  console.warn(`[SystemBots] Failed to parse AI indicators:`, parseErr);
+                }
+              }
+            }
+          } catch (aiErr) {
+            console.warn(`[SystemBots] AI indicator generation failed:`, aiErr);
+          }
+        }
+
+        // --- Phase 3: Backtest AI indicators with best param config ---
+        if (aiIndicators) {
+          const bestParamConfig = results.length > 0
+            ? results.sort((a, b) => b.sharpe - a.sharpe)[0].config
+            : baseConfig;
+
+          const aiResult = await runBacktest(bestParamConfig, aiIndicators);
+          if (aiResult) {
+            results.push(aiResult);
+            console.log(`[SystemBots] AI indicators Sharpe: ${aiResult.sharpe.toFixed(4)} vs current best: ${currentBestSharpe.toFixed(4)}`);
+          }
+        }
+
+        // --- Phase 4: Pick winner and apply ---
+        if (results.length >= 1) {
           results.sort((a, b) => b.sharpe - a.sharpe);
           const best = results[0];
 
-          // Try AI-generated custom indicators using full platform knowledge
-          let updatedIndicators = { ...indicators };
-          const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-          if (LOVABLE_API_KEY) {
-            try {
-              const aiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${LOVABLE_API_KEY}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  model: 'google/gemini-2.5-flash',
-                  messages: [
-                    {
-                      role: 'system',
-                      content: `You are a quantitative trading indicator developer specializing in the ${cfg.sector.replace('_', ' ')} sector. Generate 1-3 custom JavaScript indicator functions specifically tailored for trading ${ticker}. Each function receives an array of OHLCV bars ({o, h, l, c, v, t}) and must return a number: positive for buy signal, negative for sell, 0 for neutral. Consider the sector characteristics: ${cfg.sector === 'tech_growth' ? 'stable large-caps with institutional flows, earnings-driven moves' : cfg.sector === 'tech_momentum' ? 'high-beta momentum stocks with rapid price swings, gap moves, retail sentiment' : 'commodities with macro sensitivity, inflation hedging, mean-reversion tendencies'}. Return ONLY valid JSON array of objects with fields: name (string), code (string - the JS function body as "(bars) => { ... }"), weight (number 0.5-2.0), enabled (boolean true). No markdown, no explanation.`,
-                    },
-                    {
-                      role: 'user',
-                      content: `Current native indicators: ${JSON.stringify(Object.keys(indicators).filter(k => k !== 'custom' && indicators[k]?.enabled))}. Current best Sharpe from param sweep: ${best.sharpe.toFixed(4)}.\n\nPLATFORM INTELLIGENCE:\n${knowledgeContext}\n\nGenerate complementary custom indicators that leverage the platform's historical knowledge and capture patterns specific to ${ticker} that the native indicators miss. Focus on sector-appropriate signals (e.g., ${cfg.sector === 'tech_momentum' ? 'gap-and-go, volume spikes, momentum exhaustion' : cfg.sector === 'precious_metals' ? 'safe-haven flow detection, inverse equity correlation, volatility regime' : 'institutional accumulation, earnings momentum, sector rotation'}).`,
-                    },
-                  ],
-                }),
-              });
-
-              if (aiResp.ok) {
-                const aiData = await aiResp.json();
-                const content = aiData.choices?.[0]?.message?.content?.trim();
-                if (content) {
-                  try {
-                    // Strip markdown code fences if present
-                    const cleaned = content.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
-                    const customIndicators = JSON.parse(cleaned);
-                    if (Array.isArray(customIndicators) && customIndicators.length > 0) {
-                      updatedIndicators = {
-                        ...indicators,
-                        custom: customIndicators.map((ci: any) => ({
-                          name: ci.name || 'Custom',
-                          code: ci.code || '',
-                          weight: Math.max(0.1, Math.min(5.0, ci.weight ?? 1.0)),
-                          enabled: true,
-                        })),
-                      };
-                      console.log(`[SystemBots] Generated ${customIndicators.length} custom indicators for ${cfg.sector}`);
-                    }
-                  } catch (parseErr) {
-                    console.warn(`[SystemBots] Failed to parse AI custom indicators:`, parseErr);
-                  }
-                }
-              }
-            } catch (aiErr) {
-              console.warn(`[SystemBots] AI indicator generation failed:`, aiErr);
-            }
-          }
-
-          // Apply best config to model
+          // Apply best config + indicators to model, including metrics
           await supabaseAdmin.from('models').update({
-            indicators_config: updatedIndicators,
+            indicators_config: best.indicators,
             theta: best.config.theta,
             stop_loss_percent: best.config.stop_loss_percent,
             take_profit_percent: best.config.take_profit_percent,
             position_size_percent: best.config.position_size_percent,
+            // Update metrics from backtest
+            total_return: best.total_return,
+            sharpe_ratio: best.sharpe,
+            win_rate: best.win_rate,
+            max_drawdown: best.max_drawdown,
           }).eq('id', cfg.model_id);
 
           await supabaseAdmin.from('system_bot_config').update({
@@ -570,18 +609,27 @@ serve(async (req) => {
           }).eq('id', cfg.id);
 
           // Log
+          const usedAiIndicators = best.indicators !== indicators;
           await supabaseAdmin.from('bot_optimization_logs').insert({
             model_id: cfg.model_id,
             user_id: seifUserId,
-            stage: 'param_sweep_with_custom_indicators',
+            stage: usedAiIndicators ? 'ai_indicator_evolution' : 'param_sweep',
             status: 'applied',
             trigger_reason: 'scheduled_optimization',
-            old_config: baseConfig,
-            new_config: { ...best.config, custom_indicators: updatedIndicators.custom || [] },
-            new_metrics: { sharpe: best.sharpe },
+            old_config: { params: baseConfig, indicators_summary: Object.keys(indicators).filter(k => k !== 'custom' && indicators[k]?.enabled) },
+            new_config: { params: best.config, indicators_summary: Object.keys(best.indicators).filter(k => k !== 'custom' && best.indicators[k]?.enabled), custom_count: (best.indicators.custom || []).length },
+            old_metrics: { sharpe: currentBestSharpe },
+            new_metrics: { sharpe: best.sharpe, total_return: best.total_return, win_rate: best.win_rate, max_drawdown: best.max_drawdown },
           });
 
-          optimized.push({ sector: cfg.sector, best_sharpe: best.sharpe, generation: cfg.optimization_generation + 1, custom_indicators: (updatedIndicators.custom || []).length });
+          optimized.push({
+            sector: cfg.sector,
+            best_sharpe: best.sharpe,
+            total_return: best.total_return,
+            used_ai_indicators: usedAiIndicators,
+            generation: cfg.optimization_generation + 1,
+            custom_indicators: (best.indicators.custom || []).length,
+          });
         } else {
           optimized.push({ sector: cfg.sector, status: 'insufficient_data' });
         }
