@@ -273,14 +273,25 @@ export default function Orders() {
                             className={
                               trade.status === 'executed'
                                 ? 'bg-profit/20 text-profit border-profit/30 capitalize'
-                                : trade.status === 'failed'
+                                : trade.status === 'failed' || (trade.status as string).startsWith('blocked')
                                 ? 'bg-destructive/20 text-destructive border-destructive/30 capitalize'
                                 : 'capitalize'
                             }
                             variant={trade.status === 'executed' ? 'outline' : 'secondary'}
                           >
-                            {trade.status}
+                            {(trade.status as string) === 'blocked_insufficient_funds'
+                              ? 'Insufficient Funds'
+                              : trade.status === 'failed' && trade.error_message
+                              ? trade.error_message.length > 30
+                                ? trade.error_message.slice(0, 30) + '…'
+                                : trade.error_message
+                              : (trade.status as string).replace(/_/g, ' ')}
                           </Badge>
+                          {trade.error_message && trade.status !== 'executed' && (
+                            <p className="text-xs text-muted-foreground mt-1 max-w-[200px] truncate" title={trade.error_message}>
+                              {trade.error_message}
+                            </p>
+                          )}
                           {trade.pnl !== null && (
                             <p className={`text-xs mt-1 ${trade.pnl >= 0 ? 'text-profit' : 'text-loss'}`}>
                               P&L: {trade.pnl >= 0 ? '+' : ''}${Number(trade.pnl).toFixed(2)}
