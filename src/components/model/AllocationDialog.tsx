@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { usePaperBalance, useCreateAllocation } from '@/hooks/useAllocations';
+import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Wallet, TrendingUp, AlertCircle } from 'lucide-react';
+import { Wallet, TrendingUp, AlertCircle, LinkIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface AllocationDialogProps {
   open: boolean;
@@ -27,7 +29,12 @@ export function AllocationDialog({
   maxAllocation = 10000,
 }: AllocationDialogProps) {
   const { data: balance } = usePaperBalance();
+  const { data: brokerageAccounts, isLoading: loadingAccounts } = useBrokerageAccounts();
   const createAllocation = useCreateAllocation();
+  const navigate = useNavigate();
+
+  const hasLiveAccount = brokerageAccounts?.some(a => a.account_type === 'live' && a.is_active);
+  const hasAnyAccount = brokerageAccounts?.some(a => a.is_active);
   
   const availableBalance = (balance?.paper_balance ?? 100000) - (balance?.allocated_balance ?? 0);
   const effectiveMin = Math.min(minAllocation, availableBalance);
@@ -60,7 +67,7 @@ export function AllocationDialog({
 
   const isBelowMin = amount < effectiveMin;
   const isAboveMax = amount > effectiveMax;
-  const isInvalid = amount <= 0 || isBelowMin || isAboveMax || amount > availableBalance;
+  const isInvalid = amount <= 0 || isBelowMin || isAboveMax || amount > availableBalance || !hasAnyAccount;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -76,6 +83,52 @@ export function AllocationDialog({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* No brokerage account warning */}
+          {!loadingAccounts && !hasAnyAccount && (
+            <div className="flex flex-col gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-destructive">No Brokerage Account Connected</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    You need a connected brokerage account to mirror trades. Connect one to continue.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { onOpenChange(false); navigate('/settings/brokerage'); }}
+              >
+                <LinkIcon className="h-4 w-4 mr-2" />
+                Connect Brokerage Account
+              </Button>
+            </div>
+          )}
+
+          {/* No live account warning (has paper only) */}
+          {!loadingAccounts && hasAnyAccount && !hasLiveAccount && (
+            <div className="flex flex-col gap-3 p-4 bg-warning/10 border border-warning/20 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-warning">No Live Account</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    You only have a paper account connected. Trades will execute on paper. Connect a live account for real trading.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { onOpenChange(false); navigate('/settings/brokerage'); }}
+              >
+                <LinkIcon className="h-4 w-4 mr-2" />
+                Connect Live Account
+              </Button>
+            </div>
+          )}
+
           {/* Balances */}
           <div className="p-4 bg-muted rounded-lg space-y-2">
             <div className="flex items-center justify-between">

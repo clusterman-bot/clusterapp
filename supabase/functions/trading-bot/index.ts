@@ -425,17 +425,20 @@ async function executeTradeForOwnerAndSubscribers(
 
   for (const trader of usersToTrade) {
     try {
-      // Get user's brokerage account
-      const { data: brokerageAccount, error: accError } = await supabase
+      // Get user's brokerage accounts – prefer live, fall back to paper
+      const { data: brokerageAccounts, error: accError } = await supabase
         .from('user_brokerage_accounts')
         .select('*')
         .eq('user_id', trader.userId)
         .eq('broker_name', 'alpaca')
-        .eq('is_active', true)
-        .single();
+        .eq('is_active', true);
+
+      const brokerageAccount = brokerageAccounts?.find((a: any) => a.account_type === 'live')
+        || brokerageAccounts?.[0]
+        || null;
 
       if (accError || !brokerageAccount) {
-        console.log(`[TradingBot] No brokerage for user ${trader.userId}, skipping`);
+        console.log(`[TradingBot] No active brokerage for user ${trader.userId}, skipping`);
         if (!trader.isOwner && trader.subscriptionId) {
           await supabase.from('subscriber_trades').insert({
             subscription_id: trader.subscriptionId,
@@ -445,7 +448,7 @@ async function executeTradeForOwnerAndSubscribers(
             side,
             quantity: signal.quantity,
             status: 'failed',
-            error_message: 'No brokerage account connected',
+            error_message: 'No active brokerage account connected',
           });
         }
         continue;
