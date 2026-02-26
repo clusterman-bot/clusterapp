@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ModelSubscribeButton } from '@/components/ModelSubscribeButton';
-import { TrendingUp, TrendingDown, Users, Shield, Wallet, BarChart3 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, Shield, Wallet, BarChart3, Bot } from 'lucide-react';
 
 interface ModelMarketplaceCardProps {
   model: {
@@ -26,6 +26,7 @@ interface ModelMarketplaceCardProps {
       avatar_url: string | null;
       is_verified: boolean | null;
     } | null;
+    is_system?: boolean;
   };
 }
 
@@ -48,6 +49,12 @@ export function ModelMarketplaceCard({ model }: ModelMarketplaceCardProps) {
               <h3 className="font-semibold text-base hover:text-primary transition-colors truncate">
                 {model.name}
               </h3>
+              {(model as any).is_system && (
+                <Badge variant="secondary" className="text-xs gap-1 ml-2 shrink-0">
+                  <Bot className="h-3 w-3" />
+                  System Bot
+                </Badge>
+              )}
             </button>
             {model.description && (
               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{model.description}</p>

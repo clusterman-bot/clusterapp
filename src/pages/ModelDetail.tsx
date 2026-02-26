@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useModel, useUpdateModel, useDeleteModel } from '@/hooks/useModels';
+import { useIsAlpha } from '@/hooks/useAlpha';
 import { useModelSignals, useDeployedModel, useDeployModel, useStopModel, useSignalRealtimeUpdates, useUpdateDeploymentConfig } from '@/hooks/useDeployedModels';
 import { Switch } from '@/components/ui/switch';
 import { useIsSubscribed } from '@/hooks/useSubscriptions';
@@ -26,7 +27,7 @@ import {
   BarChart3, Target, Zap, Activity, AlertTriangle,
   CheckCircle, Clock, ArrowUpRight, ArrowDownRight,
   Sparkles, Code2, Pause, Play, Trash2, Settings2,
-  Rocket, Square, RefreshCw, Radio
+  Rocket, Square, RefreshCw, Radio, Bot
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -77,6 +78,8 @@ export default function ModelDetail() {
   const stopModel = useStopModel();
   const updateDeploymentConfig = useUpdateDeploymentConfig();
   const [runningSignal, setRunningSignal] = useState(false);
+  const { data: isAlpha } = useIsAlpha();
+  const isSystemBot = !!(model as any)?.is_system;
 
   const handleDeploy = async () => {
     if (!model) return;
@@ -155,6 +158,7 @@ export default function ModelDetail() {
 
   const developer = (model as any).profiles;
   const isOwner = user?.id === model.user_id;
+  const canManageSystemBot = isSystemBot && isAlpha;
   const isSubscribed = !!subscription;
 
   const totalReturn = model.total_return ?? 0;
@@ -203,6 +207,14 @@ export default function ModelDetail() {
               <h1 className="text-2xl font-bold leading-tight">{model.name}</h1>
               {model.is_public && (
                 <Badge variant="secondary" className="text-xs">Public</Badge>
+              )}
+              {isSystemBot && (
+                <Badge variant="secondary" className="text-xs gap-1">
+                  <Bot className="h-3 w-3" /> System Bot
+                </Badge>
+              )}
+              {isSystemBot && (
+                <Badge variant="outline" className="text-xs">Auto-rotates weekly · Self-improves</Badge>
               )}
               {isSubscribed && (
                 <Badge className="text-xs gap-1">
@@ -273,7 +285,7 @@ export default function ModelDetail() {
           )}
 
           {/* Owner controls */}
-          {isOwner && (
+          {(isOwner || canManageSystemBot) && (
             <div className="flex flex-col items-end gap-2 shrink-0">
               {/* Marketplace visibility badge */}
               <Badge variant={model.status === 'published' ? 'default' : 'secondary'} className="text-xs">
