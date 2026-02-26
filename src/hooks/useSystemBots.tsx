@@ -44,10 +44,35 @@ interface SystemBotDeployment {
   total_trades: number | null;
 }
 
+interface SystemBotSignal {
+  id: string;
+  ticker: string;
+  signal_type: 'BUY' | 'SELL' | 'HOLD';
+  confidence: number | null;
+  price_at_signal: number | null;
+  quantity: number;
+  generated_at: string;
+  status: string;
+}
+
+interface SystemBotComputedMetrics {
+  total_return: number;
+  sharpe_ratio: number | null;
+  win_rate: number | null;
+  max_drawdown: number | null;
+  total_signals: number;
+  buy_signals: number;
+  sell_signals: number;
+  hold_signals: number;
+  completed_trades: number;
+}
+
 export interface SystemBot {
   config: SystemBotConfig;
   model: SystemBotModel | null;
   deployment: SystemBotDeployment | null;
+  signals: SystemBotSignal[];
+  computedMetrics: SystemBotComputedMetrics | null;
 }
 
 export function useSystemBots() {

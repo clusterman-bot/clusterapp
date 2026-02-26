@@ -78,12 +78,16 @@ function BotCard({ bot }: { bot: SystemBot }) {
   const [tickerInput, setTickerInput] = useState('');
   const [showParams, setShowParams] = useState(false);
   const [showIndicators, setShowIndicators] = useState(false);
+  const [showSignals, setShowSignals] = useState(false);
 
   // Editable params state
   const model = bot.model;
   const cfg = bot.config;
   const deploy = bot.deployment;
-  const totalReturn = model?.total_return ?? 0;
+  const metrics = bot.computedMetrics;
+  const totalReturn = metrics?.total_return ?? model?.total_return ?? 0;
+  const sharpeRatio = metrics?.sharpe_ratio ?? model?.sharpe_ratio;
+  const winRate = metrics?.win_rate ?? model?.win_rate;
   const isPositive = totalReturn >= 0;
 
   const [params, setParams] = useState({
@@ -190,7 +194,7 @@ function BotCard({ bot }: { bot: SystemBot }) {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="text-center">
             <p className="text-xs text-muted-foreground">Current Ticker</p>
             <p className="font-mono font-bold text-lg">{cfg.current_ticker ?? '—'}</p>
@@ -198,18 +202,43 @@ function BotCard({ bot }: { bot: SystemBot }) {
           <div className="text-center">
             <p className="text-xs text-muted-foreground">Return</p>
             <p className={`font-mono font-bold text-lg ${isPositive ? 'text-profit' : 'text-loss'}`}>
-              {isPositive ? '+' : ''}{totalReturn.toFixed(1)}%
+              {totalReturn !== 0 ? `${isPositive ? '+' : ''}${totalReturn.toFixed(2)}%` : '—'}
             </p>
           </div>
           <div className="text-center">
             <p className="text-xs text-muted-foreground">Sharpe</p>
-            <p className="font-mono font-bold text-lg">{model?.sharpe_ratio?.toFixed(2) ?? '—'}</p>
+            <p className="font-mono font-bold text-lg">{sharpeRatio != null ? sharpeRatio.toFixed(2) : '—'}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-muted-foreground">Win Rate</p>
+            <p className="font-mono font-bold text-lg">{winRate != null ? `${(winRate * 100).toFixed(0)}%` : '—'}</p>
           </div>
           <div className="text-center">
             <p className="text-xs text-muted-foreground">Subscribers</p>
             <p className="font-mono font-bold text-lg">{model?.total_subscribers ?? 0}</p>
           </div>
         </div>
+
+        {/* Signal Summary */}
+        {metrics && (
+          <div className="flex flex-wrap gap-3 text-xs">
+            <Badge variant="outline" className="gap-1">
+              {metrics.total_signals} signals
+            </Badge>
+            <Badge variant="outline" className="gap-1 text-green-600 border-green-600/30">
+              {metrics.buy_signals} buys
+            </Badge>
+            <Badge variant="outline" className="gap-1 text-red-600 border-red-600/30">
+              {metrics.sell_signals} sells
+            </Badge>
+            <Badge variant="outline" className="gap-1">
+              {metrics.hold_signals} holds
+            </Badge>
+            <Badge variant="outline" className="gap-1">
+              {metrics.completed_trades} closed trades
+            </Badge>
+          </div>
+        )}
 
         {/* Timestamps */}
         <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
@@ -222,9 +251,6 @@ function BotCard({ bot }: { bot: SystemBot }) {
             Last optimization: {cfg.last_optimization_at ? formatDistanceToNow(new Date(cfg.last_optimization_at), { addSuffix: true }) : 'Never'}
           </span>
           <span>Gen #{cfg.optimization_generation}</span>
-          {deploy?.total_signals != null && (
-            <span>{deploy.total_signals} signals · {deploy.total_trades ?? 0} trades</span>
-          )}
         </div>
 
         <Separator />
@@ -334,6 +360,41 @@ function BotCard({ bot }: { bot: SystemBot }) {
             <div className="pl-6">
               <IndicatorDisplay config={model?.indicators_config} />
               <p className="text-xs text-muted-foreground mt-2">Indicators are auto-managed by the optimization engine.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Recent Signals */}
+        <div className="space-y-3">
+          <button className="flex items-center gap-2 text-sm font-medium hover:text-primary transition-colors w-full"
+            onClick={() => setShowSignals(!showSignals)}>
+            <Bot className="h-4 w-4" />
+            Recent Signals ({bot.signals.length})
+            {showSignals ? <ChevronUp className="h-4 w-4 ml-auto" /> : <ChevronDown className="h-4 w-4 ml-auto" />}
+          </button>
+          {showSignals && (
+            <div className="pl-6 space-y-1 max-h-60 overflow-auto">
+              {bot.signals.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No signals generated yet.</p>
+              ) : (
+                <div className="space-y-1">
+                  {bot.signals.map((sig) => (
+                    <div key={sig.id} className="flex items-center justify-between text-xs bg-muted/50 rounded px-3 py-1.5">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={sig.signal_type === 'BUY' ? 'default' : sig.signal_type === 'SELL' ? 'destructive' : 'secondary'} className="text-[10px] h-5">
+                          {sig.signal_type}
+                        </Badge>
+                        <span className="font-mono">{sig.ticker}</span>
+                        <span className="text-muted-foreground">@ ${sig.price_at_signal?.toFixed(2) ?? '—'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <span>{(sig.confidence != null ? (sig.confidence * 100).toFixed(0) : '?')}% conf</span>
+                        <span>{formatDistanceToNow(new Date(sig.generated_at), { addSuffix: true })}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
