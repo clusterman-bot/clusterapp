@@ -61,17 +61,19 @@ export function FeedbackDialog() {
   const canSubmit = form.name.trim() && form.email.trim() && form.section && form.message.trim();
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || !user?.id) return;
     setSending(true);
     try {
-      const { error } = await supabase.functions.invoke('send-feedback', {
-        body: {
+      const sectionLabel = SECTIONS.find(s => s.value === form.section)?.label || form.section;
+      const { error } = await supabase
+        .from('feedback' as any)
+        .insert({
+          user_id: user.id,
           name: form.name.trim(),
           email: form.email.trim(),
-          section: SECTIONS.find(s => s.value === form.section)?.label || form.section,
+          section: sectionLabel,
           message: form.message.trim(),
-        },
-      });
+        });
       if (error) throw error;
       toast({ title: 'Feedback sent!', description: 'Thanks for helping us improve Cluster.' });
       setOpen(false);
