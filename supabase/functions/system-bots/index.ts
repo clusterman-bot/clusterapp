@@ -241,10 +241,74 @@ serve(async (req) => {
           .eq('model_id', cfg.model_id)
           .maybeSingle();
 
+        // Fetch recent signals for this bot
+        const { data: signals } = await supabaseAdmin
+          .from('model_signals')
+          .select('id, ticker, signal_type, confidence, price_at_signal, quantity, generated_at, status')
+          .eq('model_id', cfg.model_id)
+          .order('generated_at', { ascending: false })
+          .limit(20);
+
+        // Compute live metrics from signals if model metrics are null
+        let computedMetrics: any = null;
+        if (signals && signals.length > 0) {
+          const totalSignals = signals.length;
+          const buySignals = signals.filter((s: any) => s.signal_type === 'BUY').length;
+          const sellSignals = signals.filter((s: any) => s.signal_type === 'SELL').length;
+          const holdSignals = signals.filter((s: any) => s.signal_type === 'HOLD').length;
+          
+          // Compute a simple P&L from sequential buy/sell pairs
+          const allSignals = await supabaseAdmin
+            .from('model_signals')
+            .select('signal_type, price_at_signal, generated_at')
+            .eq('model_id', cfg.model_id)
+            .neq('signal_type', 'HOLD')
+            .order('generated_at', { ascending: true });
+          
+          let totalPnlPct = 0;
+          let trades = 0;
+          let wins = 0;
+          let entryPrice: number | null = null;
+          const pnls: number[] = [];
+          
+          for (const sig of (allSignals.data || [])) {
+            if (sig.signal_type === 'BUY' && !entryPrice) {
+              entryPrice = sig.price_at_signal;
+            } else if (sig.signal_type === 'SELL' && entryPrice && sig.price_at_signal) {
+              const pnlPct = ((sig.price_at_signal - entryPrice) / entryPrice) * 100;
+              totalPnlPct += pnlPct;
+              pnls.push(pnlPct);
+              trades++;
+              if (pnlPct > 0) wins++;
+              entryPrice = null;
+            }
+          }
+          
+          const winRate = trades > 0 ? wins / trades : null;
+          const avgReturn = pnls.length > 0 ? pnls.reduce((a, b) => a + b, 0) / pnls.length : null;
+          const stdDev = pnls.length > 1 ? Math.sqrt(pnls.reduce((sum, p) => sum + Math.pow(p - (avgReturn || 0), 2), 0) / (pnls.length - 1)) : null;
+          const sharpe = stdDev && stdDev > 0 && avgReturn !== null ? avgReturn / stdDev : null;
+          const maxDD = pnls.length > 0 ? Math.min(...pnls) : null;
+
+          computedMetrics = {
+            total_return: totalPnlPct,
+            sharpe_ratio: sharpe,
+            win_rate: winRate,
+            max_drawdown: maxDD,
+            total_signals: totalSignals,
+            buy_signals: buySignals,
+            sell_signals: sellSignals,
+            hold_signals: holdSignals,
+            completed_trades: trades,
+          };
+        }
+
         bots.push({
           config: cfg,
           model,
           deployment,
+          signals: signals || [],
+          computedMetrics,
         });
       }
 
