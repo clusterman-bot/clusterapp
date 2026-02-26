@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,10 +17,31 @@ import {
   SystemBot,
 } from '@/hooks/useSystemBots';
 import {
-  Bot, Play, RefreshCw, Zap, TrendingUp, TrendingDown,
-  Users, Clock, BarChart3, XCircle, Settings2, Rocket,
+  Bot, RefreshCw, Zap, Clock, XCircle, Rocket, ChevronDown, ChevronUp, Settings2,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+
+function IndicatorDisplay({ config }: { config: any }) {
+  if (!config) return <span className="text-muted-foreground text-xs">No indicators</span>;
+  const entries = Object.entries(config).filter(([_, v]: any) => v?.enabled);
+  if (!entries.length) return <span className="text-muted-foreground text-xs">No active indicators</span>;
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {entries.map(([key, val]: any) => (
+        <div key={key} className="bg-muted/50 rounded p-2 text-xs">
+          <span className="font-mono font-semibold uppercase">{key}</span>
+          <div className="text-muted-foreground mt-0.5">
+            {val.periods && <span>Periods: {val.periods.join(', ')}</span>}
+            {val.windows && <span>Windows: {val.windows.join(', ')}</span>}
+            {val.window && !val.windows && <span>Window: {val.window}</span>}
+            {val.std && <span> · Std: {val.std}</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function BotCard({ bot }: { bot: SystemBot }) {
   const { toast } = useToast();
@@ -30,12 +51,25 @@ function BotCard({ bot }: { bot: SystemBot }) {
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState(bot.model?.name ?? '');
   const [tickerInput, setTickerInput] = useState('');
+  const [showParams, setShowParams] = useState(false);
+  const [showIndicators, setShowIndicators] = useState(false);
 
+  // Editable params state
   const model = bot.model;
   const cfg = bot.config;
   const deploy = bot.deployment;
   const totalReturn = model?.total_return ?? 0;
   const isPositive = totalReturn >= 0;
+
+  const [params, setParams] = useState({
+    min_allocation: model?.min_allocation ?? 100,
+    max_allocation: model?.max_allocation ?? 10000,
+    stop_loss_percent: model?.stop_loss_percent ?? 5,
+    take_profit_percent: model?.take_profit_percent ?? 15,
+    position_size_percent: model?.position_size_percent ?? 10,
+    theta: model?.theta ?? 0.01,
+    max_exposure_percent: model?.max_exposure_percent ?? 20,
+  });
 
   const handleRename = async () => {
     if (!newName.trim()) return;
@@ -54,11 +88,29 @@ function BotCard({ bot }: { bot: SystemBot }) {
 
   const handleToggleActive = async (active: boolean) => {
     try {
+      await updateConfig.mutateAsync({ config_id: cfg.id, updates: { is_active: active } });
+      toast({ title: active ? 'Bot activated' : 'Bot deactivated' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const handleSaveParams = async () => {
+    try {
       await updateConfig.mutateAsync({
         config_id: cfg.id,
-        updates: { is_active: active },
+        model_id: model?.id,
+        model_updates: {
+          min_allocation: params.min_allocation,
+          max_allocation: params.max_allocation,
+          stop_loss_percent: params.stop_loss_percent,
+          take_profit_percent: params.take_profit_percent,
+          position_size_percent: params.position_size_percent,
+          theta: params.theta,
+          max_exposure_percent: params.max_exposure_percent,
+        },
       });
-      toast({ title: active ? 'Bot activated' : 'Bot deactivated' });
+      toast({ title: 'Parameters saved' });
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     }
@@ -93,12 +145,7 @@ function BotCard({ bot }: { bot: SystemBot }) {
             <Bot className="h-5 w-5 text-primary" />
             {editingName ? (
               <div className="flex items-center gap-2">
-                <Input
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="h-8 w-56"
-                  onKeyDown={(e) => e.key === 'Enter' && handleRename()}
-                />
+                <Input value={newName} onChange={(e) => setNewName(e.target.value)} className="h-8 w-56" onKeyDown={(e) => e.key === 'Enter' && handleRename()} />
                 <Button size="sm" variant="outline" onClick={handleRename} disabled={updateConfig.isPending}>Save</Button>
                 <Button size="sm" variant="ghost" onClick={() => setEditingName(false)}>Cancel</Button>
               </div>
@@ -164,20 +211,14 @@ function BotCard({ bot }: { bot: SystemBot }) {
             <Switch checked={cfg.is_active} onCheckedChange={handleToggleActive} />
           </div>
           <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5"
+            <Button size="sm" variant="outline" className="gap-1.5"
               onClick={() => rotateTickers.mutateAsync({ force: true }).then(() => toast({ title: 'Rotation triggered' })).catch((e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }))}
               disabled={rotateTickers.isPending}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${rotateTickers.isPending ? 'animate-spin' : ''}`} />
               Rotate Now
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5"
+            <Button size="sm" variant="outline" className="gap-1.5"
               onClick={() => optimizeBots.mutateAsync().then(() => toast({ title: 'Optimization triggered' })).catch((e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }))}
               disabled={optimizeBots.isPending}
             >
@@ -201,15 +242,75 @@ function BotCard({ bot }: { bot: SystemBot }) {
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <Input
-              placeholder="Add ticker"
-              value={tickerInput}
-              onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTicker())}
-              className="w-28 h-8"
-            />
+            <Input placeholder="Add ticker" value={tickerInput} onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTicker())} className="w-28 h-8" />
             <Button size="sm" variant="outline" onClick={addTicker} disabled={!tickerInput.trim()}>Add</Button>
           </div>
+        </div>
+
+        <Separator />
+
+        {/* Strategy Parameters (collapsible) */}
+        <div className="space-y-3">
+          <button className="flex items-center gap-2 text-sm font-medium hover:text-primary transition-colors w-full"
+            onClick={() => setShowParams(!showParams)}>
+            <Settings2 className="h-4 w-4" />
+            Strategy Parameters
+            {showParams ? <ChevronUp className="h-4 w-4 ml-auto" /> : <ChevronDown className="h-4 w-4 ml-auto" />}
+          </button>
+          {showParams && (
+            <div className="space-y-4 pl-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-xs">Min Allocation ($)</Label>
+                  <Input type="number" value={params.min_allocation} onChange={(e) => setParams(p => ({ ...p, min_allocation: Number(e.target.value) }))} className="h-8" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Max Allocation ($)</Label>
+                  <Input type="number" value={params.max_allocation} onChange={(e) => setParams(p => ({ ...p, max_allocation: Number(e.target.value) }))} className="h-8" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Position Size (%)</Label>
+                  <Input type="number" value={params.position_size_percent} onChange={(e) => setParams(p => ({ ...p, position_size_percent: Number(e.target.value) }))} className="h-8" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Stop Loss (%)</Label>
+                  <Input type="number" value={params.stop_loss_percent} onChange={(e) => setParams(p => ({ ...p, stop_loss_percent: Number(e.target.value) }))} className="h-8" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Take Profit (%)</Label>
+                  <Input type="number" value={params.take_profit_percent} onChange={(e) => setParams(p => ({ ...p, take_profit_percent: Number(e.target.value) }))} className="h-8" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Theta</Label>
+                  <Input type="number" step="0.001" value={params.theta} onChange={(e) => setParams(p => ({ ...p, theta: Number(e.target.value) }))} className="h-8" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Max Exposure (%)</Label>
+                  <Input type="number" value={params.max_exposure_percent} onChange={(e) => setParams(p => ({ ...p, max_exposure_percent: Number(e.target.value) }))} className="h-8" />
+                </div>
+              </div>
+              <Button size="sm" onClick={handleSaveParams} disabled={updateConfig.isPending}>
+                {updateConfig.isPending ? 'Saving…' : 'Save Parameters'}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Indicators (collapsible, view-only) */}
+        <div className="space-y-3">
+          <button className="flex items-center gap-2 text-sm font-medium hover:text-primary transition-colors w-full"
+            onClick={() => setShowIndicators(!showIndicators)}>
+            <Zap className="h-4 w-4" />
+            Active Indicators
+            {showIndicators ? <ChevronUp className="h-4 w-4 ml-auto" /> : <ChevronDown className="h-4 w-4 ml-auto" />}
+          </button>
+          {showIndicators && (
+            <div className="pl-6">
+              <IndicatorDisplay config={model?.indicators_config} />
+              <p className="text-xs text-muted-foreground mt-2">Indicators are auto-managed by the optimization engine.</p>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -252,7 +353,10 @@ export function SystemBotsTab() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <div className="p-3 bg-muted/50 rounded-lg border text-sm text-muted-foreground">
+        <p><strong>Schedule:</strong> System bots run on the same 1-minute automation cycle as all deployed models. Ticker rotation checks happen daily (rotates weekly). Optimization runs when manually triggered or via daily scheduled checks. Owner trades are disabled — only subscriber trades are mirrored.</p>
+      </div>
       {data.bots.map((bot) => (
         <BotCard key={bot.config.id} bot={bot} />
       ))}

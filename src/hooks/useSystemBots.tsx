@@ -27,6 +27,14 @@ interface SystemBotModel {
   max_drawdown: number | null;
   status: string | null;
   indicators_config: any;
+  min_allocation: number | null;
+  max_allocation: number | null;
+  stop_loss_percent: number | null;
+  take_profit_percent: number | null;
+  position_size_percent: number | null;
+  theta: number | null;
+  max_exposure_percent: number | null;
+  risk_level: string | null;
 }
 
 interface SystemBotDeployment {
@@ -119,7 +127,19 @@ export function useUpdateSystemBotConfig() {
       config_id: string;
       model_id?: string;
       updates?: Partial<Pick<SystemBotConfig, 'ticker_pool' | 'rotation_interval_days' | 'is_active'>>;
-      model_updates?: { name?: string; description?: string };
+      model_updates?: {
+        name?: string;
+        description?: string;
+        min_allocation?: number;
+        max_allocation?: number;
+        stop_loss_percent?: number;
+        take_profit_percent?: number;
+        position_size_percent?: number;
+        theta?: number;
+        max_exposure_percent?: number;
+        risk_level?: string;
+        indicators_config?: any;
+      };
     }) => {
       const { data, error } = await supabase.functions.invoke('system-bots', {
         body: { action: 'update-config', ...params },
