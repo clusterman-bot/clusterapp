@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.strategy-knowledge]
 verify_jwt = false
+
+[functions.system-bots]
+verify_jwt = false

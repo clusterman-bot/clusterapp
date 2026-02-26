@@ -1013,6 +1013,7 @@ export type Database = {
           id: string
           indicators_config: Json | null
           is_public: boolean | null
+          is_system: boolean
           max_allocation: number | null
           max_drawdown: number | null
           max_exposure_percent: number | null
@@ -1048,6 +1049,7 @@ export type Database = {
           id?: string
           indicators_config?: Json | null
           is_public?: boolean | null
+          is_system?: boolean
           max_allocation?: number | null
           max_drawdown?: number | null
           max_exposure_percent?: number | null
@@ -1083,6 +1085,7 @@ export type Database = {
           id?: string
           indicators_config?: Json | null
           is_public?: boolean | null
+          is_system?: boolean
           max_allocation?: number | null
           max_drawdown?: number | null
           max_exposure_percent?: number | null
@@ -1910,6 +1913,56 @@ export type Database = {
             columns: ["subscriber_id"]
             isOneToOne: false
             referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      system_bot_config: {
+        Row: {
+          created_at: string
+          current_ticker: string | null
+          id: string
+          is_active: boolean
+          last_optimization_at: string | null
+          last_rotation_at: string | null
+          model_id: string
+          optimization_generation: number
+          rotation_interval_days: number
+          sector: string
+          ticker_pool: string[]
+        }
+        Insert: {
+          created_at?: string
+          current_ticker?: string | null
+          id?: string
+          is_active?: boolean
+          last_optimization_at?: string | null
+          last_rotation_at?: string | null
+          model_id: string
+          optimization_generation?: number
+          rotation_interval_days?: number
+          sector: string
+          ticker_pool?: string[]
+        }
+        Update: {
+          created_at?: string
+          current_ticker?: string | null
+          id?: string
+          is_active?: boolean
+          last_optimization_at?: string | null
+          last_rotation_at?: string | null
+          model_id?: string
+          optimization_generation?: number
+          rotation_interval_days?: number
+          sector?: string
+          ticker_pool?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_bot_config_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: true
+            referencedRelation: "models"
             referencedColumns: ["id"]
           },
         ]

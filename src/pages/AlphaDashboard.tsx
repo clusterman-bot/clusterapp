@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SystemBotsTab } from '@/components/alpha/SystemBotsTab';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAlpha, useAllUsersForAlpha, useMuteUser, useFreezeTrading, usePlatformSettings, useUpdatePlatformSetting, useSetRoleForUser } from '@/hooks/useAlpha';
@@ -624,6 +625,10 @@ export default function AlphaDashboard() {
           <TabsList>
             <TabsTrigger value="users">User Moderation</TabsTrigger>
             <TabsTrigger value="platform">Platform Controls</TabsTrigger>
+            <TabsTrigger value="system-bots">
+              <Bot className="h-3.5 w-3.5 mr-1.5" />
+              System Bots
+            </TabsTrigger>
             <TabsTrigger value="marketing-bot">
               <Instagram className="h-3.5 w-3.5 mr-1.5" />
               Marketing Bot
@@ -992,6 +997,11 @@ export default function AlphaDashboard() {
                 </div>
               </div>
             </div>
+          </TabsContent>
+
+          {/* System Bots */}
+          <TabsContent value="system-bots">
+            <SystemBotsTab />
           </TabsContent>
 
           {/* Marketing Bot */}
