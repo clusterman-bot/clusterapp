@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Clock, CheckCircle, XCircle, AlertCircle,
-  ArrowRight, Calendar, Bot
+  ArrowRight, Calendar, Bot, Link
 } from 'lucide-react';
 import { useAlpacaOrders, useAlpacaCancelOrder, AlpacaOrder } from '@/hooks/useAlpaca';
 import { useTradingMode } from '@/hooks/useTradingMode';
@@ -281,17 +281,29 @@ export default function Orders() {
                           >
                             {(trade.status as string) === 'blocked_insufficient_funds'
                               ? 'Insufficient Funds'
+                              : trade.error_message === 'No brokerage account connected'
+                              ? 'No Live Account'
                               : trade.status === 'failed' && trade.error_message
                               ? trade.error_message.length > 30
                                 ? trade.error_message.slice(0, 30) + '…'
                                 : trade.error_message
                               : (trade.status as string).replace(/_/g, ' ')}
                           </Badge>
-                          {trade.error_message && trade.status !== 'executed' && (
+                          {trade.error_message === 'No brokerage account connected' ? (
+                            <Button
+                              variant="link"
+                              size="sm"
+                              className="text-xs p-0 h-auto mt-1"
+                              onClick={() => navigate('/settings/brokerage')}
+                            >
+                              <Link className="h-3 w-3 mr-1" />
+                              Connect Live Account
+                            </Button>
+                          ) : trade.error_message && trade.status !== 'executed' ? (
                             <p className="text-xs text-muted-foreground mt-1 max-w-[200px] truncate" title={trade.error_message}>
                               {trade.error_message}
                             </p>
-                          )}
+                          ) : null}
                           {trade.pnl !== null && (
                             <p className={`text-xs mt-1 ${trade.pnl >= 0 ? 'text-profit' : 'text-loss'}`}>
                               P&L: {trade.pnl >= 0 ? '+' : ''}${Number(trade.pnl).toFixed(2)}
