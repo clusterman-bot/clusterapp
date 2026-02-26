@@ -138,7 +138,7 @@ serve(async (req) => {
           model_id: model.id,
           user_id: seifUserId,
           status: 'running',
-          config: { owner_trades_too: true },
+          config: { owner_trades_too: false },
         });
 
         results.push({ sector: bot.sector, status: 'created', model_id: model.id });
@@ -165,7 +165,7 @@ serve(async (req) => {
       for (const cfg of configs) {
         const { data: model } = await supabaseAdmin
           .from('models')
-          .select('id, name, ticker, total_subscribers, total_return, sharpe_ratio, win_rate, max_drawdown, status, indicators_config')
+          .select('id, name, ticker, total_subscribers, total_return, sharpe_ratio, win_rate, max_drawdown, status, indicators_config, min_allocation, max_allocation, stop_loss_percent, take_profit_percent, position_size_percent, theta, max_exposure_percent, risk_level')
           .eq('id', cfg.model_id)
           .single();
 
@@ -457,7 +457,11 @@ serve(async (req) => {
       }
 
       if (model_updates && body.model_id) {
-        const allowedModelFields: Record<string, boolean> = { name: true, description: true };
+        const allowedModelFields: Record<string, boolean> = {
+          name: true, description: true, min_allocation: true, max_allocation: true,
+          stop_loss_percent: true, take_profit_percent: true, position_size_percent: true,
+          theta: true, max_exposure_percent: true, risk_level: true, indicators_config: true,
+        };
         const safeModelUpdates: Record<string, any> = {};
         for (const [k, v] of Object.entries(model_updates)) {
           if (allowedModelFields[k]) safeModelUpdates[k] = v;
