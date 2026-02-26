@@ -6,6 +6,34 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// Sector-specific indicator configs tuned to each asset class
+const SECTOR_INDICATORS: Record<string, any> = {
+  tech_growth: {
+    // Stable large-caps: longer SMAs for trend-following, moderate RSI
+    rsi: { enabled: true, periods: [14, 21] },
+    sma: { enabled: true, windows: [50, 200] },
+    ema: { enabled: true, windows: [12, 26] },
+    bollinger: { enabled: true, window: 20, std: 2 },
+    sma_deviation: { enabled: true, window: 50 },
+  },
+  tech_momentum: {
+    // High-volatility momentum: shorter windows, tighter signals
+    rsi: { enabled: true, periods: [9, 14] },
+    sma: { enabled: true, windows: [10, 30] },
+    ema: { enabled: true, windows: [5, 13] },
+    bollinger: { enabled: true, window: 15, std: 2.5 },
+    sma_deviation: { enabled: true, window: 20 },
+  },
+  precious_metals: {
+    // Commodities: wider Bollinger, longer trend windows, mean-reversion focus
+    rsi: { enabled: true, periods: [14, 28] },
+    sma: { enabled: true, windows: [20, 100] },
+    ema: { enabled: false, windows: [12, 26] },
+    bollinger: { enabled: true, window: 25, std: 1.8 },
+    sma_deviation: { enabled: true, window: 30 },
+  },
+};
+
 const SYSTEM_BOTS = [
   {
     name: 'System Bot: Tech Growth',
@@ -13,6 +41,7 @@ const SYSTEM_BOTS = [
     ticker_pool: ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'META', 'AMZN', 'AMD', 'CRM', 'AVGO', 'ORCL'],
     default_ticker: 'AAPL',
     description: 'Platform-managed bot focusing on established tech leaders. Auto-rotates tickers weekly and self-optimizes via continuous backtesting.',
+    default_params: { theta: 0.008, stop_loss_percent: 4, take_profit_percent: 12, position_size_percent: 8 },
   },
   {
     name: 'System Bot: Tech Momentum',
@@ -20,6 +49,7 @@ const SYSTEM_BOTS = [
     ticker_pool: ['TSLA', 'PLTR', 'SNOW', 'NET', 'CRWD', 'DDOG', 'MDB', 'ZS', 'PANW', 'UBER'],
     default_ticker: 'TSLA',
     description: 'Platform-managed bot trading high-momentum tech stocks. Weekly ticker rotation driven by AI analysis of sector performance.',
+    default_params: { theta: 0.015, stop_loss_percent: 6, take_profit_percent: 20, position_size_percent: 12 },
   },
   {
     name: 'System Bot: Precious Metals',
@@ -27,16 +57,47 @@ const SYSTEM_BOTS = [
     ticker_pool: ['GLD', 'SLV', 'GDX', 'GOLD', 'NEM', 'AEM', 'WPM', 'FNV'],
     default_ticker: 'GLD',
     description: 'Platform-managed bot for precious metals ETFs and miners. Self-improving strategy with weekly rotation.',
+    default_params: { theta: 0.005, stop_loss_percent: 3, take_profit_percent: 10, position_size_percent: 7 },
   },
 ];
 
-const DEFAULT_INDICATORS = {
-  rsi: { enabled: true, periods: [14] },
-  sma: { enabled: true, windows: [20, 50] },
-  ema: { enabled: true, windows: [12, 26] },
-  bollinger: { enabled: true, window: 20, std: 2 },
-  sma_deviation: { enabled: false, window: 20 },
-};
+// Build a rich knowledge context from platform data for AI optimization
+function buildKnowledgeContext(
+  tickerKnowledge: any,
+  poolKnowledge: any[],
+  recentOptLogs: any[],
+  sectorStrategies: any[],
+  sector: string,
+): string {
+  const parts: string[] = [];
+
+  if (tickerKnowledge) {
+    parts.push(`Current ticker knowledge: avg Sharpe ${tickerKnowledge.avg_sharpe ?? 'N/A'}, avg win rate ${tickerKnowledge.avg_win_rate ?? 'N/A'}, best indicator combo: ${JSON.stringify(tickerKnowledge.best_indicator_combo)}, best params: ${JSON.stringify(tickerKnowledge.best_params)}.`);
+  }
+
+  if (poolKnowledge.length > 0) {
+    const poolSummary = poolKnowledge.map(pk => `${pk.symbol}: Sharpe=${pk.avg_sharpe ?? '?'}, WR=${pk.avg_win_rate ?? '?'}`).join('; ');
+    parts.push(`Cross-asset pool knowledge: ${poolSummary}.`);
+  }
+
+  if (recentOptLogs.length > 0) {
+    const logSummary = recentOptLogs.map((l, i) => `Opt#${i+1}(${l.stage}): Sharpe=${(l.new_metrics as any)?.sharpe ?? '?'}`).join('; ');
+    parts.push(`Recent optimization history: ${logSummary}.`);
+  }
+
+  if (sectorStrategies.length > 0) {
+    const bestStrats = sectorStrategies
+      .filter(s => (s.outcome_metrics as any)?.sharpe_ratio)
+      .sort((a, b) => ((b.outcome_metrics as any)?.sharpe_ratio || 0) - ((a.outcome_metrics as any)?.sharpe_ratio || 0))
+      .slice(0, 5);
+    if (bestStrats.length > 0) {
+      const stratSummary = bestStrats.map(s => `${s.symbol}: indicators=${JSON.stringify(Object.keys(s.indicators_used || {}))}, Sharpe=${(s.outcome_metrics as any)?.sharpe_ratio}`).join('; ');
+      parts.push(`Top-performing strategies in ${sector} pool: ${stratSummary}.`);
+    }
+  }
+
+  return parts.join(' ') || 'No historical knowledge available.';
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -98,7 +159,8 @@ serve(async (req) => {
           continue;
         }
 
-        // Create model
+        // Create model with sector-specific indicators & params
+        const sectorIndicators = SECTOR_INDICATORS[bot.sector] || SECTOR_INDICATORS.tech_growth;
         const { data: model, error: modelErr } = await supabaseAdmin
           .from('models')
           .insert({
@@ -110,10 +172,14 @@ serve(async (req) => {
             is_public: true,
             is_system: true,
             ticker: bot.default_ticker,
-            indicators_config: DEFAULT_INDICATORS,
+            indicators_config: sectorIndicators,
             performance_fee_percent: 0,
-            risk_level: 'medium',
+            risk_level: bot.sector === 'tech_momentum' ? 'high' : 'medium',
             strategy_overview: bot.description,
+            theta: bot.default_params.theta,
+            stop_loss_percent: bot.default_params.stop_loss_percent,
+            take_profit_percent: bot.default_params.take_profit_percent,
+            position_size_percent: bot.default_params.position_size_percent,
           })
           .select('id')
           .single();
@@ -308,19 +374,70 @@ serve(async (req) => {
         if (!model) continue;
 
         const ticker = model.ticker || cfg.current_ticker;
-        const indicators = model.indicators_config || DEFAULT_INDICATORS;
+        const indicators = model.indicators_config || SECTOR_INDICATORS[cfg.sector] || SECTOR_INDICATORS.tech_growth;
+
+        // ---- Gather historical knowledge from ALL platform bots ----
+        // 1. Strategy knowledge for this specific ticker
+        let tickerKnowledge: any = null;
+        try {
+          const { data: ks } = await supabaseAdmin
+            .from('knowledge_summaries')
+            .select('*')
+            .eq('symbol', ticker)
+            .maybeSingle();
+          tickerKnowledge = ks;
+        } catch (_) {}
+
+        // 2. Strategy knowledge for all tickers in the pool (cross-learning)
+        let poolKnowledge: any[] = [];
+        try {
+          const { data: pks } = await supabaseAdmin
+            .from('knowledge_summaries')
+            .select('*')
+            .in('symbol', cfg.ticker_pool);
+          poolKnowledge = pks || [];
+        } catch (_) {}
+
+        // 3. Recent optimization logs for this bot (learn from own history)
+        let recentOptLogs: any[] = [];
+        try {
+          const { data: logs } = await supabaseAdmin
+            .from('bot_optimization_logs')
+            .select('new_config, new_metrics, stage')
+            .eq('model_id', cfg.model_id)
+            .order('created_at', { ascending: false })
+            .limit(5);
+          recentOptLogs = logs || [];
+        } catch (_) {}
+
+        // 4. Best-performing strategies across all symbols in this sector's pool
+        let sectorStrategies: any[] = [];
+        try {
+          const { data: sk } = await supabaseAdmin
+            .from('strategy_knowledge')
+            .select('indicators_used, outcome_metrics, risk_params, symbol')
+            .in('symbol', cfg.ticker_pool)
+            .order('created_at', { ascending: false })
+            .limit(20);
+          sectorStrategies = sk || [];
+        } catch (_) {}
+
+        // Build knowledge context string for AI
+        const knowledgeContext = buildKnowledgeContext(tickerKnowledge, poolKnowledge, recentOptLogs, sectorStrategies, cfg.sector);
 
         // Run parameter sweep via bot-optimizer pattern
         const now = new Date();
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
 
+        // Use sector-specific base config informed by knowledge
+        const sectorDefaults = SYSTEM_BOTS.find(b => b.sector === cfg.sector)?.default_params || { theta: 0.01, stop_loss_percent: 5, take_profit_percent: 15, position_size_percent: 10 };
         const baseConfig = {
-          rsi_oversold: 30,
-          rsi_overbought: 70,
-          theta: 0.01,
-          stop_loss_percent: 5,
-          take_profit_percent: 15,
-          position_size_percent: 10,
+          rsi_oversold: cfg.sector === 'tech_momentum' ? 25 : 30,
+          rsi_overbought: cfg.sector === 'tech_momentum' ? 75 : 70,
+          theta: sectorDefaults.theta,
+          stop_loss_percent: sectorDefaults.stop_loss_percent,
+          take_profit_percent: sectorDefaults.take_profit_percent,
+          position_size_percent: sectorDefaults.position_size_percent,
         };
 
         const variations = [baseConfig];
@@ -382,27 +499,11 @@ serve(async (req) => {
           results.sort((a, b) => b.sharpe - a.sharpe);
           const best = results[0];
 
-          // Try AI-generated custom indicators
+          // Try AI-generated custom indicators using full platform knowledge
           let updatedIndicators = { ...indicators };
           const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
           if (LOVABLE_API_KEY) {
             try {
-              // Fetch platform knowledge for this ticker
-              let knowledgeHint = '';
-              try {
-                const pkResp = await fetch(`${supabaseUrl}/functions/v1/strategy-knowledge`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseServiceKey}` },
-                  body: JSON.stringify({ action: 'query', symbol: ticker }),
-                });
-                if (pkResp.ok) {
-                  const pkData = await pkResp.json();
-                  if (pkData.summary) {
-                    knowledgeHint = `Platform knowledge for ${ticker}: avg Sharpe ${pkData.summary.avg_sharpe}, avg win rate ${pkData.summary.avg_win_rate}. Best indicator combo: ${JSON.stringify(pkData.summary.best_indicator_combo)}.`;
-                  }
-                }
-              } catch (_) {}
-
               const aiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -414,11 +515,11 @@ serve(async (req) => {
                   messages: [
                     {
                       role: 'system',
-                      content: `You are a quantitative trading indicator developer. Generate 1-2 custom JavaScript indicator functions for trading ${ticker} in the ${cfg.sector} sector. Each function receives an array of OHLCV bars ({o, h, l, c, v, t}) and must return a number: positive for buy signal, negative for sell, 0 for neutral. Return ONLY valid JSON array of objects with fields: name (string), code (string - the JS function body as "(bars) => { ... }"), weight (number 0.5-2.0), enabled (boolean true). No markdown, no explanation.`,
+                      content: `You are a quantitative trading indicator developer specializing in the ${cfg.sector.replace('_', ' ')} sector. Generate 1-3 custom JavaScript indicator functions specifically tailored for trading ${ticker}. Each function receives an array of OHLCV bars ({o, h, l, c, v, t}) and must return a number: positive for buy signal, negative for sell, 0 for neutral. Consider the sector characteristics: ${cfg.sector === 'tech_growth' ? 'stable large-caps with institutional flows, earnings-driven moves' : cfg.sector === 'tech_momentum' ? 'high-beta momentum stocks with rapid price swings, gap moves, retail sentiment' : 'commodities with macro sensitivity, inflation hedging, mean-reversion tendencies'}. Return ONLY valid JSON array of objects with fields: name (string), code (string - the JS function body as "(bars) => { ... }"), weight (number 0.5-2.0), enabled (boolean true). No markdown, no explanation.`,
                     },
                     {
                       role: 'user',
-                      content: `Current native indicators: ${JSON.stringify(Object.keys(indicators).filter(k => indicators[k]?.enabled))}. Current best Sharpe from param sweep: ${best.sharpe.toFixed(4)}. ${knowledgeHint} Generate complementary custom indicators that capture patterns the native indicators miss (e.g., volume-price divergence, momentum acceleration, volatility breakout).`,
+                      content: `Current native indicators: ${JSON.stringify(Object.keys(indicators).filter(k => k !== 'custom' && indicators[k]?.enabled))}. Current best Sharpe from param sweep: ${best.sharpe.toFixed(4)}.\n\nPLATFORM INTELLIGENCE:\n${knowledgeContext}\n\nGenerate complementary custom indicators that leverage the platform's historical knowledge and capture patterns specific to ${ticker} that the native indicators miss. Focus on sector-appropriate signals (e.g., ${cfg.sector === 'tech_momentum' ? 'gap-and-go, volume spikes, momentum exhaustion' : cfg.sector === 'precious_metals' ? 'safe-haven flow detection, inverse equity correlation, volatility regime' : 'institutional accumulation, earnings momentum, sector rotation'}).`,
                     },
                   ],
                 }),
