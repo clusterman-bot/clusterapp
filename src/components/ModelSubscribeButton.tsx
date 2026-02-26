@@ -6,6 +6,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useSubscribeToModel, useIsSubscribed, useUnsubscribeFromModel } from '@/hooks/useSubscriptions';
 import { useAllocationForSubscription } from '@/hooks/useAllocations';
 import { AllocationDialog } from '@/components/model/AllocationDialog';
+import { TradingModeSelector } from '@/components/model/TradingModeSelector';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
@@ -46,10 +47,16 @@ export function ModelSubscribeButton({
   const unsubscribe = useUnsubscribeFromModel();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { data: brokerageAccounts } = useBrokerageAccounts();
+  const { data: brokerageAccounts, isLoading: loadingAccounts } = useBrokerageAccounts();
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showUnsubscribeDialog, setShowUnsubscribeDialog] = useState(false);
   const [showNoBrokerageDialog, setShowNoBrokerageDialog] = useState(false);
+
+  // Determine default trading mode based on available accounts
+  const hasLiveAccount = brokerageAccounts?.some(a => a.account_type === 'live' && a.is_active);
+  const hasPaperAccount = brokerageAccounts?.some(a => a.account_type === 'paper' && a.is_active);
+  const defaultMode = hasLiveAccount ? 'live' as const : 'paper' as const;
+  const [tradingMode, setTradingMode] = useState<'paper' | 'live'>(defaultMode);
 
   const isSubscribed = !!subscription;
   const isRetailTrader = userRole?.role === 'retail_trader';
@@ -178,6 +185,12 @@ export function ModelSubscribeButton({
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-3">
+            <TradingModeSelector
+              mode={tradingMode}
+              onModeChange={setTradingMode}
+              brokerageAccounts={brokerageAccounts}
+              isLoading={loadingAccounts}
+            />
             <p className="text-sm text-muted-foreground">
               By subscribing, you'll receive trading signals from this model and your connected Alpaca account will automatically mirror its trades.
             </p>
@@ -260,6 +273,8 @@ export function ModelSubscribeButton({
           modelName={modelName}
           minAllocation={minAllocation}
           maxAllocation={maxAllocation}
+          brokerageAccounts={brokerageAccounts}
+          loadingAccounts={loadingAccounts}
         />
       )}
 

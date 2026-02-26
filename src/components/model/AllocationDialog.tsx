@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { usePaperBalance, useCreateAllocation, useUpdateAllocation, useAllocationForSubscription } from '@/hooks/useAllocations';
-import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
+import { useBrokerageAccounts, BrokerageAccount } from '@/hooks/useBrokerageAccounts';
+import { TradingModeSelector } from '@/components/model/TradingModeSelector';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +18,8 @@ interface AllocationDialogProps {
   modelName: string;
   minAllocation?: number;
   maxAllocation?: number;
+  brokerageAccounts?: BrokerageAccount[];
+  loadingAccounts?: boolean;
 }
 
 export function AllocationDialog({
@@ -27,9 +30,13 @@ export function AllocationDialog({
   modelName,
   minAllocation = 100,
   maxAllocation = 10000,
+  brokerageAccounts: externalAccounts,
+  loadingAccounts: externalLoading,
 }: AllocationDialogProps) {
   const { data: balance } = usePaperBalance();
-  const { data: brokerageAccounts, isLoading: loadingAccounts } = useBrokerageAccounts();
+  const { data: fallbackAccounts, isLoading: fallbackLoading } = useBrokerageAccounts();
+  const brokerageAccounts = externalAccounts ?? fallbackAccounts;
+  const loadingAccounts = externalLoading ?? fallbackLoading;
   const createAllocation = useCreateAllocation();
   const updateAllocation = useUpdateAllocation();
   const { data: existingAllocation } = useAllocationForSubscription(subscriptionId);
@@ -40,6 +47,19 @@ export function AllocationDialog({
   const hasLiveAccount = brokerageAccounts?.some(a => a.account_type === 'live' && a.is_active);
   const hasPaperAccount = brokerageAccounts?.some(a => a.account_type === 'paper' && a.is_active);
   const hasAnyAccount = brokerageAccounts?.some(a => a.is_active);
+
+  // Trading mode state
+  const [tradingMode, setTradingMode] = useState<'paper' | 'live'>(() =>
+    hasLiveAccount ? 'live' : 'paper'
+  );
+
+  // Sync mode when accounts load
+  useEffect(() => {
+    if (!loadingAccounts) {
+      if (hasLiveAccount) setTradingMode('live');
+      else if (hasPaperAccount) setTradingMode('paper');
+    }
+  }, [loadingAccounts, hasLiveAccount, hasPaperAccount]);
   
   const availableBalance = (balance?.paper_balance ?? 100000) - (balance?.allocated_balance ?? 0) + (isEditing ? existingAllocation.allocated_amount : 0);
   const effectiveMin = Math.min(minAllocation, availableBalance);
@@ -131,19 +151,14 @@ export function AllocationDialog({
             </div>
           )}
 
-          {/* Paper-only info (not blocking) */}
-          {!loadingAccounts && hasPaperAccount && !hasLiveAccount && (
-            <div className="flex flex-col gap-3 p-4 bg-muted/50 border border-border rounded-lg">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium">Paper Account Connected</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Trades will execute on your paper account. You can connect a live account later for real trading.
-                  </p>
-                </div>
-              </div>
-            </div>
+          {/* Trading mode toggle */}
+          {hasAnyAccount && (
+            <TradingModeSelector
+              mode={tradingMode}
+              onModeChange={setTradingMode}
+              brokerageAccounts={brokerageAccounts}
+              isLoading={loadingAccounts}
+            />
           )}
 
           {/* Balances */}
