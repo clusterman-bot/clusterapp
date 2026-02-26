@@ -267,16 +267,20 @@ async function executeModelTrades(
 
   for (const trader of usersToTrade) {
     try {
-      const { data: brokerageAccount, error: accError } = await supabaseAdmin
+      // Get user's brokerage accounts – prefer live, fall back to paper
+      const { data: brokerageAccounts, error: accError } = await supabaseAdmin
         .from('user_brokerage_accounts')
         .select('*')
         .eq('user_id', trader.userId)
         .eq('broker_name', 'alpaca')
-        .eq('is_active', true)
-        .single();
+        .eq('is_active', true);
+
+      const brokerageAccount = brokerageAccounts?.find((a: any) => a.account_type === 'live')
+        || brokerageAccounts?.[0]
+        || null;
 
       if (accError || !brokerageAccount) {
-        console.log(`[RunAutomations] No brokerage account for user ${trader.userId}, skipping`);
+        console.log(`[RunAutomations] No active brokerage account for user ${trader.userId}, skipping`);
         if (!trader.isOwner && trader.subscriptionId) {
           await supabaseAdmin.from('subscriber_trades').insert({
             subscription_id: trader.subscriptionId,
@@ -286,7 +290,7 @@ async function executeModelTrades(
             side,
             quantity: signal.quantity,
             status: 'failed',
-            error_message: 'No brokerage account connected',
+            error_message: 'No active brokerage account connected',
           });
         }
         continue;
@@ -686,17 +690,20 @@ serve(async (req) => {
         }
 
         try {
-          // Fetch owner's brokerage account for market data
-          const { data: brokerageAccount, error: brokerErr } = await supabaseAdmin
+          // Fetch owner's brokerage accounts – prefer live, fall back to paper
+          const { data: brokerageAccounts, error: brokerErr } = await supabaseAdmin
             .from('user_brokerage_accounts')
             .select('*')
             .eq('user_id', deployment.user_id)
             .eq('broker_name', 'alpaca')
-            .eq('is_active', true)
-            .single();
+            .eq('is_active', true);
+
+          const brokerageAccount = brokerageAccounts?.find((a: any) => a.account_type === 'live')
+            || brokerageAccounts?.[0]
+            || null;
 
           if (brokerErr || !brokerageAccount) {
-            console.log(`[RunAutomations] No brokerage account for model owner ${deployment.user_id}, skipping`);
+            console.log(`[RunAutomations] No active brokerage account for model owner ${deployment.user_id}, skipping`);
             modelResults.push({ deploymentId: deployment.id, modelId: model.id, ticker: model.ticker, error: 'No brokerage account' });
             continue;
           }

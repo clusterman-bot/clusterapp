@@ -281,15 +281,19 @@ export default function Orders() {
                           >
                             {(trade.status as string) === 'blocked_insufficient_funds'
                               ? 'Insufficient Funds'
-                              : trade.error_message?.includes('No') && trade.error_message?.includes('brokerage')
+                              : trade.error_message?.toLowerCase().includes('brokerage') || trade.error_message?.toLowerCase().includes('no active')
                               ? 'No Account Connected'
+                              : trade.error_message?.toLowerCase().includes('insufficient') || trade.error_message?.toLowerCase().includes('buying power')
+                              ? 'Insufficient Funds'
+                              : trade.error_message?.toLowerCase().includes('not found') || trade.error_message?.toLowerCase().includes('position')
+                              ? 'No Holdings'
                               : trade.status === 'failed' && trade.error_message
                               ? trade.error_message.length > 30
                                 ? trade.error_message.slice(0, 30) + '…'
                                 : trade.error_message
                               : (trade.status as string).replace(/_/g, ' ')}
                           </Badge>
-                          {trade.error_message?.includes('brokerage') ? (
+                          {(trade.error_message?.toLowerCase().includes('brokerage') || trade.error_message?.toLowerCase().includes('no active')) ? (
                             <Button
                               variant="link"
                               size="sm"
