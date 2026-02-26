@@ -60,8 +60,8 @@ export function ModelMarketplaceCard({ model }: ModelMarketplaceCardProps) {
               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{model.description}</p>
             )}
 
-            {/* Developer */}
-            {dev && (
+            {/* Developer — hidden for system bots */}
+            {dev && !(model as any).is_system && (
               <button
                 className="flex items-center gap-2 mt-3 group"
                 onClick={() => navigate(`/profile/${dev.id}`)}
