@@ -281,15 +281,15 @@ export default function Orders() {
                           >
                             {(trade.status as string) === 'blocked_insufficient_funds'
                               ? 'Insufficient Funds'
-                              : trade.error_message === 'No brokerage account connected'
-                              ? 'No Live Account'
+                              : trade.error_message?.includes('No') && trade.error_message?.includes('brokerage')
+                              ? 'No Account Connected'
                               : trade.status === 'failed' && trade.error_message
                               ? trade.error_message.length > 30
                                 ? trade.error_message.slice(0, 30) + '…'
                                 : trade.error_message
                               : (trade.status as string).replace(/_/g, ' ')}
                           </Badge>
-                          {trade.error_message === 'No brokerage account connected' ? (
+                          {trade.error_message?.includes('brokerage') ? (
                             <Button
                               variant="link"
                               size="sm"
@@ -297,7 +297,7 @@ export default function Orders() {
                               onClick={() => navigate('/settings/brokerage')}
                             >
                               <Link className="h-3 w-3 mr-1" />
-                              Connect Live Account
+                              Connect Brokerage Account
                             </Button>
                           ) : trade.error_message && trade.status !== 'executed' ? (
                             <p className="text-xs text-muted-foreground mt-1 max-w-[200px] truncate" title={trade.error_message}>
