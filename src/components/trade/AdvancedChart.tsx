@@ -192,7 +192,7 @@ const timeframes = ['1D', '1W', '1M', '3M', '1Y'];
 const indicators = ['SMA', 'EMA', 'BB', 'RSI', 'MACD', 'VOL'];
 
 export function AdvancedChart({ symbol, currentPrice, previousClose, dayHigh, dayLow, isCrypto }: AdvancedChartProps) {
-  const [timeframe, setTimeframe] = useState('1M');
+  const [timeframe, setTimeframe] = useState('1D');
   const [activeIndicators, setActiveIndicators] = useState<string[]>([]);
   const [chartType, setChartType] = useState<'line' | 'candle' | 'area'>('area');
 

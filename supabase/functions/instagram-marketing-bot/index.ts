@@ -74,7 +74,7 @@ async function takeScreenshot(pageUrl: string, browserlessApiKey: string): Promi
         url: pageUrl,
         options: { type: "jpeg", quality: 85, fullPage: false },
         viewport: { width: 1080, height: 1080 },
-        waitForTimeout: 5000,
+        waitForTimeout: 12000,
       }),
     }
   );
