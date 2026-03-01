@@ -479,6 +479,12 @@ export default function Trade() {
             </Card>
 
             <TabsContent value="explore" className="space-y-6">
+              {/* Portfolio chart also visible on crypto */}
+              {user && (
+                <div className="mb-6">
+                  <PortfolioHistoryChart />
+                </div>
+              )}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
