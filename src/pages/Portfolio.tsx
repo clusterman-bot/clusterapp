@@ -14,6 +14,8 @@ import { useBrokerageAccounts } from '@/hooks/useBrokerageAccounts';
 import { useAlpacaAccount, useAlpacaPositions } from '@/hooks/useAlpaca';
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TradingModeToggle } from '@/components/TradingModeToggle';
+import { useTradingMode } from '@/hooks/useTradingMode';
 
 function formatPrice(price: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -173,7 +175,8 @@ export default function Portfolio() {
               </p>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
+            <TradingModeToggle />
             <Button variant="outline" onClick={() => navigate('/settings/brokerage')}>
               <Settings className="mr-2 h-4 w-4" /> Manage
             </Button>
