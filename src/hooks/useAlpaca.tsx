@@ -168,15 +168,26 @@ export function useAlpacaQuote(symbol: string | undefined) {
 }
 
 // Fetch Alpaca portfolio history for charting
+// Map period to the correct timeframe for Alpaca API
+const PORTFOLIO_TIMEFRAME_MAP: Record<string, string> = {
+  '1D': '5Min',
+  '1W': '1H',
+  '1M': '1D',
+  '3M': '1D',
+  '1A': '1D',
+  'all': '1D',
+};
+
 export function useAlpacaPortfolioHistory(period: string = '1M') {
   const { user } = useAuth();
   const { isPaper } = useTradingMode();
+  const timeframe = PORTFOLIO_TIMEFRAME_MAP[period] || '1D';
   
   return useQuery({
     queryKey: ['alpaca-portfolio-history', user?.id, isPaper, period],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke('alpaca-trading/portfolio-history', {
-        body: { isPaper, period, timeframe: '1D' },
+        body: { isPaper, period, timeframe },
       });
       
       if (data?.needsConnection) return null;
