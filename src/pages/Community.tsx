@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Users, Sparkles, LogIn, MessageSquareOff, Bot, MessageSquare, Plus } from 'lucide-react';
+import { TradingModeToggle } from '@/components/TradingModeToggle';
 
 export default function Community() {
   const { user } = useAuth();
@@ -53,14 +54,17 @@ export default function Community() {
     <div className="min-h-screen bg-background">
       <MainNav />
       <main className="container max-w-3xl py-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Users className="h-5 w-5 text-primary" />
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Users className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Community</h1>
+              <p className="text-sm text-muted-foreground">Discover models and see what traders are talking about</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">Community</h1>
-            <p className="text-sm text-muted-foreground">Discover models and see what traders are talking about</p>
-          </div>
+          {user && <TradingModeToggle />}
         </div>
 
         {/* Verification banner for unverified users */}

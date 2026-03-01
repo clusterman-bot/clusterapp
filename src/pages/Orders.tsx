@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useAlpacaOrders, useAlpacaCancelOrder, AlpacaOrder } from '@/hooks/useAlpaca';
 import { useTradingMode } from '@/hooks/useTradingMode';
-import { TradingModeIndicator } from '@/components/TradingModeToggle';
+import { TradingModeToggle } from '@/components/TradingModeToggle';
 import { formatDistanceToNow } from 'date-fns';
 import { useMySubscriberTrades, useTradeRealtimeUpdates } from '@/hooks/useDeployedModels';
 
@@ -158,11 +158,13 @@ export default function Orders() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold">Orders</h1>
-            <TradingModeIndicator />
           </div>
-          <Button onClick={() => navigate('/trade')}>
-            Trade <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <TradingModeToggle />
+            <Button onClick={() => navigate('/trade')}>
+              Trade <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Summary Cards */}
