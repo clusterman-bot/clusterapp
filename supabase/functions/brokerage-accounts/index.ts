@@ -221,6 +221,14 @@ serve(async (req) => {
         const accountData = await verifyResponse.json();
         console.log('[Brokerage] Account verified:', accountData.account_number);
 
+        // Auto-detect actual account type from Alpaca account number
+        // Paper accounts always start with "PA", live accounts don't
+        const detectedType = accountData.account_number?.startsWith('PA') ? 'paper' : 'live';
+        const resolvedAccountType = detectedType;
+        if (detectedType !== accountType) {
+          console.warn(`[Brokerage] User selected '${accountType}' but Alpaca returned a '${detectedType}' account (${accountData.account_number}). Using detected type.`);
+        }
+
         // Encrypt the API keys before storing (using AES-256-GCM)
         const encryptedApiKey = await encryptKey(apiKey, encryptionSecret);
         const encryptedApiSecret = await encryptKey(apiSecret, encryptionSecret);
@@ -231,7 +239,7 @@ serve(async (req) => {
           .select('id')
           .eq('user_id', user.id)
           .eq('broker_name', 'alpaca')
-          .eq('account_type', accountType)
+          .eq('account_type', resolvedAccountType)
           .single();
 
         if (existing) {
@@ -259,7 +267,7 @@ serve(async (req) => {
             .insert({
               user_id: user.id,
               broker_name: 'alpaca',
-              account_type: accountType,
+              account_type: resolvedAccountType,
               api_key_encrypted: encryptedApiKey,
               api_secret_encrypted: encryptedApiSecret,
               account_id: accountData.account_number,
@@ -278,7 +286,7 @@ serve(async (req) => {
           user_id: user.id,
           action_type: 'account_connected',
           metadata: { 
-            account_type: accountType, 
+            account_type: resolvedAccountType, 
             account_number: accountData.account_number,
           },
         });
@@ -289,7 +297,7 @@ serve(async (req) => {
             account: {
               account_number: accountData.account_number,
               status: accountData.status,
-              account_type: accountType,
+              account_type: resolvedAccountType,
             }
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
