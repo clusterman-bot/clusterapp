@@ -75,6 +75,7 @@ const CAPTURABLE_PAGES = [
   { path: '/trade/portfolio', label: 'Portfolio' },
   { path: '/trade/orders', label: 'Orders' },
   { path: '/explore', label: 'Explore' },
+  { path: '/ai-bot-builder', label: 'AI Bot Builder' },
 ];
 
 function MarketingBotTab() {
