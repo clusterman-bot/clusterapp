@@ -378,29 +378,8 @@ serve(async (req) => {
         // Decrypt IG token
         const igToken = await decryptToken(config.ig_access_token_encrypted, ENCRYPTION_SECRET);
 
-        // Pick a random stock to feature in this post
-        let featuredStock: string | null = null;
-        try {
-          const { data: randomStock } = await supabase
-            .from("stocks")
-            .select("symbol")
-            .order("id", { ascending: false }) // Use a column to randomise via JS
-            .limit(50);
-          if (randomStock && randomStock.length > 0) {
-            const pick = randomStock[Math.floor(Math.random() * randomStock.length)];
-            featuredStock = pick.symbol;
-            console.log(`Random featured stock: ${featuredStock}`);
-          }
-        } catch (e) {
-          console.warn("Could not pick random stock:", e);
-        }
-
-        // Screenshot each page
-        const pages: string[] = Array.isArray(config.pages_to_capture) ? config.pages_to_capture : [];
-        // Append the featured stock page if we picked one
-        if (featuredStock) {
-          pages.push(`/trade/stocks/${featuredStock}`);
-        }
+        // Screenshot each page — only use what the user configured, no random additions
+        const pages: string[] = Array.isArray(config.pages_to_capture) ? [...config.pages_to_capture] : [];
         const baseUrl = "https://clusterapp.lovable.app";
 
         const imageUrls: string[] = [];
@@ -422,12 +401,9 @@ serve(async (req) => {
           throw new Error("No pages could be screenshotted");
         }
 
-        // Generate AI caption (include featured stock context)
-        const captionPages = featuredStock
-          ? [...pages, `Featured stock: $${featuredStock}`]
-          : pages;
+        // Generate AI caption
         const caption = await generateCaption(
-          captionPages,
+          pages,
           config.caption_template,
           LOVABLE_API_KEY
         );
