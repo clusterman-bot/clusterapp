@@ -227,11 +227,22 @@ serve(async (req) => {
     const alpacaApiKey = await decryptKey(brokerageAccount.api_key_encrypted, encryptionSecret);
     const alpacaApiSecret = await decryptKey(brokerageAccount.api_secret_encrypted, encryptionSecret);
 
-    const alpacaBaseUrl = isPaper 
+    // Use the actual account type based on account ID prefix for correctness
+    // Paper accounts always start with 'PA', live accounts don't
+    let actualIsPaper = isPaper;
+    if (brokerageAccount.account_id) {
+      const isPaperAccount = brokerageAccount.account_id.startsWith('PA');
+      if (isPaper !== isPaperAccount) {
+        console.warn(`[Alpaca] Account mismatch: user requested ${accountType} but account ${brokerageAccount.account_id} is ${isPaperAccount ? 'paper' : 'live'}. Using correct base URL for the actual account.`);
+        actualIsPaper = isPaperAccount;
+      }
+    }
+
+    const alpacaBaseUrl = actualIsPaper 
       ? 'https://paper-api.alpaca.markets' 
       : 'https://api.alpaca.markets';
 
-    console.log(`[Alpaca] Using user's ${accountType} account: ${brokerageAccount.account_id}`);
+    console.log(`[Alpaca] Using user's ${actualIsPaper ? 'paper' : 'live'} account: ${brokerageAccount.account_id}`);
 
     const alpacaHeaders = {
       'APCA-API-KEY-ID': alpacaApiKey,
