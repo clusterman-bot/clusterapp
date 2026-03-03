@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { usePaperBalance, useCreateAllocation, useUpdateAllocation, useAllocationForSubscription } from '@/hooks/useAllocations';
 import { useBrokerageAccounts, BrokerageAccount } from '@/hooks/useBrokerageAccounts';
-import { useAlpacaAccount } from '@/hooks/useAlpaca';
+import type { AlpacaAccount } from '@/hooks/useAlpaca';
+import { useAuth } from '@/hooks/useAuth';
 import { TradingModeSelector } from '@/components/model/TradingModeSelector';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -65,10 +68,23 @@ export function AllocationDialog({
     }
   }, [loadingAccounts, hasLiveAccount, hasPaperAccount, globalMode]);
 
-  // Get Alpaca account data for the selected trading mode
-  const { data: alpacaAccount } = useAlpacaAccount();
+  // Fetch Alpaca account data for the LOCALLY selected trading mode (not global)
+  const { user } = useAuth();
+  const localIsPaper = tradingMode === 'paper';
+  const { data: alpacaAccount } = useQuery({
+    queryKey: ['alpaca-account-dialog', user?.id, localIsPaper],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('alpaca-trading/account', {
+        body: { isPaper: localIsPaper },
+      });
+      if (data?.needsConnection || data?.needsReconnect) return null;
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      return data.account as AlpacaAccount;
+    },
+    enabled: !!user && hasAnyAccount,
+  });
 
-  // Use Alpaca buying power for live/paper, or paper balance for paper-only
   const isLiveMode = tradingMode === 'live';
   const availableBalance = isLiveMode
     ? (alpacaAccount?.buying_power ?? 0)
