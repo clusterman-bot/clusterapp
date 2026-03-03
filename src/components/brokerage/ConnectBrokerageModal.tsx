@@ -17,6 +17,7 @@ import { useConnectBrokerageAccount } from '@/hooks/useBrokerageAccounts';
 const EXCHANGES = [
   { id: 'alpaca', name: 'Alpaca', description: 'Commission-free stock & crypto trading API' },
   { id: 'tradier', name: 'Tradier', description: 'Brokerage API for equities and options trading' },
+  { id: 'other', name: 'Other', description: 'Connect any exchange with API key support' },
 ] as const;
 
 type ExchangeId = typeof EXCHANGES[number]['id'];
@@ -60,6 +61,25 @@ const EXCHANGE_STEPS: Record<ExchangeId, { signUp: { url: string; steps: string[
       secretPlaceholder: 'Enter your Tradier account ID',
     },
   },
+  other: {
+    signUp: {
+      url: '',
+      steps: [
+        'Create an account on your exchange or brokerage platform',
+        'Complete any required identity verification (KYC)',
+        'Make sure API access is enabled for your account',
+      ],
+    },
+    apiKey: {
+      steps: [
+        'Log into your exchange and navigate to Settings, API, or Developer section',
+        'Create or generate a new API key — enable trading permissions if prompted',
+        'Copy both the API Key and Secret Key — the secret is usually only shown once!',
+      ],
+      keyPlaceholder: 'Enter your API key',
+      secretPlaceholder: 'Enter your secret key',
+    },
+  },
 };
 
 interface ConnectBrokerageModalProps {
@@ -78,6 +98,7 @@ export function ConnectBrokerageModal({
   const [accountType, setAccountType] = useState<'paper' | 'live'>(defaultAccountType);
   const [apiKey, setApiKey] = useState('');
   const [apiSecret, setApiSecret] = useState('');
+  const [customExchangeName, setCustomExchangeName] = useState('');
   const [showSecret, setShowSecret] = useState(false);
 
   const connectAccount = useConnectBrokerageAccount();
@@ -91,7 +112,7 @@ export function ConnectBrokerageModal({
       apiKey,
       apiSecret,
       accountType,
-      brokerName: selectedExchange?.name || exchange,
+      brokerName: exchange === 'other' ? customExchangeName : (selectedExchange?.name || exchange),
     });
 
     resetModal();
@@ -103,6 +124,7 @@ export function ConnectBrokerageModal({
     setExchange('');
     setApiKey('');
     setApiSecret('');
+    setCustomExchangeName('');
     setShowSecret(false);
   };
 
@@ -165,12 +187,28 @@ export function ConnectBrokerageModal({
                 </SelectContent>
               </Select>
 
-              {selectedExchange && (
+              {selectedExchange && exchange !== 'other' && (
                 <p className="text-sm text-muted-foreground">{selectedExchange.description}</p>
               )}
 
+              {exchange === 'other' && (
+                <div>
+                  <Label htmlFor="customName">Exchange / Broker Name</Label>
+                  <Input
+                    id="customName"
+                    placeholder="e.g. Interactive Brokers, Coinbase, Kraken..."
+                    value={customExchangeName}
+                    onChange={(e) => setCustomExchangeName(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+              )}
+
               <div className="flex justify-end">
-                <Button onClick={() => setStep(2)} disabled={!exchange}>
+                <Button 
+                  onClick={() => setStep(exchange === 'other' ? 3 : 2)} 
+                  disabled={!exchange || (exchange === 'other' && !customExchangeName.trim())}
+                >
                   Continue <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
               </div>
@@ -223,9 +261,9 @@ export function ConnectBrokerageModal({
         {step === 3 && exchangeConfig && (
           <Card>
             <CardHeader>
-              <CardTitle>Step 3: Enter Your API Keys</CardTitle>
+              <CardTitle>Step {exchange === 'other' ? '2' : '3'}: Enter Your API Keys</CardTitle>
               <CardDescription>
-                Generate API keys from your {selectedExchange?.name} account
+                Generate API keys from your {exchange === 'other' ? customExchangeName : selectedExchange?.name} account
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -310,7 +348,7 @@ export function ConnectBrokerageModal({
               </div>
 
               <div className="flex justify-between">
-                <Button variant="outline" onClick={() => setStep(2)}>
+                <Button variant="outline" onClick={() => setStep(exchange === 'other' ? 1 : 2)}>
                   <ArrowLeft className="h-4 w-4 mr-2" /> Back
                 </Button>
                 <Button 
@@ -328,14 +366,14 @@ export function ConnectBrokerageModal({
         {step === 4 && (
           <Card>
             <CardHeader>
-              <CardTitle>Step 4: Confirm & Connect</CardTitle>
+              <CardTitle>Step {exchange === 'other' ? '3' : '4'}: Confirm & Connect</CardTitle>
               <CardDescription>Review your details and connect</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3">
                 <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                   <span className="text-sm text-muted-foreground">Exchange</span>
-                  <span className="text-sm font-medium">{selectedExchange?.name}</span>
+                  <span className="text-sm font-medium">{exchange === 'other' ? customExchangeName : selectedExchange?.name}</span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                   <span className="text-sm text-muted-foreground">Account Type</span>
@@ -372,7 +410,7 @@ export function ConnectBrokerageModal({
                   ) : (
                     <>
                       <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Connect {selectedExchange?.name}
+                      Connect {exchange === 'other' ? customExchangeName : selectedExchange?.name}
                     </>
                   )}
                 </Button>
