@@ -315,7 +315,7 @@ serve(async (req) => {
     // Fetch historical bars with pagination
     const isCrypto = normalizedSymbol.includes('/');
     let bars: any[] = [];
-    const MAX_BARS = 25000;
+    const MAX_BARS = 50000;
 
     if (isCrypto) {
       let pageToken: string | null = null;
