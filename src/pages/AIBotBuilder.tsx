@@ -17,7 +17,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { 
   Bot, Send, Loader2, Rocket, RefreshCw, BarChart3, Settings2, 
   Sparkles, MessageSquare, Code2, ChevronDown, ChevronRight,
-  Upload, FileJson, AlertTriangle, CheckCircle2, X, Store
+  Upload, FileJson, AlertTriangle, CheckCircle2, X, Store, Brain, Zap
 } from 'lucide-react';
 import { useUpsertAutomation } from '@/hooks/useStockAutomations';
 import { supabase } from '@/integrations/supabase/client';
@@ -557,43 +557,76 @@ export default function AIBotBuilder() {
                         <Separator />
 
                         {/* Self-Improving Bot */}
-                        <div>
-                          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                            <Sparkles className="h-3 w-3" /> Self-Improving Bot
-                          </Label>
-                          <p className="text-xs text-muted-foreground mt-1 mb-3">Bot will auto-optimize when performance degrades past thresholds</p>
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm">Enable Self-Improvement</span>
-                              <Switch checked={config.self_improve_enabled ?? false} onCheckedChange={v => updateConfig('self_improve_enabled', v)} />
-                            </div>
-                            {config.self_improve_enabled && (
-                              <div className="space-y-3 pl-1">
-                                <div>
-                                  <Label className="text-xs">Min Win Rate</Label>
-                                  <div className="flex items-center gap-2">
-                                    <Slider value={[(config.min_win_rate ?? 0.40) * 100]} onValueChange={v => updateConfig('min_win_rate', v[0] / 100)} min={10} max={80} step={1} />
-                                    <span className="text-xs font-mono w-8">{((config.min_win_rate ?? 0.40) * 100).toFixed(0)}%</span>
+                        <Collapsible>
+                          <CollapsibleTrigger asChild>
+                            <div className="cursor-pointer hover:bg-muted/30 transition-colors p-3 rounded-lg border border-border">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <Brain className="h-4 w-4 text-primary" />
+                                  <div>
+                                    <p className="text-sm font-semibold">Self-Improving Bot</p>
+                                    <p className="text-xs text-muted-foreground">Automatically optimize parameters when performance degrades</p>
                                   </div>
                                 </div>
-                                <div>
-                                  <Label className="text-xs">Max Drawdown</Label>
-                                  <div className="flex items-center gap-2">
-                                    <Slider value={[config.max_drawdown_threshold ?? 15]} onValueChange={v => updateConfig('max_drawdown_threshold', v[0])} min={5} max={50} step={1} />
-                                    <span className="text-xs font-mono w-8">{config.max_drawdown_threshold ?? 15}%</span>
-                                  </div>
-                                </div>
-                                <div>
-                                  <Label className="text-xs">Max Consecutive Losses</Label>
-                                  <div className="flex items-center gap-2">
-                                    <Slider value={[config.max_consecutive_losses ?? 5]} onValueChange={v => updateConfig('max_consecutive_losses', v[0])} min={2} max={15} step={1} />
-                                    <span className="text-xs font-mono w-8">{config.max_consecutive_losses ?? 5}</span>
-                                  </div>
-                                </div>
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
                               </div>
-                            )}
-                          </div>
-                        </div>
+                            </div>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="space-y-3 pt-3">
+                              <div className="flex items-center justify-between p-3 rounded-lg border border-primary/30 bg-primary/5">
+                                <div>
+                                  <Label className="text-sm font-semibold">Enable Self-Improvement</Label>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    When enabled, the bot monitors its own win rate, drawdown, and consecutive losses. If thresholds are breached, 
+                                    it automatically optimizes parameters or rewrites the strategy using AI.
+                                  </p>
+                                </div>
+                                <Switch checked={config.self_improve_enabled ?? false} onCheckedChange={v => updateConfig('self_improve_enabled', v)} />
+                              </div>
+
+                              {config.self_improve_enabled && (
+                                <>
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div>
+                                      <Label className="text-xs">Min Win Rate (%)</Label>
+                                      <div className="flex items-center gap-2">
+                                        <Slider value={[(config.min_win_rate ?? 0.40) * 100]} onValueChange={v => updateConfig('min_win_rate', v[0] / 100)} min={10} max={80} step={5} />
+                                        <span className="text-xs font-mono w-8">{((config.min_win_rate ?? 0.40) * 100).toFixed(0)}%</span>
+                                      </div>
+                                      <p className="text-xs text-muted-foreground mt-1">Trigger optimization if win rate drops below this</p>
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs">Max Drawdown (%)</Label>
+                                      <div className="flex items-center gap-2">
+                                        <Slider value={[config.max_drawdown_threshold ?? 15]} onValueChange={v => updateConfig('max_drawdown_threshold', v[0])} min={5} max={50} step={1} />
+                                        <span className="text-xs font-mono w-8">{config.max_drawdown_threshold ?? 15}%</span>
+                                      </div>
+                                      <p className="text-xs text-muted-foreground mt-1">Trigger if drawdown exceeds this</p>
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs">Max Consecutive Losses</Label>
+                                      <div className="flex items-center gap-2">
+                                        <Slider value={[config.max_consecutive_losses ?? 5]} onValueChange={v => updateConfig('max_consecutive_losses', v[0])} min={2} max={20} step={1} />
+                                        <span className="text-xs font-mono w-8">{config.max_consecutive_losses ?? 5}</span>
+                                      </div>
+                                      <p className="text-xs text-muted-foreground mt-1">Trigger after N losses in a row</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-3 text-xs text-muted-foreground p-3 rounded-lg bg-muted/30">
+                                    <Zap className="h-4 w-4 text-primary shrink-0" />
+                                    <span>
+                                      <strong>How it works:</strong> Every hour, the bot checks its performance. If thresholds are breached, 
+                                      it first tries parameter optimization (±20% variations with backtests). If that fails, it uses AI to rewrite the entire strategy. 
+                                      Changes are only applied if the new config outperforms the old one.
+                                    </span>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
                       </CardContent>
                     </Card>
 
