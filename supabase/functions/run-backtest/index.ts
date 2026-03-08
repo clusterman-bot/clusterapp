@@ -307,9 +307,26 @@ serve(async (req) => {
       'FIL','NEAR','APE','ARB','OP','CRV','MKR','SUSHI','PEPE','BCH']);
 
     let normalizedSymbol = symbol.toUpperCase();
-    if (!normalizedSymbol.includes('/') && KNOWN_CRYPTO.has(normalizedSymbol)) {
-      normalizedSymbol = `${normalizedSymbol}/USD`;
-      console.log(`[Backtest] Auto-detected crypto symbol, normalized to ${normalizedSymbol}`);
+    // Handle formats like BTC/USD, BTC-USD, BTCUSD, or bare BTC
+    if (normalizedSymbol.includes('/')) {
+      // Already in correct format e.g. BTC/USD
+    } else if (normalizedSymbol.includes('-')) {
+      normalizedSymbol = normalizedSymbol.replace('-', '/');
+      console.log(`[Backtest] Converted dash symbol to ${normalizedSymbol}`);
+    } else {
+      // Check for concatenated format like BTCUSD or ETHUSD
+      for (const crypto of KNOWN_CRYPTO) {
+        if (normalizedSymbol === `${crypto}USD` || normalizedSymbol === `${crypto}USDT`) {
+          normalizedSymbol = `${crypto}/USD`;
+          console.log(`[Backtest] Normalized concatenated crypto ${symbol} to ${normalizedSymbol}`);
+          break;
+        }
+      }
+      // Check bare symbol like BTC
+      if (!normalizedSymbol.includes('/') && KNOWN_CRYPTO.has(normalizedSymbol)) {
+        normalizedSymbol = `${normalizedSymbol}/USD`;
+        console.log(`[Backtest] Auto-detected bare crypto symbol, normalized to ${normalizedSymbol}`);
+      }
     }
 
     // Fetch historical bars with pagination
