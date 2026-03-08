@@ -361,7 +361,7 @@ serve(async (req) => {
           end: end_date,
           limit: '10000',
           adjustment: 'raw',
-          feed: 'iex',
+          feed: 'sip',
           sort: 'asc',
         });
         if (pageToken) params.set('page_token', pageToken);
