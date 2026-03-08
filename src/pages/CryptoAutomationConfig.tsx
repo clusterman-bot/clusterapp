@@ -123,6 +123,10 @@ export default function CryptoAutomationConfig() {
       take_profit_percent: takeProfitPercent,
       allow_shorting: allowShorting,
       max_investment_amount: (parsedMax && parsedMax > 0) ? parsedMax : null,
+      self_improve_enabled: selfImproveEnabled,
+      min_win_rate: minWinRate / 100,
+      max_drawdown_threshold: maxDrawdownThreshold,
+      max_consecutive_losses: maxConsecutiveLosses,
       is_active: true,
     } as any);
   };
