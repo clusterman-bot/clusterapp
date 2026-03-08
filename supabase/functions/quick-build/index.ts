@@ -103,24 +103,18 @@ async function fetchFromAlpaca(ticker: string, isCrypto: boolean): Promise<OHLCV
     const bars = isCrypto ? data.bars?.[ticker] : data.bars;
     if (bars && bars.length > 0) {
       console.log(`[QuickBuild] Got ${bars.length} bars from Alpaca`);
-        return bars.map((bar: any) => ({
-          date: bar.t.split("T")[0],
-          open: bar.o,
-          high: bar.h,
-          low: bar.l,
-          close: bar.c,
-          volume: bar.v,
-        }));
-      }
-      console.warn(`[QuickBuild] Alpaca returned no bars (attempt ${attempt}/3)`);
-      if (attempt < 3) { await new Promise(r => setTimeout(r, 2000)); continue; }
-      throw new Error(`No market data returned from Alpaca for ${ticker}`);
-    } catch (e: any) {
-      if (e.message.includes("Alpaca API error") || e.message.includes("No market data returned")) throw e;
-      console.error(`[QuickBuild] Alpaca fetch error (attempt ${attempt}/3):`, e.message);
-      if (attempt < 3) { await new Promise(r => setTimeout(r, 2000)); continue; }
-      throw new Error(`Failed to fetch live market data from Alpaca after 3 attempts: ${e.message}`);
+      return bars.map((bar: any) => ({
+        date: bar.t.split("T")[0],
+        open: bar.o,
+        high: bar.h,
+        low: bar.l,
+        close: bar.c,
+        volume: bar.v,
+      }));
     }
+    console.warn(`[QuickBuild] Alpaca returned no bars (attempt ${attempt}/3)`);
+    if (attempt < 3) { await new Promise(r => setTimeout(r, 2000)); continue; }
+    throw new Error(`No market data returned from Alpaca for ${ticker}`);
   }
   throw new Error("Failed to fetch live market data from Alpaca after 3 attempts");
 }
