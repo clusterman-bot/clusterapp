@@ -403,8 +403,8 @@ serve(async (req) => {
     if (insertErr) throw insertErr;
     console.log(`[QuickBuild] Created run ${run.id}`);
 
-    // 2. Fetch market data
-    const bars = await fetchMarketData(upperSymbol);
+    // 2. Fetch market data (pass user token for crypto brokerage auth)
+    const bars = await fetchMarketData(upperSymbol, token);
     console.log(`[QuickBuild] Fetched ${bars.length} bars`);
 
     if (bars.length < 30) {
