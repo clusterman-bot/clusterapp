@@ -43,6 +43,7 @@ export default function CryptoAutomationConfig() {
 
   const { data: automation, isLoading } = useStockAutomation(upperSymbol);
   const { data: signals } = useAutomationSignals(automation?.id);
+  const { data: optimizationLogs } = useOptimizationLogs(automation?.id);
   const upsertMutation = useUpsertAutomation();
   const toggleMutation = useToggleAutomation();
   const resetInvestedMutation = useResetInvestedAmount();
