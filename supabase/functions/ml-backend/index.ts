@@ -11,7 +11,8 @@ const ML_BACKEND_URL_RAW = Deno.env.get('ML_BACKEND_URL');
 const ML_BACKEND_URL = ML_BACKEND_URL_RAW?.replace(/\/+$/, '');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const POLYGON_API_KEY = Deno.env.get('POLYGON_API_KEY');
+const ALPACA_API_KEY = Deno.env.get('ALPACA_API_KEY');
+const ALPACA_API_SECRET = Deno.env.get('ALPACA_API_SECRET');
 
 // ============================================================
 // REAL ML ALGORITHMS IN TYPESCRIPT
