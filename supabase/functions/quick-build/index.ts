@@ -22,68 +22,62 @@ interface OHLCVBar {
   volume: number;
 }
 
-// Fetch 1 year of OHLCV data
+// Fetch 1 year of OHLCV data via Alpaca
 async function fetchMarketData(ticker: string): Promise<OHLCVBar[]> {
+  if (!ALPACA_API_KEY || !ALPACA_API_SECRET) {
+    throw new Error("Alpaca credentials (ALPACA_API_KEY / ALPACA_API_SECRET) are not configured. Live market data is required.");
+  }
+
   const endDate = new Date();
   const startDate = new Date();
   startDate.setFullYear(startDate.getFullYear() - 1);
-
   const start = startDate.toISOString().split("T")[0];
   const end = endDate.toISOString().split("T")[0];
 
   const isCrypto = ticker.includes("/");
+  const baseUrl = isCrypto
+    ? `https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=${encodeURIComponent(ticker)}&timeframe=1Day&start=${start}&end=${end}&limit=1000&sort=asc`
+    : `https://data.alpaca.markets/v2/stocks/${ticker}/bars?timeframe=1Day&start=${start}&end=${end}&limit=1000&adjustment=raw&sort=asc`;
 
-  if (!POLYGON_API_KEY || isCrypto) {
-    console.log(`[QuickBuild] ${isCrypto ? 'Crypto ticker' : 'No Polygon API key'}, generating simulated data`);
-    return generateSimulatedData(ticker, start, end);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    console.log(`[QuickBuild] Fetching from Alpaca (attempt ${attempt}/3): ${ticker}`);
+    try {
+      const resp = await fetch(baseUrl, {
+        headers: {
+          "APCA-API-KEY-ID": ALPACA_API_KEY,
+          "APCA-API-SECRET-KEY": ALPACA_API_SECRET,
+        },
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error(`[QuickBuild] Alpaca HTTP ${resp.status}: ${errText}`);
+        if (attempt < 3) { await new Promise(r => setTimeout(r, 2000)); continue; }
+        throw new Error(`Alpaca API error (${resp.status}): ${errText}`);
+      }
+      const data = await resp.json();
+      const bars = isCrypto ? data.bars?.[ticker] : data.bars;
+      if (bars && bars.length > 0) {
+        console.log(`[QuickBuild] Got ${bars.length} bars from Alpaca`);
+        return bars.map((bar: any) => ({
+          date: bar.t.split("T")[0],
+          open: bar.o,
+          high: bar.h,
+          low: bar.l,
+          close: bar.c,
+          volume: bar.v,
+        }));
+      }
+      console.warn(`[QuickBuild] Alpaca returned no bars (attempt ${attempt}/3)`);
+      if (attempt < 3) { await new Promise(r => setTimeout(r, 2000)); continue; }
+      throw new Error(`No market data returned from Alpaca for ${ticker}`);
+    } catch (e: any) {
+      if (e.message.includes("Alpaca API error") || e.message.includes("No market data returned")) throw e;
+      console.error(`[QuickBuild] Alpaca fetch error (attempt ${attempt}/3):`, e.message);
+      if (attempt < 3) { await new Promise(r => setTimeout(r, 2000)); continue; }
+      throw new Error(`Failed to fetch live market data from Alpaca after 3 attempts: ${e.message}`);
+    }
   }
-
-  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/${start}/${end}?adjusted=true&sort=asc&apiKey=${POLYGON_API_KEY}`;
-  const resp = await fetch(url);
-  const data = await resp.json();
-
-  if (data.status === "ERROR" || !data.results) {
-    console.warn("[QuickBuild] Polygon API error, using simulated data");
-    return generateSimulatedData(ticker, start, end);
-  }
-
-  return data.results.map((bar: any) => ({
-    date: new Date(bar.t).toISOString().split("T")[0],
-    open: bar.o,
-    high: bar.h,
-    low: bar.l,
-    close: bar.c,
-    volume: bar.v,
-  }));
-}
-
-function generateSimulatedData(ticker: string, start: string, end: string): OHLCVBar[] {
-  const startD = new Date(start);
-  const endD = new Date(end);
-  const data: OHLCVBar[] = [];
-  const seed = ticker.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  let price = 100 + (seed % 150);
-  const isCrypto = ticker.includes("/");
-
-  for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
-    // Skip weekends only for stocks, not crypto
-    if (!isCrypto && (d.getDay() === 0 || d.getDay() === 6)) continue;
-    const change = (Math.random() - 0.5) * 0.04;
-    const open = price;
-    const close = price * (1 + change);
-    const high = Math.max(open, close) * (1 + Math.random() * 0.02);
-    const low = Math.min(open, close) * (1 - Math.random() * 0.02);
-    data.push({
-      date: d.toISOString().split("T")[0],
-      open: +open.toFixed(2),
-      high: +high.toFixed(2),
-      low: +low.toFixed(2),
-      close: +close.toFixed(2),
-      volume: Math.floor(1e6 + Math.random() * 5e6),
-    });
-    price = close;
-  }
-  return data;
+  throw new Error("Failed to fetch live market data from Alpaca after 3 attempts");
 }
 
 // Compute summary statistics from OHLCV data
