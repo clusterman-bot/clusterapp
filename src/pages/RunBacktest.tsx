@@ -22,11 +22,16 @@ export default function RunBacktest() {
   const createBacktest = useCreateBacktest();
 
   const getDateString = (d: Date) => d.toISOString().split('T')[0];
-  const sixMonthsAgo = () => { const d = new Date(); d.setMonth(d.getMonth() - 6); return getDateString(d); };
+  const lastMarketDay = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+    return d;
+  };
 
   const [name, setName] = useState('');
-  const [startDate, setStartDate] = useState(sixMonthsAgo());
-  const [endDate, setEndDate] = useState(getDateString(new Date()));
+  const [startDate, setStartDate] = useState(() => { const d = lastMarketDay(); d.setMonth(d.getMonth() - 6); return getDateString(d); });
+  const [endDate, setEndDate] = useState(() => getDateString(lastMarketDay()));
   const [initialCapital, setInitialCapital] = useState('100000');
   const [benchmark, setBenchmark] = useState('SPY');
 
@@ -38,8 +43,8 @@ export default function RunBacktest() {
     { label: '2Y', months: 24 },
   ];
   const applyPreset = (months: number) => {
-    const end = new Date();
-    const start = new Date(); start.setMonth(start.getMonth() - months);
+    const end = lastMarketDay();
+    const start = new Date(end); start.setMonth(start.getMonth() - months);
     setStartDate(getDateString(start));
     setEndDate(getDateString(end));
   };
