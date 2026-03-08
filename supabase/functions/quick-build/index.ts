@@ -481,7 +481,7 @@ serve(async (req) => {
     // 3. Compute stats, fetch platform knowledge, and run AI analysis
     await appendLog(run.id, "🔬 Computing statistical features (volatility, returns, volume profile)...");
     const stats = computeDataStats(bars);
-    await appendLog(run.id, `📈 Stats: avg_return=${(stats.avg_daily_return * 100).toFixed(3)}%, volatility=${(stats.volatility * 100).toFixed(2)}%, price_range=$${stats.price_min.toFixed(2)}-$${stats.price_max.toFixed(2)}`);
+    await appendLog(run.id, `📈 Stats: avg_return=${stats.avg_daily_return.toFixed(3)}%, volatility=${stats.volatility.toFixed(2)}%, price_range=$${stats.price_range.low.toFixed(2)}-$${stats.price_range.high.toFixed(2)}`);
     console.log(`[QuickBuild] Stats:`, JSON.stringify(stats));
 
     // Fetch platform knowledge for this symbol
