@@ -17,7 +17,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { 
   Bot, Send, Loader2, Rocket, RefreshCw, BarChart3, Settings2, 
   Sparkles, MessageSquare, Code2, ChevronDown, ChevronRight,
-  Upload, FileJson, AlertTriangle, CheckCircle2, X, Store
+  Upload, FileJson, AlertTriangle, CheckCircle2, X, Store, Brain, Zap
 } from 'lucide-react';
 import { useUpsertAutomation } from '@/hooks/useStockAutomations';
 import { supabase } from '@/integrations/supabase/client';
