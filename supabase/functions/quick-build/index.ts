@@ -474,39 +474,35 @@ serve(async (req) => {
 
     console.log(`[QuickBuild] Created training run ${trainingRun.id}`);
 
-    // 5. Trigger training via the ml-backend function (internal call)
-    const ML_BACKEND_URL_RAW = Deno.env.get("ML_BACKEND_URL");
-    const ML_BACKEND_URL = ML_BACKEND_URL_RAW?.replace(/\/+$/, "");
-
-    if (ML_BACKEND_URL) {
-      try {
-        const mlResp = await fetch(`${ML_BACKEND_URL}/train`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            training_run_id: trainingRun.id,
-            ticker: upperSymbol,
-            start_date: aiConfig.training_date_range.start,
-            end_date: aiConfig.training_date_range.end,
-            horizon_minutes: aiConfig.horizon,
-            indicators: aiConfig.indicators,
-            hyperparameters: aiConfig.hyperparameters,
-            callback_url: `${SUPABASE_URL}/functions/v1/ml-backend/callback`,
-          }),
-        });
-        if (mlResp.ok) {
-          await supabase.from("training_runs").update({ status: "running" }).eq("id", trainingRun.id);
-        } else {
-          console.warn("[QuickBuild] ML backend returned error, using simulation");
-          await simulateTrainingAndValidation(supabase, run.id, trainingRun.id, user.id, aiConfig);
-        }
-      } catch (e: any) {
-        console.warn("[QuickBuild] ML backend unreachable, simulating:", e.message);
-        await simulateTrainingAndValidation(supabase, run.id, trainingRun.id, user.id, aiConfig);
+    // 5. Trigger real training via the ml-backend edge function (internal call)
+    console.log("[QuickBuild] Invoking ml-backend for real training");
+    try {
+      const mlResp = await fetch(`${SUPABASE_URL}/functions/v1/ml-backend`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({
+          training_run_id: trainingRun.id,
+          ticker: upperSymbol,
+          start_date: aiConfig.training_date_range.start,
+          end_date: aiConfig.training_date_range.end,
+          horizon: aiConfig.horizon,
+          theta: aiConfig.theta,
+          indicators: indicatorsWithCustom,
+          hyperparameters: aiConfig.hyperparameters,
+        }),
+      });
+      if (!mlResp.ok) {
+        const errText = await mlResp.text();
+        console.error("[QuickBuild] ml-backend error:", errText);
+        throw new Error(`ml-backend returned ${mlResp.status}`);
       }
-    } else {
-      console.log("[QuickBuild] No ML backend URL, simulating entire pipeline");
-      await simulateTrainingAndValidation(supabase, run.id, trainingRun.id, user.id, aiConfig);
+    } catch (e: any) {
+      console.error("[QuickBuild] Failed to trigger ml-backend:", e.message);
+      await supabase.from("quick_build_runs").update({ status: "failed", error_message: `Training failed: ${e.message}` }).eq("id", run.id);
+      throw e;
     }
 
     return new Response(
