@@ -9,7 +9,8 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const POLYGON_API_KEY = Deno.env.get("POLYGON_API_KEY");
+const ALPACA_API_KEY = Deno.env.get("ALPACA_API_KEY");
+const ALPACA_API_SECRET = Deno.env.get("ALPACA_API_SECRET");
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 
 interface OHLCVBar {
