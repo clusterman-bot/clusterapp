@@ -1,7 +1,6 @@
-import { useState, useRef, useEffect, useCallback, memo } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { MessageCircle, X, Send, Bot, User, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -21,16 +20,23 @@ export function ChatWidget() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
 
+  // Typewriter: fullText accumulates from SSE, displayedLen reveals char-by-char
+  const fullTextRef = useRef("");
+  const displayedLenRef = useRef(0);
+  const typingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const streamDoneRef = useRef(false);
+
   const scrollToBottom = useCallback(() => {
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       if (scrollRef.current) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
       }
-    }, 50);
+    });
   }, []);
 
   useEffect(() => {
@@ -38,10 +44,51 @@ export function ChatWidget() {
   }, [messages, scrollToBottom]);
 
   useEffect(() => {
-    if (open && inputRef.current) {
-      inputRef.current.focus();
-    }
+    if (open && inputRef.current) inputRef.current.focus();
   }, [open]);
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) clearInterval(typingTimerRef.current);
+    };
+  }, []);
+
+  const startTypewriter = useCallback(() => {
+    if (typingTimerRef.current) return;
+    setIsTyping(true);
+
+    typingTimerRef.current = setInterval(() => {
+      const full = fullTextRef.current;
+      const cur = displayedLenRef.current;
+
+      if (cur < full.length) {
+        // Reveal 1-3 chars per tick for a natural typing speed
+        const step = Math.min(2, full.length - cur);
+        displayedLenRef.current = cur + step;
+        const visible = full.slice(0, displayedLenRef.current);
+
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant") {
+            return prev.map((m, i) =>
+              i === prev.length - 1 ? { ...m, content: visible } : m
+            );
+          }
+          return [...prev, { role: "assistant", content: visible }];
+        });
+      } else if (streamDoneRef.current) {
+        // All done — stop the interval
+        if (typingTimerRef.current) {
+          clearInterval(typingTimerRef.current);
+          typingTimerRef.current = null;
+        }
+        setIsTyping(false);
+        setIsLoading(false);
+      }
+      // else: waiting for more SSE data, keep interval running
+    }, 18); // ~55 chars/sec — fast enough to feel snappy, slow enough to read
+  }, []);
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;
@@ -52,20 +99,10 @@ export function ChatWidget() {
     setInput("");
     setIsLoading(true);
 
-    let assistantSoFar = "";
-
-    const upsertAssistant = (chunk: string) => {
-      assistantSoFar += chunk;
-      setMessages((prev) => {
-        const last = prev[prev.length - 1];
-        if (last?.role === "assistant") {
-          return prev.map((m, i) =>
-            i === prev.length - 1 ? { ...m, content: assistantSoFar } : m
-          );
-        }
-        return [...prev, { role: "assistant", content: assistantSoFar }];
-      });
-    };
+    // Reset typewriter state
+    fullTextRef.current = "";
+    displayedLenRef.current = 0;
+    streamDoneRef.current = false;
 
     try {
       const resp = await fetch(CHAT_URL, {
@@ -86,34 +123,34 @@ export function ChatWidget() {
 
       if (!resp.body) throw new Error("No response body");
 
+      // Start the typewriter reveal loop
+      startTypewriter();
+
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let streamDone = false;
+      let sseFinished = false;
 
-      while (!streamDone) {
+      while (!sseFinished) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
 
-        let newlineIdx: number;
-        while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
-          let line = buffer.slice(0, newlineIdx);
-          buffer = buffer.slice(newlineIdx + 1);
+        let idx: number;
+        while ((idx = buffer.indexOf("\n")) !== -1) {
+          let line = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 1);
           if (line.endsWith("\r")) line = line.slice(0, -1);
           if (line.startsWith(":") || line.trim() === "") continue;
           if (!line.startsWith("data: ")) continue;
 
           const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") {
-            streamDone = true;
-            break;
-          }
+          if (jsonStr === "[DONE]") { sseFinished = true; break; }
 
           try {
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-            if (content) upsertAssistant(content);
+            if (content) fullTextRef.current += content;
           } catch {
             buffer = line + "\n" + buffer;
             break;
@@ -121,7 +158,7 @@ export function ChatWidget() {
         }
       }
 
-      // flush remaining
+      // Flush remaining buffer
       if (buffer.trim()) {
         for (let raw of buffer.split("\n")) {
           if (!raw) continue;
@@ -132,15 +169,23 @@ export function ChatWidget() {
           try {
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-            if (content) upsertAssistant(content);
+            if (content) fullTextRef.current += content;
           } catch { /* ignore */ }
         }
       }
+
+      // Signal the typewriter to finish once it catches up
+      streamDoneRef.current = true;
     } catch (e) {
       console.error("Chat stream error:", e);
-      toast({ title: "Connection error", description: "Could not reach the assistant.", variant: "destructive" });
-    } finally {
+      streamDoneRef.current = true;
+      if (typingTimerRef.current) {
+        clearInterval(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
+      setIsTyping(false);
       setIsLoading(false);
+      toast({ title: "Connection error", description: "Could not reach the assistant.", variant: "destructive" });
     }
   };
 
@@ -209,7 +254,7 @@ export function ChatWidget() {
             )}
 
             {messages.map((msg, i) => {
-              const isStreamingMsg = isLoading && msg.role === "assistant" && i === messages.length - 1;
+              const isActiveTyping = isTyping && msg.role === "assistant" && i === messages.length - 1;
               return (
                 <div key={i} className={cn("flex gap-2", msg.role === "user" ? "justify-end" : "justify-start")}>
                   {msg.role === "assistant" && (
@@ -226,7 +271,7 @@ export function ChatWidget() {
                     )}
                   >
                     {msg.role === "assistant" ? (
-                      isStreamingMsg ? (
+                      isActiveTyping ? (
                         <p className="whitespace-pre-wrap">
                           {msg.content}
                           <span className="inline-block w-1.5 h-4 bg-primary/70 ml-0.5 animate-pulse align-middle rounded-sm" />
@@ -249,7 +294,7 @@ export function ChatWidget() {
               );
             })}
 
-            {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
+            {isLoading && !isTyping && messages[messages.length - 1]?.role !== "assistant" && (
               <div className="flex gap-2 items-center">
                 <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                   <Bot className="h-3.5 w-3.5 text-primary" />
