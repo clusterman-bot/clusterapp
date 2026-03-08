@@ -378,7 +378,43 @@ serve(async (req) => {
   }
 
   try {
-    const { symbol } = await req.json();
+    const body = await req.json();
+    const { symbol, action } = body;
+
+    // Handle cancel action
+    if (action === "cancel") {
+      const { run_id } = body;
+      if (!run_id) {
+        return new Response(JSON.stringify({ error: "run_id is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      await supabase
+        .from("quick_build_runs")
+        .update({
+          status: "failed",
+          error_message: "Cancelled by user",
+          build_logs: supabase.rpc ? undefined : undefined, // keep existing logs
+        })
+        .eq("id", run_id)
+        .eq("user_id", user.id);
+
+      // Append cancel log
+      const { data: currentRun } = await supabase
+        .from("quick_build_runs")
+        .select("build_logs")
+        .eq("id", run_id)
+        .single();
+      const logs = Array.isArray(currentRun?.build_logs) ? currentRun.build_logs : [];
+      logs.push({ ts: Date.now(), msg: "⛔ Build cancelled by user", level: "error" });
+      await supabase.from("quick_build_runs").update({ build_logs: logs }).eq("id", run_id);
+
+      return new Response(JSON.stringify({ success: true, cancelled: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!symbol) {
       return new Response(JSON.stringify({ error: "symbol is required" }), {
         status: 400,
@@ -389,6 +425,24 @@ serve(async (req) => {
     const upperSymbol = symbol.toUpperCase();
     console.log(`[QuickBuild] Starting for ${upperSymbol}, user ${user.id}`);
 
+    // Helper to append a build log entry
+    async function appendLog(runId: string, msg: string, level: string = "info") {
+      try {
+        const { data: cur } = await supabase.from("quick_build_runs").select("build_logs").eq("id", runId).single();
+        const logs = Array.isArray(cur?.build_logs) ? cur.build_logs : [];
+        logs.push({ ts: Date.now(), msg, level });
+        await supabase.from("quick_build_runs").update({ build_logs: logs }).eq("id", runId);
+      } catch (e) {
+        console.warn("[QuickBuild] Failed to append log:", e);
+      }
+    }
+
+    // Helper to check if cancelled
+    async function isCancelled(runId: string): Promise<boolean> {
+      const { data } = await supabase.from("quick_build_runs").select("status").eq("id", runId).single();
+      return data?.status === "failed";
+    }
+
     // 1. Create quick_build_runs record
     const { data: run, error: insertErr } = await supabase
       .from("quick_build_runs")
@@ -396,6 +450,7 @@ serve(async (req) => {
         user_id: user.id,
         symbol: upperSymbol,
         status: "analyzing",
+        build_logs: [{ ts: Date.now(), msg: `🚀 Starting Quick Build for ${upperSymbol}`, level: "info" }],
       })
       .select()
       .single();
@@ -403,11 +458,14 @@ serve(async (req) => {
     if (insertErr) throw insertErr;
     console.log(`[QuickBuild] Created run ${run.id}`);
 
-    // 2. Fetch market data (pass user token for crypto brokerage auth)
+    // 2. Fetch market data
+    await appendLog(run.id, `📊 Fetching historical market data for ${upperSymbol}...`);
     const bars = await fetchMarketData(upperSymbol, token);
+    await appendLog(run.id, `✅ Received ${bars.length} daily bars (${bars[0]?.date} → ${bars[bars.length - 1]?.date})`);
     console.log(`[QuickBuild] Fetched ${bars.length} bars`);
 
     if (bars.length < 30) {
+      await appendLog(run.id, `❌ Insufficient data: only ${bars.length} bars (need 30+)`, "error");
       await supabase
         .from("quick_build_runs")
         .update({ status: "failed", error_message: "Insufficient market data (need at least 30 trading days)" })
@@ -418,11 +476,16 @@ serve(async (req) => {
       });
     }
 
+    if (await isCancelled(run.id)) return new Response(JSON.stringify({ cancelled: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
     // 3. Compute stats, fetch platform knowledge, and run AI analysis
+    await appendLog(run.id, "🔬 Computing statistical features (volatility, returns, volume profile)...");
     const stats = computeDataStats(bars);
+    await appendLog(run.id, `📈 Stats: avg_return=${(stats.avg_daily_return * 100).toFixed(3)}%, volatility=${(stats.volatility * 100).toFixed(2)}%, price_range=$${stats.price_min.toFixed(2)}-$${stats.price_max.toFixed(2)}`);
     console.log(`[QuickBuild] Stats:`, JSON.stringify(stats));
 
     // Fetch platform knowledge for this symbol
+    await appendLog(run.id, "🧠 Querying platform intelligence database...");
     let platformContext = "";
     try {
       const pkResp = await fetch(`${SUPABASE_URL}/functions/v1/strategy-knowledge`, {
@@ -438,18 +501,33 @@ serve(async (req) => {
           if (s.avg_sharpe != null) platformContext += ` Avg Sharpe: ${s.avg_sharpe}.`;
           if (s.avg_win_rate != null) platformContext += ` Avg win rate: ${(s.avg_win_rate * 100).toFixed(1)}%.`;
           if (s.common_pitfalls?.length > 0) platformContext += ` Pitfalls: ${s.common_pitfalls.join("; ")}.`;
+          await appendLog(run.id, `💡 Found ${pkData.total_entries} historical strategies for ${upperSymbol}`);
+        } else {
+          await appendLog(run.id, `ℹ️ No prior strategies found for ${upperSymbol} — starting fresh`);
         }
       }
     } catch (e) {
       console.warn("[QuickBuild] Platform knowledge fetch failed:", e);
+      await appendLog(run.id, "⚠️ Platform knowledge unavailable, proceeding without it", "warn");
     }
 
+    if (await isCancelled(run.id)) return new Response(JSON.stringify({ cancelled: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    await appendLog(run.id, "🤖 AI analyzing market data and selecting optimal indicators...");
     let aiConfig: any;
     try {
       aiConfig = await aiAnalyze(upperSymbol, stats, platformContext);
       console.log(`[QuickBuild] AI config received`);
+      const indicatorNames = Object.keys(aiConfig.indicators || {}).filter(k => aiConfig.indicators[k]?.enabled !== false);
+      await appendLog(run.id, `✅ AI selected indicators: ${indicatorNames.join(", ")}`);
+      if (aiConfig.custom_indicators?.length) {
+        await appendLog(run.id, `🔧 AI generated ${aiConfig.custom_indicators.length} custom indicator(s): ${aiConfig.custom_indicators.map((i: any) => i.name).join(", ")}`);
+      }
+      await appendLog(run.id, `📅 Training: ${aiConfig.training_date_range.start} → ${aiConfig.training_date_range.end}`);
+      await appendLog(run.id, `📅 Validation: ${aiConfig.validation_date_range.start} → ${aiConfig.validation_date_range.end}`);
     } catch (aiErr: any) {
       console.error("[QuickBuild] AI analysis failed:", aiErr.message);
+      await appendLog(run.id, `⚠️ AI analysis failed: ${aiErr.message}. Using default config.`, "warn");
       // Fallback to sensible defaults
       const splitIdx = Math.floor(bars.length * 0.8);
       aiConfig = {
@@ -480,6 +558,7 @@ serve(async (req) => {
     };
 
     // Update run with AI analysis
+    await appendLog(run.id, "⚙️ Configuring ML models: Random Forest, Gradient Boosting, Logistic Regression...");
     await supabase
       .from("quick_build_runs")
       .update({
@@ -492,7 +571,10 @@ serve(async (req) => {
       })
       .eq("id", run.id);
 
+    if (await isCancelled(run.id)) return new Response(JSON.stringify({ cancelled: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
     // 4. Create training run via ml-backend
+    await appendLog(run.id, "🏋️ Creating training run and preparing feature matrix...");
     const { data: trainingRun, error: trainInsertErr } = await supabase
       .from("training_runs")
       .insert({
@@ -519,8 +601,10 @@ serve(async (req) => {
       .eq("id", run.id);
 
     console.log(`[QuickBuild] Created training run ${trainingRun.id}`);
+    await appendLog(run.id, `🔗 Training run created (${trainingRun.id.slice(0, 8)}...)`);
 
     // 5. Trigger real training via the ml-backend edge function (internal call)
+    await appendLog(run.id, "🚂 Submitting to ML backend for model training...");
     console.log("[QuickBuild] Invoking ml-backend for real training");
     try {
       const mlResp = await fetch(`${SUPABASE_URL}/functions/v1/ml-backend`, {
@@ -543,10 +627,13 @@ serve(async (req) => {
       if (!mlResp.ok) {
         const errText = await mlResp.text();
         console.error("[QuickBuild] ml-backend error:", errText);
+        await appendLog(run.id, `❌ ML backend error: ${errText.slice(0, 200)}`, "error");
         throw new Error(`ml-backend returned ${mlResp.status}`);
       }
+      await appendLog(run.id, "✅ ML backend accepted training job — models are being trained");
     } catch (e: any) {
       console.error("[QuickBuild] Failed to trigger ml-backend:", e.message);
+      await appendLog(run.id, `❌ Training failed: ${e.message}`, "error");
       await supabase.from("quick_build_runs").update({ status: "failed", error_message: `Training failed: ${e.message}` }).eq("id", run.id);
       throw e;
     }
@@ -568,5 +655,3 @@ serve(async (req) => {
     });
   }
 });
-
-// Simulation removed — all training uses real ml-backend pipeline

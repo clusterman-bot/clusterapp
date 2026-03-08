@@ -1,6 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { useEffect } from 'react';
+
+export interface BuildLogEntry {
+  ts: number;
+  msg: string;
+  level: string;
+}
 
 export interface QuickBuildRun {
   id: string;
@@ -19,6 +26,7 @@ export interface QuickBuildRun {
   error_message: string | null;
   created_at: string;
   completed_at: string | null;
+  build_logs: BuildLogEntry[] | null;
 }
 
 export function useStartQuickBuild() {
@@ -42,8 +50,52 @@ export function useStartQuickBuild() {
   });
 }
 
+export function useCancelQuickBuild() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (runId: string) => {
+      const response = await supabase.functions.invoke('quick-build', {
+        body: { action: 'cancel', run_id: runId },
+      });
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quick_build_runs'] });
+      queryClient.invalidateQueries({ queryKey: ['quick_build_run'] });
+    },
+  });
+}
+
 export function useQuickBuildRun(id: string | undefined) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Subscribe to realtime updates for this run
+  useEffect(() => {
+    if (!id) return;
+
+    const channel = supabase
+      .channel(`quick_build_run_${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'quick_build_runs',
+          filter: `id=eq.${id}`,
+        },
+        (payload) => {
+          queryClient.setQueryData(['quick_build_run', id], payload.new);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, queryClient]);
 
   return useQuery({
     queryKey: ['quick_build_run', id],
@@ -58,7 +110,7 @@ export function useQuickBuildRun(id: string | undefined) {
         .single();
 
       if (error) throw error;
-      return data as QuickBuildRun;
+      return data as unknown as QuickBuildRun;
     },
     enabled: !!id && !!user?.id,
     refetchInterval: (query) => {
@@ -91,7 +143,7 @@ export function useQuickBuildRuns(symbol?: string) {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data as QuickBuildRun[];
+      return data as unknown as QuickBuildRun[];
     },
     enabled: !!user?.id,
   });
