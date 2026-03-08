@@ -110,7 +110,7 @@ export function useQuickBuildRun(id: string | undefined) {
         .single();
 
       if (error) throw error;
-      return data as QuickBuildRun;
+      return data as unknown as QuickBuildRun;
     },
     enabled: !!id && !!user?.id,
     refetchInterval: (query) => {
