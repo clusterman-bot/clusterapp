@@ -410,30 +410,35 @@ function computeMetrics(yTrue: Label[], yPred: Label[], numClasses: number) {
   };
 }
 
-// --- Fetch Market Data ---
+// --- Fetch Market Data via Alpaca ---
 async function fetchMarketData(ticker: string, startDate: string, endDate: string): Promise<Bar[]> {
-  if (!POLYGON_API_KEY) {
-    console.log('[ML] No POLYGON_API_KEY, generating simulated data');
+  if (!ALPACA_API_KEY || !ALPACA_API_SECRET) {
+    console.log('[ML] No Alpaca credentials, generating simulated data');
     return generateSimulatedBars(ticker, startDate, endDate);
   }
   
-  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/${startDate}/${endDate}?adjusted=true&sort=asc&limit=1000&apiKey=${POLYGON_API_KEY}`;
-  console.log(`[ML] Fetching from Polygon: ${ticker} ${startDate} to ${endDate}`);
+  const url = `https://data.alpaca.markets/v2/stocks/${ticker}/bars?timeframe=1Day&start=${startDate}&end=${endDate}&limit=1000&adjustment=raw&sort=asc`;
+  console.log(`[ML] Fetching from Alpaca: ${ticker} ${startDate} to ${endDate}`);
   
   try {
-    const resp = await fetch(url);
+    const resp = await fetch(url, {
+      headers: {
+        'APCA-API-KEY-ID': ALPACA_API_KEY,
+        'APCA-API-SECRET-KEY': ALPACA_API_SECRET,
+      },
+    });
     const data = await resp.json();
-    if (data.results && data.results.length > 0) {
-      console.log(`[ML] Got ${data.results.length} bars from Polygon`);
-      return data.results.map((bar: any) => ({
-        timestamp: bar.t,
-        date: new Date(bar.t).toISOString().split('T')[0],
+    if (data.bars && data.bars.length > 0) {
+      console.log(`[ML] Got ${data.bars.length} bars from Alpaca`);
+      return data.bars.map((bar: any) => ({
+        timestamp: new Date(bar.t).getTime(),
+        date: bar.t.split('T')[0],
         open: bar.o, high: bar.h, low: bar.l, close: bar.c, volume: bar.v, vwap: bar.vw,
       }));
     }
-    console.log('[ML] Polygon returned no results, falling back to simulation');
+    console.log('[ML] Alpaca returned no bars, falling back to simulation');
   } catch (e: any) {
-    console.error('[ML] Polygon fetch error:', e.message);
+    console.error('[ML] Alpaca fetch error:', e.message);
   }
   return generateSimulatedBars(ticker, startDate, endDate);
 }
