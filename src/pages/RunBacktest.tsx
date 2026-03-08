@@ -117,6 +117,14 @@ export default function RunBacktest() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Quick presets */}
+                <div className="flex gap-2 flex-wrap">
+                  {DATE_PRESETS.map(p => (
+                    <Button key={p.label} variant="outline" size="sm" onClick={() => applyPreset(p.months)}>
+                      {p.label}
+                    </Button>
+                  ))}
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="name">Backtest Name (optional)</Label>
                   <Input
