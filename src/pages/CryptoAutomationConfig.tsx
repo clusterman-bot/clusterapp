@@ -58,6 +58,11 @@ export default function CryptoAutomationConfig() {
   const [takeProfitPercent, setTakeProfitPercent] = useState(15);
   const [allowShorting, setAllowShorting] = useState(false);
   const [maxInvestmentAmount, setMaxInvestmentAmount] = useState<string>('');
+  const [selfImproveEnabled, setSelfImproveEnabled] = useState(false);
+  const [minWinRate, setMinWinRate] = useState(40);
+  const [maxDrawdownThreshold, setMaxDrawdownThreshold] = useState(15);
+  const [maxConsecutiveLosses, setMaxConsecutiveLosses] = useState(5);
+  const [selfImproveOpen, setSelfImproveOpen] = useState(false);
 
   const [rsiPeriodsText, setRsiPeriodsText] = useState('14');
   const [smaWindowsText, setSmaWindowsText] = useState('5, 20');
