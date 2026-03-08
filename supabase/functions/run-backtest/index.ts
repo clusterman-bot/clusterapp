@@ -393,7 +393,18 @@ serve(async (req) => {
     console.log(`[Backtest] Fetched ${bars.length} bars for ${normalizedSymbol}`);
 
     if (bars.length < 10) {
-      return new Response(JSON.stringify({ error: `Insufficient data: only ${bars.length} bars found for ${normalizedSymbol} in the selected date range.` }),
+      // In chunk mode, 0 bars on the final chunk is normal (e.g. today's date with no market data yet)
+      if (chunk_mode) {
+        return new Response(JSON.stringify({
+          skip: true,
+          trades: [],
+          raw_equity_curve: [],
+          raw_daily_returns: [],
+          bars_count: 0,
+          carry_over: carry_over || { cash: initial_capital, position: 0, entry_price: 0 },
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ error: `Insufficient data: only ${bars.length} bars found for ${normalizedSymbol} in the selected date range. Try an earlier end date or a different timeframe.` }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 

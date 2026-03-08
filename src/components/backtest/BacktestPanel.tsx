@@ -179,6 +179,12 @@ export function BacktestPanel({ config }: BacktestPanelProps) {
             return;
           }
 
+          // Skip chunks with no data (e.g. final chunk lands on today with no market data)
+          if (data.skip) {
+            carryOver = data.carry_over;
+            continue;
+          }
+
           const chunkData = data as ChunkResult;
           allTrades.push(...(chunkData.trades || []));
           allEquityCurve.push(...(chunkData.raw_equity_curve || []));
