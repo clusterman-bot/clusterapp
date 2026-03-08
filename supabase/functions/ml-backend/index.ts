@@ -642,20 +642,7 @@ async function realValidation(supabase: any, validationRunId: string, trainingRu
   }
 }
 
-// --- FAST DEMO SIMULATION (kept for demo_mode only) ---
-async function simulateTrainingDemo(supabase: any, trainingRunId: string) {
-  await supabase.from('training_runs').update({ status: 'running' }).eq('id', trainingRunId);
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  const base = 0.70, v = 0.05;
-  const results = {
-    random_forest: { accuracy: base + Math.random() * v, f1: base - 0.05 + Math.random() * v, recall: base - 0.07 + Math.random() * v },
-    gradient_boosting: { accuracy: base + 0.02 + Math.random() * (v - 0.02), f1: base - 0.03 + Math.random() * v, recall: base - 0.05 + Math.random() * v },
-    logistic_regression: { accuracy: base - 0.10 + Math.random() * v, f1: base - 0.15 + Math.random() * v, recall: base - 0.17 + Math.random() * v },
-  };
-  const models = Object.entries(results);
-  const best = models.reduce((b, [n, m]: [string, any]) => m.accuracy > (b.metrics?.accuracy || 0) ? { name: n, metrics: m } : b, { name: '', metrics: null as any });
-  await supabase.from('training_runs').update({ status: 'completed', results, best_model_name: best.name, best_model_metrics: best.metrics, completed_at: new Date().toISOString() }).eq('id', trainingRunId);
-}
+// Demo simulation removed — all training uses real data
 
 // ============================================================
 // MAIN SERVER
