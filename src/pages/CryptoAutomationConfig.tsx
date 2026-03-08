@@ -14,13 +14,15 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { 
   Activity, BarChart3, Settings2, History, Save, Power, PowerOff, 
-  TrendingUp, TrendingDown, Minus, CheckCircle2, XCircle, Loader2, RotateCcw, DollarSign, Bitcoin
+  TrendingUp, TrendingDown, Minus, CheckCircle2, XCircle, Loader2, RotateCcw, DollarSign, Bitcoin,
+  Brain, ChevronDown, Zap, RefreshCw
 } from 'lucide-react';
 import { 
   useStockAutomation, useUpsertAutomation, useToggleAutomation, 
-  useAutomationSignals, useResetInvestedAmount, type StockAutomation 
+  useAutomationSignals, useResetInvestedAmount, useOptimizationLogs, type StockAutomation 
 } from '@/hooks/useStockAutomations';
 import { toast } from '@/hooks/use-toast';
 
