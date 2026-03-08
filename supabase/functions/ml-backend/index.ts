@@ -413,57 +413,46 @@ function computeMetrics(yTrue: Label[], yPred: Label[], numClasses: number) {
 // --- Fetch Market Data via Alpaca ---
 async function fetchMarketData(ticker: string, startDate: string, endDate: string): Promise<Bar[]> {
   if (!ALPACA_API_KEY || !ALPACA_API_SECRET) {
-    console.log('[ML] No Alpaca credentials, generating simulated data');
-    return generateSimulatedBars(ticker, startDate, endDate);
+    throw new Error('Alpaca credentials (ALPACA_API_KEY / ALPACA_API_SECRET) are not configured. Live market data is required.');
   }
   
   const url = `https://data.alpaca.markets/v2/stocks/${ticker}/bars?timeframe=1Day&start=${startDate}&end=${endDate}&limit=1000&adjustment=raw&sort=asc`;
-  console.log(`[ML] Fetching from Alpaca: ${ticker} ${startDate} to ${endDate}`);
   
-  try {
-    const resp = await fetch(url, {
-      headers: {
-        'APCA-API-KEY-ID': ALPACA_API_KEY,
-        'APCA-API-SECRET-KEY': ALPACA_API_SECRET,
-      },
-    });
-    const data = await resp.json();
-    if (data.bars && data.bars.length > 0) {
-      console.log(`[ML] Got ${data.bars.length} bars from Alpaca`);
-      return data.bars.map((bar: any) => ({
-        timestamp: new Date(bar.t).getTime(),
-        date: bar.t.split('T')[0],
-        open: bar.o, high: bar.h, low: bar.l, close: bar.c, volume: bar.v, vwap: bar.vw,
-      }));
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    console.log(`[ML] Fetching from Alpaca (attempt ${attempt}/3): ${ticker} ${startDate} to ${endDate}`);
+    try {
+      const resp = await fetch(url, {
+        headers: {
+          'APCA-API-KEY-ID': ALPACA_API_KEY,
+          'APCA-API-SECRET-KEY': ALPACA_API_SECRET,
+        },
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error(`[ML] Alpaca HTTP ${resp.status}: ${errText}`);
+        if (attempt < 3) { await new Promise(r => setTimeout(r, 2000)); continue; }
+        throw new Error(`Alpaca API error (${resp.status}): ${errText}`);
+      }
+      const data = await resp.json();
+      if (data.bars && data.bars.length > 0) {
+        console.log(`[ML] Got ${data.bars.length} bars from Alpaca`);
+        return data.bars.map((bar: any) => ({
+          timestamp: new Date(bar.t).getTime(),
+          date: bar.t.split('T')[0],
+          open: bar.o, high: bar.h, low: bar.l, close: bar.c, volume: bar.v, vwap: bar.vw,
+        }));
+      }
+      console.warn(`[ML] Alpaca returned no bars (attempt ${attempt}/3)`);
+      if (attempt < 3) { await new Promise(r => setTimeout(r, 2000)); continue; }
+      throw new Error(`No market data returned from Alpaca for ${ticker} (${startDate} to ${endDate})`);
+    } catch (e: any) {
+      if (e.message.includes('Alpaca API error') || e.message.includes('No market data returned')) throw e;
+      console.error(`[ML] Alpaca fetch error (attempt ${attempt}/3):`, e.message);
+      if (attempt < 3) { await new Promise(r => setTimeout(r, 2000)); continue; }
+      throw new Error(`Failed to fetch live market data from Alpaca after 3 attempts: ${e.message}`);
     }
-    console.log('[ML] Alpaca returned no bars, falling back to simulation');
-  } catch (e: any) {
-    console.error('[ML] Alpaca fetch error:', e.message);
   }
-  return generateSimulatedBars(ticker, startDate, endDate);
-}
-
-function generateSimulatedBars(ticker: string, startDate: string, endDate: string): Bar[] {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const bars: Bar[] = [];
-  const seed = ticker.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  let price = 100 + (seed % 100);
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    if (d.getDay() === 0 || d.getDay() === 6) continue;
-    const change = (Math.random() - 0.48) * 0.04; // slight upward bias
-    const open = price;
-    const close = price * (1 + change);
-    bars.push({
-      timestamp: d.getTime(), date: d.toISOString().split('T')[0],
-      open: +open.toFixed(2), high: +(Math.max(open, close) * (1 + Math.random() * 0.02)).toFixed(2),
-      low: +(Math.min(open, close) * (1 - Math.random() * 0.02)).toFixed(2),
-      close: +close.toFixed(2), volume: Math.floor(1e6 + Math.random() * 5e6),
-    });
-    price = close;
-  }
-  console.log(`[ML] Generated ${bars.length} simulated bars`);
-  return bars;
+  throw new Error('Failed to fetch live market data from Alpaca after 3 attempts');
 }
 
 // --- REAL TRAINING PIPELINE ---
