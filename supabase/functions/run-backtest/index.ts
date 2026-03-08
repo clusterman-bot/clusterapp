@@ -263,7 +263,7 @@ serve(async (req) => {
 
     // Map timeframe to annualization factor and warm-up bars
     const timeframeConfig: Record<string, { annualization: number; warmup: number; alpacaTimeframe: string }> = {
-      '1Min':  { annualization: 252 * 6.5 * 60, warmup: 200, alpacaTimeframe: '1Min', signalEvery: 5 },
+      '1Min':  { annualization: 252 * 6.5 * 60, warmup: 200, alpacaTimeframe: '1Min', signalEvery: 2 },
       '5Min':  { annualization: 252 * 6.5 * 12, warmup: 200, alpacaTimeframe: '5Min', signalEvery: 2 },
       '15Min': { annualization: 252 * 6.5 * 4,  warmup: 200, alpacaTimeframe: '15Min', signalEvery: 1 },
       '1Hour': { annualization: 252 * 6.5,       warmup: 100, alpacaTimeframe: '1Hour', signalEvery: 1 },
@@ -315,7 +315,7 @@ serve(async (req) => {
     // Fetch historical bars with pagination
     const isCrypto = normalizedSymbol.includes('/');
     let bars: any[] = [];
-    const MAX_BARS = 25000;
+    const MAX_BARS = 50000;
 
     if (isCrypto) {
       let pageToken: string | null = null;
@@ -361,7 +361,7 @@ serve(async (req) => {
           end: end_date,
           limit: '10000',
           adjustment: 'raw',
-          feed: 'iex',
+          feed: 'sip',
           sort: 'asc',
         });
         if (pageToken) params.set('page_token', pageToken);

@@ -1,32 +1,110 @@
 
 
-# System Limitations Analysis & Fixes
+## Plan: System Bots — Platform-Managed Auto-Trading Strategies
 
-After examining your backtest network requests and the edge function code, here's what's limiting your results:
+Three platform-managed bots that auto-generate strategies, continuously self-improve via backtesting, swap tickers weekly, and are published as community models under the @Seif account. Alpha users get full management controls.
 
-## Key Limitations Found
+### Architecture
 
-### 1. IEX Feed (BIGGEST issue)
-The backtest engine uses `feed: 'iex'` when fetching stock bars from Alpaca. IEX captures roughly 2-3% of total US equity market volume. For 1-minute bars, this means many minutes simply have **no bar at all** because no IEX trade occurred. Switching to `feed: 'sip'` (full consolidated tape) will dramatically increase bar count — from potentially a few hundred to ~23,000+ bars for a 60-day 1Min window on SPY.
+```text
+  ┌──────────────────────────────────────────────────────────┐
+  │  system-bots edge function (new)                         │
+  │  Called on schedule (daily) + on-demand by Alpha         │
+  │                                                          │
+  │  1. Bootstrap: Create 3 models owned by @Seif            │
+  │     - "System Bot: Tech Growth" (tech stock)             │
+  │     - "System Bot: Tech Momentum" (tech stock)           │
+  │     - "System Bot: Precious Metals" (GLD/SLV/etc.)       │
+  │                                                          │
+  │  2. Weekly Ticker Rotation:                              │
+  │     AI picks best stock for each sector using            │
+  │     platform knowledge + recent performance              │
+  │                                                          │
+  │  3. Strategy Optimization:                               │
+  │     Runs backtests → picks best indicator setup           │
+  │     Uses same self-improve pipeline (bot-optimizer)       │
+  │                                                          │
+  │  4. All data fetched via @Seif's Alpaca credentials      │
+  │                                                          │
+  │  5. Models published as is_public=true, is_system=true   │
+  │     so they appear in the marketplace with a badge       │
+  └──────────────────────────────────────────────────────────┘
+```
 
-### 2. Signal Sampling (signalEvery = 5 for 1Min)
-On 1-minute timeframe, the engine only evaluates indicator signals every 5th bar as a performance optimization. This means 80% of bars are only checked for stop-loss/take-profit, but never generate new entry signals. This reduces trade count.
+### Database Changes
 
-### 3. MAX_BARS = 25,000 per chunk
-This is a safety cap. With SIP data it could be hit more easily on 60-day 1Min windows (~23,400 trading bars). The current 60-day chunk size is actually well-calibrated for this.
+**Add `is_system` column to `models` table:**
+- `is_system boolean NOT NULL DEFAULT false`
+- Identifies system-managed bots vs. user-created ones
 
-### 4. Chunk window = 60 days for 1Min
-This is reasonable and doesn't need changing.
+**Add `system_bot_config` table:**
 
-## Plan
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | PK |
+| model_id | uuid | FK → models.id |
+| sector | text | "tech" or "precious_metals" |
+| ticker_pool | text[] | Candidate tickers for weekly rotation (e.g., AAPL, MSFT, NVDA, GOOGL, META for tech) |
+| current_ticker | text | Currently active ticker |
+| last_rotation_at | timestamptz | When ticker was last swapped |
+| last_optimization_at | timestamptz | When strategy was last optimized |
+| optimization_generation | int | Counter |
+| rotation_interval_days | int | Default 7 |
+| is_active | boolean | Master on/off |
+| created_at | timestamptz | |
 
-**File: `supabase/functions/run-backtest/index.ts`**
+RLS: Alpha users can SELECT and UPDATE. Service role can do everything.
 
-| Change | Detail |
-|--------|--------|
-| Switch `feed` from `'iex'` to `'sip'` (line 364) | Full consolidated market data instead of partial IEX feed |
-| Reduce `signalEvery` for 1Min from 5 to 2 (line 266) | Evaluate signals every 2nd bar instead of every 5th — more entry opportunities while still performant |
-| Increase `MAX_BARS` from 25,000 to 50,000 (line 318) | Allow more data per chunk now that SIP provides denser bars |
+### Edge Function: `supabase/functions/system-bots/index.ts`
 
-These three changes should increase your bar count by 10-50x on stock tickers and result in significantly more trades. No frontend changes needed.
+Actions:
+- **`bootstrap`**: Creates the 3 system bot models under @Seif's user_id if they don't exist. Sets `is_system=true`, `is_public=true`, `model_type='system'`. Creates `system_bot_config` entries with appropriate ticker pools. Deploys them via `deployed_models`.
+- **`rotate-tickers`**: For each system bot, checks if `rotation_interval_days` have passed. If so, uses AI (Lovable AI gateway) to pick the best ticker from the pool based on recent market conditions and platform knowledge. Updates `models.ticker` and `system_bot_config.current_ticker`.
+- **`optimize`**: For each system bot, runs the same optimization pipeline as user bots: backtest current config → parameter sweep → AI rewrite if needed. Updates indicators_config and risk params. All data pulled via @Seif's Alpaca credentials.
+- **`status`**: Returns current state of all 3 system bots (for Alpha dashboard display).
+- **`update-config`**: Alpha can rename bots, change ticker pools, toggle active state, adjust rotation interval.
+
+### Scheduler
+
+Add a cron job that calls `system-bots` daily:
+1. Check if any bot needs ticker rotation (weekly check)
+2. Run optimization on all 3 bots (continuous improvement)
+3. The existing `run-automations` cron already handles signal generation + trade mirroring for deployed models — system bots just ride that pipeline since they're regular deployed models.
+
+### Frontend Changes
+
+**`src/components/community/ModelMarketplaceCard.tsx`** — Show a "System Bot" badge (e.g., a robot icon + "System") when `model.is_system === true`. Style it distinctively so users can identify platform-managed bots.
+
+**`src/pages/ModelDetail.tsx`** — Display "System Bot" label, show that it auto-rotates tickers weekly and self-improves. Hide "Edit" buttons for non-Alpha users.
+
+**`src/pages/AlphaDashboard.tsx`** — Add a "System Bots" tab with:
+- Status cards for each bot (current ticker, last rotation, last optimization, subscriber count, performance metrics)
+- Rename capability
+- Toggle active/inactive
+- Edit ticker pool
+- Manual "Rotate Now" and "Optimize Now" buttons
+- View full signal/trade history
+
+**`src/hooks/useSystemBots.tsx`** (new) — Hooks for fetching system bot config, triggering actions (rotate, optimize, bootstrap), and updating config.
+
+### Data Flow
+
+1. **Bootstrap** (one-time): Alpha triggers or auto-runs on first deploy → creates 3 models + configs + deployments
+2. **Every minute** (existing cron): `run-automations` picks up deployed system bot models, generates signals, mirrors trades to subscribers — no changes needed
+3. **Daily** (new cron): `system-bots` checks rotation schedule and runs optimization
+4. **Weekly**: AI selects new tickers for each bot based on sector performance
+5. **On underperformance**: Same self-improve pipeline triggers (health check → param optimization → AI rewrite)
+
+### Ticker Pools (defaults)
+
+- **Tech Growth**: AAPL, MSFT, NVDA, GOOGL, META, AMZN, AMD, CRM, AVGO, ORCL
+- **Tech Momentum**: TSLA, PLTR, SNOW, NET, CRWD, DDOG, MDB, ZS, PANW, UBER
+- **Precious Metals**: GLD, SLV, GDX, GOLD, NEM, AEM, WPM, FNV
+
+### Security
+
+- System bots are owned by @Seif's real account — uses their Alpaca credentials for data + owner trades
+- `is_system` column prevents regular users from creating system bots (checked in edge function)
+- Only Alpha role can manage system bot config (RLS + edge function auth check)
+- Subscribers interact with system bots exactly like any other model — same subscription, allocation, trade mirroring flow
 
