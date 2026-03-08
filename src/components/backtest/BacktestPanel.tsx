@@ -60,10 +60,18 @@ interface BacktestPanelProps {
 }
 
 const getDateString = (d: Date) => d.toISOString().split('T')[0];
-const sixMonthsAgo = () => {
-  const d = new Date(); d.setMonth(d.getMonth() - 6); return getDateString(d);
+const lastMarketDay = () => {
+  const d = new Date();
+  // Move to previous day first (we want last *completed* trading day)
+  d.setDate(d.getDate() - 1);
+  // Skip weekends
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+  return d;
 };
-const today = () => getDateString(new Date());
+const defaultEnd = () => getDateString(lastMarketDay());
+const defaultStart = () => {
+  const d = lastMarketDay(); d.setMonth(d.getMonth() - 6); return getDateString(d);
+};
 
 const DATE_PRESETS = [
   { label: '1M', months: 1 },
@@ -74,14 +82,14 @@ const DATE_PRESETS = [
 ];
 
 export function BacktestPanel({ config }: BacktestPanelProps) {
-  const [startDate, setStartDate] = useState(sixMonthsAgo());
-  const [endDate, setEndDate] = useState(today());
+  const [startDate, setStartDate] = useState(defaultStart());
+  const [endDate, setEndDate] = useState(defaultEnd());
   const [initialCapital, setInitialCapital] = useState('100000');
   const [timeframe, setTimeframe] = useState('1Day');
 
   const applyPreset = (months: number) => {
-    const end = new Date();
-    const start = new Date(); start.setMonth(start.getMonth() - months);
+    const end = lastMarketDay();
+    const start = new Date(end); start.setMonth(start.getMonth() - months);
     setStartDate(getDateString(start));
     setEndDate(getDateString(end));
   };
