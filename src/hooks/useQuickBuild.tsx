@@ -143,7 +143,7 @@ export function useQuickBuildRuns(symbol?: string) {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data as QuickBuildRun[];
+      return data as unknown as QuickBuildRun[];
     },
     enabled: !!user?.id,
   });
