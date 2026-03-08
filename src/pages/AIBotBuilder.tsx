@@ -576,7 +576,7 @@ export default function AIBotBuilder() {
                             <div className="space-y-3 pt-3">
                               <div className="flex items-center justify-between p-3 rounded-lg border border-primary/30 bg-primary/5">
                                 <div>
-                                  <Label className="text-sm font-semibold">Enable Self-ній Improvement</Label>
+                                  <Label className="text-sm font-semibold">Enable Self-Improvement</Label>
                                   <p className="text-xs text-muted-foreground mt-1">
                                     When enabled, the bot monitors its own win rate, drawdown, and consecutive losses. If thresholds are breached, 
                                     it automatically optimizes parameters or rewrites the strategy using AI.
