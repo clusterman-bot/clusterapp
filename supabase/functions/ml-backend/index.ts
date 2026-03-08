@@ -527,9 +527,9 @@ async function realTraining(supabase: any, trainingRunId: string, config: any) {
     
     // 8. Compile results
     const results: Record<string, any> = {
-      random_forest: { accuracy: rfMetrics.accuracy, f1: rfMetrics.f1, recall: rfMetrics.recall },
-      gradient_boosting: { accuracy: gbMetrics.accuracy, f1: gbMetrics.f1, recall: gbMetrics.recall },
-      logistic_regression: { accuracy: lrMetrics.accuracy, f1: lrMetrics.f1, recall: lrMetrics.recall },
+      random_forest: { accuracy: rfMetrics.accuracy, f1: rfMetrics.f1, recall: rfMetrics.recall, precision: rfMetrics.precision },
+      gradient_boosting: { accuracy: gbMetrics.accuracy, f1: gbMetrics.f1, recall: gbMetrics.recall, precision: gbMetrics.precision },
+      logistic_regression: { accuracy: lrMetrics.accuracy, f1: lrMetrics.f1, recall: lrMetrics.recall, precision: lrMetrics.precision },
     };
     
     const models = Object.entries(results);
