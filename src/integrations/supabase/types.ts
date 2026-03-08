@@ -1496,6 +1496,7 @@ export type Database = {
       quick_build_runs: {
         Row: {
           ai_analysis: Json | null
+          build_logs: Json | null
           completed_at: string | null
           created_at: string
           error_message: string | null
@@ -1514,6 +1515,7 @@ export type Database = {
         }
         Insert: {
           ai_analysis?: Json | null
+          build_logs?: Json | null
           completed_at?: string | null
           created_at?: string
           error_message?: string | null
@@ -1532,6 +1534,7 @@ export type Database = {
         }
         Update: {
           ai_analysis?: Json | null
+          build_logs?: Json | null
           completed_at?: string | null
           created_at?: string
           error_message?: string | null
