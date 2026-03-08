@@ -83,6 +83,10 @@ export default function CryptoAutomationConfig() {
       setTakeProfitPercent(automation.take_profit_percent);
       setAllowShorting(automation.allow_shorting ?? false);
       setMaxInvestmentAmount(automation.max_investment_amount != null ? String(automation.max_investment_amount) : '');
+      setSelfImproveEnabled(automation.self_improve_enabled ?? false);
+      setMinWinRate((automation.min_win_rate ?? 0.40) * 100);
+      setMaxDrawdownThreshold(automation.max_drawdown_threshold ?? 15);
+      setMaxConsecutiveLosses(automation.max_consecutive_losses ?? 5);
       setRsiPeriodsText((ind.rsi?.periods || [14]).join(', '));
       setSmaWindowsText((ind.sma?.windows || [5, 20]).join(', '));
       setEmaWindowsText((ind.ema?.windows || [5, 20]).join(', '));
