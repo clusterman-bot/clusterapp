@@ -263,7 +263,7 @@ serve(async (req) => {
 
     // Map timeframe to annualization factor and warm-up bars
     const timeframeConfig: Record<string, { annualization: number; warmup: number; alpacaTimeframe: string }> = {
-      '1Min':  { annualization: 252 * 6.5 * 60, warmup: 200, alpacaTimeframe: '1Min', signalEvery: 5 },
+      '1Min':  { annualization: 252 * 6.5 * 60, warmup: 200, alpacaTimeframe: '1Min', signalEvery: 2 },
       '5Min':  { annualization: 252 * 6.5 * 12, warmup: 200, alpacaTimeframe: '5Min', signalEvery: 2 },
       '15Min': { annualization: 252 * 6.5 * 4,  warmup: 200, alpacaTimeframe: '15Min', signalEvery: 1 },
       '1Hour': { annualization: 252 * 6.5,       warmup: 100, alpacaTimeframe: '1Hour', signalEvery: 1 },
