@@ -607,7 +607,7 @@ serve(async (req) => {
     await appendLog(run.id, "🚂 Submitting to ML backend for model training...");
     console.log("[QuickBuild] Invoking ml-backend for real training");
     try {
-      const mlResp = await fetch(`${SUPABASE_URL}/functions/v1/ml-backend`, {
+      const mlResp = await fetch(`${SUPABASE_URL}/functions/v1/ml-backend/train`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
