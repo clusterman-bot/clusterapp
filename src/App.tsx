@@ -9,6 +9,7 @@ import { TradingModeProvider } from "@/hooks/useTradingMode";
 import { TourProvider } from "@/contexts/TourContext";
 import { GuidedTour } from "@/components/tour/GuidedTour";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ChatWidget } from "@/components/ChatWidget";
 
 // Eagerly load the landing page for FCP/LCP
 import Index from "./pages/Index";
@@ -81,6 +82,7 @@ const App = () => (
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
+              <ChatWidget />
             </TourProvider>
           </BrowserRouter>
         </TooltipProvider>
