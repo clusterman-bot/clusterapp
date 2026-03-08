@@ -730,8 +730,8 @@ serve(async (req) => {
             console.log(`[ML-Backend] Can't reach external engine: ${e.message}, using built-in ML`);
             realTraining(supabase, trainingRun.id, body);
           }
-        } else if (isDemoMode) {
-          simulateTrainingDemo(supabase, trainingRun.id);
+        } else if (false) {
+          // Demo mode removed — always use real training
         } else {
           // USE REAL BUILT-IN ML TRAINING
           realTraining(supabase, trainingRun.id, body);

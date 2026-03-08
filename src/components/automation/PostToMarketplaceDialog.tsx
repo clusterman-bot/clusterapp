@@ -37,7 +37,7 @@ export function PostToMarketplaceDialog({
   const [maxAllocation, setMaxAllocation] = useState(10000);
   const [maxExposurePercent, setMaxExposurePercent] = useState(20);
   const [riskLevel, setRiskLevel] = useState<'low' | 'medium' | 'high'>('medium');
-  const [isPublic, setIsPublic] = useState(true);
+  const [isPublic, setIsPublic] = useState(false);
 
   // Derive custom indicators at component level so JSX can access them
   const indicatorsSource = automationConfig.indicators ?? automationConfig;
