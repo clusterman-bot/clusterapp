@@ -1,11 +1,11 @@
-import { useState } from 'react';
-import { Zap, CheckCircle2, Loader2, AlertCircle, ChevronDown, ChevronUp, Cpu, BarChart3, Code, Rocket } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Zap, CheckCircle2, Loader2, AlertCircle, ChevronDown, ChevronUp, Cpu, BarChart3, Code, Rocket, Square, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { useStartQuickBuild, useQuickBuildRun, useQuickBuildRuns } from '@/hooks/useQuickBuild';
+import { useStartQuickBuild, useQuickBuildRun, useQuickBuildRuns, useCancelQuickBuild, type BuildLogEntry } from '@/hooks/useQuickBuild';
 import { useTrainingRun, type TrainingRun } from '@/hooks/useMLTraining';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -63,6 +63,57 @@ function StepperProgress({ status }: { status: string }) {
   );
 }
 
+function BuildLogTerminal({ logs, isRunning }: { logs: BuildLogEntry[]; isRunning: boolean }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [logs]);
+
+  if (!logs || logs.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/80 border-b border-border">
+        <Terminal className="h-3 w-3 text-primary" />
+        <span className="text-[11px] font-medium text-foreground">Build Log</span>
+        {isRunning && (
+          <span className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            Live
+          </span>
+        )}
+      </div>
+      <div
+        ref={scrollRef}
+        className="bg-background/80 p-2 max-h-48 overflow-y-auto font-mono text-[11px] leading-relaxed space-y-0.5"
+      >
+        {logs.map((log, i) => (
+          <div
+            key={i}
+            className={`flex gap-2 ${
+              log.level === 'error' ? 'text-destructive' : log.level === 'warn' ? 'text-yellow-500' : 'text-muted-foreground'
+            }`}
+          >
+            <span className="text-muted-foreground/50 select-none shrink-0">
+              {new Date(log.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </span>
+            <span className="break-all">{log.msg}</span>
+          </div>
+        ))}
+        {isRunning && (
+          <div className="flex items-center gap-1 text-primary/60 mt-1">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>Waiting for next update...</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ModelComparisonTable({ results }: { results: Record<string, { accuracy: number; f1: number; recall: number; precision?: number }> }) {
   const entries = Object.entries(results);
   const best = entries.reduce((b, [n, m]) => (m.accuracy > (b.metrics?.accuracy || 0) ? { name: n, metrics: m } : b), { name: '', metrics: null as any });
@@ -101,6 +152,7 @@ function ModelComparisonTable({ results }: { results: Record<string, { accuracy:
 export function QuickBuildPanel({ symbol, isCrypto }: QuickBuildPanelProps) {
   const navigate = useNavigate();
   const startBuild = useStartQuickBuild();
+  const cancelBuild = useCancelQuickBuild();
   const { data: pastRuns } = useQuickBuildRuns(symbol);
   const [activeRunId, setActiveRunId] = useState<string | undefined>();
   const { data: activeRun } = useQuickBuildRun(activeRunId);
@@ -123,10 +175,22 @@ export function QuickBuildPanel({ symbol, isCrypto }: QuickBuildPanelProps) {
     }
   };
 
+  const handleCancel = async () => {
+    if (!runId) return;
+    try {
+      await cancelBuild.mutateAsync(runId);
+      toast.info('Quick Build cancelled');
+    } catch {
+      toast.error('Failed to cancel build');
+    }
+  };
+
   const isRunning = run && !['completed', 'failed'].includes(run.status);
   const isComplete = run?.status === 'completed';
   const isFailed = run?.status === 'failed';
+  const wasCancelled = isFailed && run?.error_message === 'Cancelled by user';
   const trainingResults = trainingRun?.results as Record<string, { accuracy: number; f1: number; recall: number }> | null;
+  const buildLogs = (run?.build_logs as BuildLogEntry[] | null) || [];
 
   const configCode = run
     ? JSON.stringify(
@@ -173,14 +237,33 @@ export function QuickBuildPanel({ symbol, isCrypto }: QuickBuildPanelProps) {
           <>
             <StepperProgress status={run.status} />
             <Progress value={STEPS.findIndex((s) => s.key === run.status) * 33} className="h-1" />
-            <p className="text-xs text-muted-foreground text-center">This may take a few moments…</p>
+
+            {/* Build Log Terminal */}
+            <BuildLogTerminal logs={buildLogs} isRunning={true} />
+
+            {/* Stop Button */}
+            <Button
+              onClick={handleCancel}
+              disabled={cancelBuild.isPending}
+              variant="destructive"
+              size="sm"
+              className="w-full"
+            >
+              {cancelBuild.isPending ? (
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+              ) : (
+                <Square className="mr-2 h-3 w-3" />
+              )}
+              Stop Build
+            </Button>
           </>
         )}
 
         {isFailed && (
           <div className="text-center space-y-2">
             <AlertCircle className="h-8 w-8 text-destructive mx-auto" />
-            <p className="text-sm text-destructive">{run.error_message || 'Quick Build failed'}</p>
+            <p className="text-sm text-destructive">{wasCancelled ? 'Build was cancelled' : run.error_message || 'Quick Build failed'}</p>
+            {buildLogs.length > 0 && <BuildLogTerminal logs={buildLogs} isRunning={false} />}
             <Button onClick={handleStart} variant="outline" size="sm">
               <Zap className="mr-2 h-3 w-3" /> Try Again
             </Button>
@@ -190,6 +273,23 @@ export function QuickBuildPanel({ symbol, isCrypto }: QuickBuildPanelProps) {
         {isComplete && (
           <>
             <StepperProgress status="completed" />
+
+            {/* Build Log (collapsed for completed) */}
+            {buildLogs.length > 0 && (
+              <Collapsible>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-full justify-between text-xs">
+                    <span className="flex items-center gap-1">
+                      <Terminal className="h-3 w-3" /> Build Log ({buildLogs.length} entries)
+                    </span>
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <BuildLogTerminal logs={buildLogs} isRunning={false} />
+                </CollapsibleContent>
+              </Collapsible>
+            )}
 
             {/* AI Reasoning */}
             {run.ai_analysis?.reasoning && (
