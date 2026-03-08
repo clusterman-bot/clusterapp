@@ -22,68 +22,75 @@ interface OHLCVBar {
   volume: number;
 }
 
-// Generate simulated OHLCV data for crypto when Alpaca is unavailable
-function generateSimulatedCryptoBars(ticker: string): OHLCVBar[] {
-  console.log(`[QuickBuild] Generating simulated data for crypto: ${ticker}`);
-  const bars: OHLCVBar[] = [];
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setFullYear(startDate.getFullYear() - 1);
-
-  // Seed price based on ticker
-  let price = ticker.includes("BTC") ? 45000 : ticker.includes("ETH") ? 2500 : 100;
-  const volatility = 0.025;
-  const current = new Date(startDate);
-
-  while (current <= endDate) {
-    const change = (Math.random() - 0.48) * volatility * price;
-    const open = price;
-    const close = price + change;
-    const high = Math.max(open, close) * (1 + Math.random() * 0.015);
-    const low = Math.min(open, close) * (1 - Math.random() * 0.015);
-    const volume = Math.floor(1000 + Math.random() * 50000);
-    bars.push({ date: current.toISOString().split("T")[0], open, high, low, close, volume });
-    price = close;
-    current.setDate(current.getDate() + 1);
-  }
-  console.log(`[QuickBuild] Generated ${bars.length} simulated bars`);
-  return bars;
-}
-
-// Fetch 1 year of OHLCV data via Alpaca (with crypto fallback)
-async function fetchMarketData(ticker: string): Promise<OHLCVBar[]> {
+// Fetch 1 year of OHLCV data — uses user's brokerage credentials for crypto via alpaca-trading function
+async function fetchMarketData(ticker: string, userToken: string): Promise<OHLCVBar[]> {
   const isCrypto = ticker.includes("/");
 
-  // For crypto, try Alpaca first but fall back to simulated data
   if (isCrypto) {
-    if (!ALPACA_API_KEY || !ALPACA_API_SECRET) {
-      return generateSimulatedCryptoBars(ticker);
-    }
-    try {
-      return await fetchFromAlpaca(ticker, true);
-    } catch (e) {
-      console.log(`[QuickBuild] Alpaca crypto fetch failed, using simulated data: ${e.message}`);
-      return generateSimulatedCryptoBars(ticker);
-    }
+    return await fetchCryptoViaAlpacaTrading(ticker, userToken);
   }
 
-  // For stocks, Alpaca is required
+  // For stocks, use server-side Alpaca keys
   if (!ALPACA_API_KEY || !ALPACA_API_SECRET) {
     throw new Error("Alpaca credentials are not configured.");
   }
-  return await fetchFromAlpaca(ticker, false);
+  return await fetchFromAlpaca(ticker);
 }
 
-async function fetchFromAlpaca(ticker: string, isCrypto: boolean): Promise<OHLCVBar[]> {
+// Fetch crypto bars by calling the alpaca-trading edge function (which uses the user's own brokerage keys)
+async function fetchCryptoViaAlpacaTrading(ticker: string, userToken: string): Promise<OHLCVBar[]> {
+  const startDate = new Date();
+  startDate.setFullYear(startDate.getFullYear() - 1);
+  const start = startDate.toISOString().split("T")[0];
+
+  console.log(`[QuickBuild] Fetching crypto bars via alpaca-trading for ${ticker}`);
+
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/alpaca-trading/get-crypto-bars`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${userToken}`,
+      apikey: Deno.env.get("SUPABASE_ANON_KEY") || SUPABASE_SERVICE_ROLE_KEY,
+    },
+    body: JSON.stringify({
+      isPaper: true,
+      symbol: ticker,
+      timeframe: "1Day",
+      start,
+      limit: 1000,
+    }),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    console.error(`[QuickBuild] alpaca-trading crypto bars error (${resp.status}): ${errText}`);
+    throw new Error(`Failed to fetch crypto market data: ${errText}`);
+  }
+
+  const data = await resp.json();
+  if (!data.success || !data.bars?.length) {
+    throw new Error(`No crypto market data returned for ${ticker}`);
+  }
+
+  console.log(`[QuickBuild] Got ${data.bars.length} crypto bars via alpaca-trading`);
+  return data.bars.map((bar: any) => ({
+    date: bar.date.split("T")[0],
+    open: bar.open,
+    high: bar.high,
+    low: bar.low,
+    close: bar.close,
+    volume: bar.volume,
+  }));
+}
+
+async function fetchFromAlpaca(ticker: string): Promise<OHLCVBar[]> {
   const endDate = new Date();
   const startDate = new Date();
   startDate.setFullYear(startDate.getFullYear() - 1);
   const start = startDate.toISOString().split("T")[0];
   const end = endDate.toISOString().split("T")[0];
 
-  const baseUrl = isCrypto
-    ? `https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=${encodeURIComponent(ticker)}&timeframe=1Day&start=${start}&end=${end}&limit=1000&sort=asc`
-    : `https://data.alpaca.markets/v2/stocks/${ticker}/bars?timeframe=1Day&start=${start}&end=${end}&limit=1000&adjustment=raw&sort=asc`;
+  const baseUrl = `https://data.alpaca.markets/v2/stocks/${ticker}/bars?timeframe=1Day&start=${start}&end=${end}&limit=1000&adjustment=raw&sort=asc`;
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     console.log(`[QuickBuild] Fetching from Alpaca (attempt ${attempt}/3): ${ticker}`);
@@ -100,7 +107,7 @@ async function fetchFromAlpaca(ticker: string, isCrypto: boolean): Promise<OHLCV
       throw new Error(`Alpaca API error (${resp.status}): ${errText}`);
     }
     const data = await resp.json();
-    const bars = isCrypto ? data.bars?.[ticker] : data.bars;
+    const bars = data.bars;
     if (bars && bars.length > 0) {
       console.log(`[QuickBuild] Got ${bars.length} bars from Alpaca`);
       return bars.map((bar: any) => ({
@@ -396,8 +403,8 @@ serve(async (req) => {
     if (insertErr) throw insertErr;
     console.log(`[QuickBuild] Created run ${run.id}`);
 
-    // 2. Fetch market data
-    const bars = await fetchMarketData(upperSymbol);
+    // 2. Fetch market data (pass user token for crypto brokerage auth)
+    const bars = await fetchMarketData(upperSymbol, token);
     console.log(`[QuickBuild] Fetched ${bars.length} bars`);
 
     if (bars.length < 30) {
