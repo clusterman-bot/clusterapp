@@ -63,7 +63,7 @@ function StepperProgress({ status }: { status: string }) {
   );
 }
 
-function ModelComparisonTable({ results }: { results: Record<string, { accuracy: number; f1: number; recall: number }> }) {
+function ModelComparisonTable({ results }: { results: Record<string, { accuracy: number; f1: number; recall: number; precision?: number }> }) {
   const entries = Object.entries(results);
   const best = entries.reduce((b, [n, m]) => (m.accuracy > (b.metrics?.accuracy || 0) ? { name: n, metrics: m } : b), { name: '', metrics: null as any });
 
@@ -75,6 +75,7 @@ function ModelComparisonTable({ results }: { results: Record<string, { accuracy:
             <th className="text-left py-2 px-3 text-muted-foreground font-medium">Model</th>
             <th className="text-right py-2 px-3 text-muted-foreground font-medium">Accuracy</th>
             <th className="text-right py-2 px-3 text-muted-foreground font-medium">F1</th>
+            <th className="text-right py-2 px-3 text-muted-foreground font-medium">Precision</th>
             <th className="text-right py-2 px-3 text-muted-foreground font-medium">Recall</th>
           </tr>
         </thead>
@@ -87,6 +88,7 @@ function ModelComparisonTable({ results }: { results: Record<string, { accuracy:
               </td>
               <td className="text-right py-2 px-3 font-mono">{(metrics.accuracy * 100).toFixed(1)}%</td>
               <td className="text-right py-2 px-3 font-mono">{(metrics.f1 * 100).toFixed(1)}%</td>
+              <td className="text-right py-2 px-3 font-mono">{metrics.precision != null ? `${(metrics.precision * 100).toFixed(1)}%` : '—'}</td>
               <td className="text-right py-2 px-3 font-mono">{(metrics.recall * 100).toFixed(1)}%</td>
             </tr>
           ))}

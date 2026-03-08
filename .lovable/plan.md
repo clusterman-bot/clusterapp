@@ -1,54 +1,110 @@
 
 
-# Plan: Remove Simulated Fallbacks, Add F1/Precision to Results, Fix Model Visibility
+## Plan: System Bots — Platform-Managed Auto-Trading Strategies
 
-## Three Changes
+Three platform-managed bots that auto-generate strategies, continuously self-improve via backtesting, swap tickers weekly, and are published as community models under the @Seif account. Alpha users get full management controls.
 
-### 1. Remove simulated data fallback — retry Alpaca instead
+### Architecture
 
-**`supabase/functions/ml-backend/index.ts`** (~lines 414-443):
-- Remove `generateSimulatedBars` function entirely
-- In `fetchMarketData()`: if no Alpaca credentials, throw an error instead of falling back to simulation
-- If Alpaca returns no bars or fails, retry up to 3 times with a 2-second delay between attempts
-- After 3 failures, throw a clear error ("Failed to fetch live market data from Alpaca after 3 attempts") instead of falling back to simulated data
-- Remove `simulateTrainingDemo` function (lines 657-669) — no more demo mode path
+```text
+  ┌──────────────────────────────────────────────────────────┐
+  │  system-bots edge function (new)                         │
+  │  Called on schedule (daily) + on-demand by Alpha         │
+  │                                                          │
+  │  1. Bootstrap: Create 3 models owned by @Seif            │
+  │     - "System Bot: Tech Growth" (tech stock)             │
+  │     - "System Bot: Tech Momentum" (tech stock)           │
+  │     - "System Bot: Precious Metals" (GLD/SLV/etc.)       │
+  │                                                          │
+  │  2. Weekly Ticker Rotation:                              │
+  │     AI picks best stock for each sector using            │
+  │     platform knowledge + recent performance              │
+  │                                                          │
+  │  3. Strategy Optimization:                               │
+  │     Runs backtests → picks best indicator setup           │
+  │     Uses same self-improve pipeline (bot-optimizer)       │
+  │                                                          │
+  │  4. All data fetched via @Seif's Alpaca credentials      │
+  │                                                          │
+  │  5. Models published as is_public=true, is_system=true   │
+  │     so they appear in the marketplace with a badge       │
+  └──────────────────────────────────────────────────────────┘
+```
 
-**`supabase/functions/quick-build/index.ts`** (~lines 25-86):
-- Same treatment: replace `fetchMarketData` to use Alpaca (currently uses Polygon with simulated fallback)
-- Use `ALPACA_API_KEY` / `ALPACA_API_SECRET` from env (already available)
-- Retry up to 3 times on failure, then throw error — no simulated data
-- Remove `generateSimulatedData` function
-- Remove `simulateTrainingAndValidation` function (lines 536-662) — instead, always invoke the real `ml-backend` training pipeline via internal edge function call
-- Update the quick-build flow (lines 482-515) to always call `ml-backend` for real training instead of falling back to simulation
+### Database Changes
 
-### 2. Include F1 score and precision in all training/backtest results
+**Add `is_system` column to `models` table:**
+- `is_system boolean NOT NULL DEFAULT false`
+- Identifies system-managed bots vs. user-created ones
 
-**`supabase/functions/ml-backend/index.ts`**:
-- Results already include `accuracy`, `f1`, `recall` — add `precision` to the results object stored in `training_runs` (it's already computed in `computeMetrics`, just not saved in the results dict at line 541)
+**Add `system_bot_config` table:**
 
-**`src/components/stock/QuickBuildPanel.tsx`** (ModelComparisonTable):
-- Add a "Precision" column to the table alongside Accuracy, F1, Recall
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | PK |
+| model_id | uuid | FK → models.id |
+| sector | text | "tech" or "precious_metals" |
+| ticker_pool | text[] | Candidate tickers for weekly rotation (e.g., AAPL, MSFT, NVDA, GOOGL, META for tech) |
+| current_ticker | text | Currently active ticker |
+| last_rotation_at | timestamptz | When ticker was last swapped |
+| last_optimization_at | timestamptz | When strategy was last optimized |
+| optimization_generation | int | Counter |
+| rotation_interval_days | int | Default 7 |
+| is_active | boolean | Master on/off |
+| created_at | timestamptz | |
 
-**`src/components/backtest/BacktestResults.tsx`**:
-- Backtest metrics already show Sharpe, Sortino, Profit Factor, CAGR, Win Rate, Max Drawdown, Total Return — these are trading metrics, not ML metrics. No F1/precision needed here since backtesting tests trade performance, not classification.
+RLS: Alpha users can SELECT and UPDATE. Service role can do everything.
 
-**`src/components/ml/TrainingProgress.tsx`** (if it displays training results):
-- Ensure F1 and precision are shown when training results are displayed
+### Edge Function: `supabase/functions/system-bots/index.ts`
 
-### 3. PostToMarketplace: default `is_public` to false (owner-only)
+Actions:
+- **`bootstrap`**: Creates the 3 system bot models under @Seif's user_id if they don't exist. Sets `is_system=true`, `is_public=true`, `model_type='system'`. Creates `system_bot_config` entries with appropriate ticker pools. Deploys them via `deployed_models`.
+- **`rotate-tickers`**: For each system bot, checks if `rotation_interval_days` have passed. If so, uses AI (Lovable AI gateway) to pick the best ticker from the pool based on recent market conditions and platform knowledge. Updates `models.ticker` and `system_bot_config.current_ticker`.
+- **`optimize`**: For each system bot, runs the same optimization pipeline as user bots: backtest current config → parameter sweep → AI rewrite if needed. Updates indicators_config and risk params. All data pulled via @Seif's Alpaca credentials.
+- **`status`**: Returns current state of all 3 system bots (for Alpha dashboard display).
+- **`update-config`**: Alpha can rename bots, change ticker pools, toggle active state, adjust rotation interval.
 
-**`src/components/automation/PostToMarketplaceDialog.tsx`**:
-- Change the default `isPublic` state to `false` so when a user posts/publishes a model, it defaults to private (visible only to the owner)
-- The toggle to make it public still exists, but the default is now "private"
+### Scheduler
 
-## Files to Edit
+Add a cron job that calls `system-bots` daily:
+1. Check if any bot needs ticker rotation (weekly check)
+2. Run optimization on all 3 bots (continuous improvement)
+3. The existing `run-automations` cron already handles signal generation + trade mirroring for deployed models — system bots just ride that pipeline since they're regular deployed models.
 
-| File | Change |
-|------|--------|
-| `supabase/functions/ml-backend/index.ts` | Remove simulated fallback, add retry logic, add precision to results |
-| `supabase/functions/quick-build/index.ts` | Switch to Alpaca, remove all simulation functions, always use real ml-backend |
-| `src/components/stock/QuickBuildPanel.tsx` | Add Precision column to ModelComparisonTable |
-| `src/components/automation/PostToMarketplaceDialog.tsx` | Default `isPublic` to `false` |
+### Frontend Changes
 
-No database changes needed.
+**`src/components/community/ModelMarketplaceCard.tsx`** — Show a "System Bot" badge (e.g., a robot icon + "System") when `model.is_system === true`. Style it distinctively so users can identify platform-managed bots.
+
+**`src/pages/ModelDetail.tsx`** — Display "System Bot" label, show that it auto-rotates tickers weekly and self-improves. Hide "Edit" buttons for non-Alpha users.
+
+**`src/pages/AlphaDashboard.tsx`** — Add a "System Bots" tab with:
+- Status cards for each bot (current ticker, last rotation, last optimization, subscriber count, performance metrics)
+- Rename capability
+- Toggle active/inactive
+- Edit ticker pool
+- Manual "Rotate Now" and "Optimize Now" buttons
+- View full signal/trade history
+
+**`src/hooks/useSystemBots.tsx`** (new) — Hooks for fetching system bot config, triggering actions (rotate, optimize, bootstrap), and updating config.
+
+### Data Flow
+
+1. **Bootstrap** (one-time): Alpha triggers or auto-runs on first deploy → creates 3 models + configs + deployments
+2. **Every minute** (existing cron): `run-automations` picks up deployed system bot models, generates signals, mirrors trades to subscribers — no changes needed
+3. **Daily** (new cron): `system-bots` checks rotation schedule and runs optimization
+4. **Weekly**: AI selects new tickers for each bot based on sector performance
+5. **On underperformance**: Same self-improve pipeline triggers (health check → param optimization → AI rewrite)
+
+### Ticker Pools (defaults)
+
+- **Tech Growth**: AAPL, MSFT, NVDA, GOOGL, META, AMZN, AMD, CRM, AVGO, ORCL
+- **Tech Momentum**: TSLA, PLTR, SNOW, NET, CRWD, DDOG, MDB, ZS, PANW, UBER
+- **Precious Metals**: GLD, SLV, GDX, GOLD, NEM, AEM, WPM, FNV
+
+### Security
+
+- System bots are owned by @Seif's real account — uses their Alpaca credentials for data + owner trades
+- `is_system` column prevents regular users from creating system bots (checked in edge function)
+- Only Alpha role can manage system bot config (RLS + edge function auth check)
+- Subscribers interact with system bots exactly like any other model — same subscription, allocation, trade mirroring flow
 

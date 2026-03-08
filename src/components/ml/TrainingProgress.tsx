@@ -108,7 +108,7 @@ export function TrainingProgress({ trainingRun, isLoading }: TrainingProgressPro
                       {modelName.replace('_', ' ')}
                     </span>
                   </div>
-                  <div className="flex gap-4 text-sm">
+                  <div className="flex gap-4 text-sm flex-wrap">
                     <div>
                       <span className="text-muted-foreground">Accuracy: </span>
                       <span className="font-mono">{((metrics as any).accuracy * 100).toFixed(1)}%</span>
@@ -116,6 +116,10 @@ export function TrainingProgress({ trainingRun, isLoading }: TrainingProgressPro
                     <div>
                       <span className="text-muted-foreground">F1: </span>
                       <span className="font-mono">{((metrics as any).f1 * 100).toFixed(1)}%</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Precision: </span>
+                      <span className="font-mono">{(metrics as any).precision != null ? `${((metrics as any).precision * 100).toFixed(1)}%` : '—'}</span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Recall: </span>

@@ -9,7 +9,8 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const POLYGON_API_KEY = Deno.env.get("POLYGON_API_KEY");
+const ALPACA_API_KEY = Deno.env.get("ALPACA_API_KEY");
+const ALPACA_API_SECRET = Deno.env.get("ALPACA_API_SECRET");
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 
 interface OHLCVBar {
@@ -21,68 +22,62 @@ interface OHLCVBar {
   volume: number;
 }
 
-// Fetch 1 year of OHLCV data
+// Fetch 1 year of OHLCV data via Alpaca
 async function fetchMarketData(ticker: string): Promise<OHLCVBar[]> {
+  if (!ALPACA_API_KEY || !ALPACA_API_SECRET) {
+    throw new Error("Alpaca credentials (ALPACA_API_KEY / ALPACA_API_SECRET) are not configured. Live market data is required.");
+  }
+
   const endDate = new Date();
   const startDate = new Date();
   startDate.setFullYear(startDate.getFullYear() - 1);
-
   const start = startDate.toISOString().split("T")[0];
   const end = endDate.toISOString().split("T")[0];
 
   const isCrypto = ticker.includes("/");
+  const baseUrl = isCrypto
+    ? `https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=${encodeURIComponent(ticker)}&timeframe=1Day&start=${start}&end=${end}&limit=1000&sort=asc`
+    : `https://data.alpaca.markets/v2/stocks/${ticker}/bars?timeframe=1Day&start=${start}&end=${end}&limit=1000&adjustment=raw&sort=asc`;
 
-  if (!POLYGON_API_KEY || isCrypto) {
-    console.log(`[QuickBuild] ${isCrypto ? 'Crypto ticker' : 'No Polygon API key'}, generating simulated data`);
-    return generateSimulatedData(ticker, start, end);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    console.log(`[QuickBuild] Fetching from Alpaca (attempt ${attempt}/3): ${ticker}`);
+    try {
+      const resp = await fetch(baseUrl, {
+        headers: {
+          "APCA-API-KEY-ID": ALPACA_API_KEY,
+          "APCA-API-SECRET-KEY": ALPACA_API_SECRET,
+        },
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error(`[QuickBuild] Alpaca HTTP ${resp.status}: ${errText}`);
+        if (attempt < 3) { await new Promise(r => setTimeout(r, 2000)); continue; }
+        throw new Error(`Alpaca API error (${resp.status}): ${errText}`);
+      }
+      const data = await resp.json();
+      const bars = isCrypto ? data.bars?.[ticker] : data.bars;
+      if (bars && bars.length > 0) {
+        console.log(`[QuickBuild] Got ${bars.length} bars from Alpaca`);
+        return bars.map((bar: any) => ({
+          date: bar.t.split("T")[0],
+          open: bar.o,
+          high: bar.h,
+          low: bar.l,
+          close: bar.c,
+          volume: bar.v,
+        }));
+      }
+      console.warn(`[QuickBuild] Alpaca returned no bars (attempt ${attempt}/3)`);
+      if (attempt < 3) { await new Promise(r => setTimeout(r, 2000)); continue; }
+      throw new Error(`No market data returned from Alpaca for ${ticker}`);
+    } catch (e: any) {
+      if (e.message.includes("Alpaca API error") || e.message.includes("No market data returned")) throw e;
+      console.error(`[QuickBuild] Alpaca fetch error (attempt ${attempt}/3):`, e.message);
+      if (attempt < 3) { await new Promise(r => setTimeout(r, 2000)); continue; }
+      throw new Error(`Failed to fetch live market data from Alpaca after 3 attempts: ${e.message}`);
+    }
   }
-
-  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/${start}/${end}?adjusted=true&sort=asc&apiKey=${POLYGON_API_KEY}`;
-  const resp = await fetch(url);
-  const data = await resp.json();
-
-  if (data.status === "ERROR" || !data.results) {
-    console.warn("[QuickBuild] Polygon API error, using simulated data");
-    return generateSimulatedData(ticker, start, end);
-  }
-
-  return data.results.map((bar: any) => ({
-    date: new Date(bar.t).toISOString().split("T")[0],
-    open: bar.o,
-    high: bar.h,
-    low: bar.l,
-    close: bar.c,
-    volume: bar.v,
-  }));
-}
-
-function generateSimulatedData(ticker: string, start: string, end: string): OHLCVBar[] {
-  const startD = new Date(start);
-  const endD = new Date(end);
-  const data: OHLCVBar[] = [];
-  const seed = ticker.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  let price = 100 + (seed % 150);
-  const isCrypto = ticker.includes("/");
-
-  for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
-    // Skip weekends only for stocks, not crypto
-    if (!isCrypto && (d.getDay() === 0 || d.getDay() === 6)) continue;
-    const change = (Math.random() - 0.5) * 0.04;
-    const open = price;
-    const close = price * (1 + change);
-    const high = Math.max(open, close) * (1 + Math.random() * 0.02);
-    const low = Math.min(open, close) * (1 - Math.random() * 0.02);
-    data.push({
-      date: d.toISOString().split("T")[0],
-      open: +open.toFixed(2),
-      high: +high.toFixed(2),
-      low: +low.toFixed(2),
-      close: +close.toFixed(2),
-      volume: Math.floor(1e6 + Math.random() * 5e6),
-    });
-    price = close;
-  }
-  return data;
+  throw new Error("Failed to fetch live market data from Alpaca after 3 attempts");
 }
 
 // Compute summary statistics from OHLCV data
@@ -479,39 +474,35 @@ serve(async (req) => {
 
     console.log(`[QuickBuild] Created training run ${trainingRun.id}`);
 
-    // 5. Trigger training via the ml-backend function (internal call)
-    const ML_BACKEND_URL_RAW = Deno.env.get("ML_BACKEND_URL");
-    const ML_BACKEND_URL = ML_BACKEND_URL_RAW?.replace(/\/+$/, "");
-
-    if (ML_BACKEND_URL) {
-      try {
-        const mlResp = await fetch(`${ML_BACKEND_URL}/train`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            training_run_id: trainingRun.id,
-            ticker: upperSymbol,
-            start_date: aiConfig.training_date_range.start,
-            end_date: aiConfig.training_date_range.end,
-            horizon_minutes: aiConfig.horizon,
-            indicators: aiConfig.indicators,
-            hyperparameters: aiConfig.hyperparameters,
-            callback_url: `${SUPABASE_URL}/functions/v1/ml-backend/callback`,
-          }),
-        });
-        if (mlResp.ok) {
-          await supabase.from("training_runs").update({ status: "running" }).eq("id", trainingRun.id);
-        } else {
-          console.warn("[QuickBuild] ML backend returned error, using simulation");
-          await simulateTrainingAndValidation(supabase, run.id, trainingRun.id, user.id, aiConfig);
-        }
-      } catch (e: any) {
-        console.warn("[QuickBuild] ML backend unreachable, simulating:", e.message);
-        await simulateTrainingAndValidation(supabase, run.id, trainingRun.id, user.id, aiConfig);
+    // 5. Trigger real training via the ml-backend edge function (internal call)
+    console.log("[QuickBuild] Invoking ml-backend for real training");
+    try {
+      const mlResp = await fetch(`${SUPABASE_URL}/functions/v1/ml-backend`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({
+          training_run_id: trainingRun.id,
+          ticker: upperSymbol,
+          start_date: aiConfig.training_date_range.start,
+          end_date: aiConfig.training_date_range.end,
+          horizon: aiConfig.horizon,
+          theta: aiConfig.theta,
+          indicators: indicatorsWithCustom,
+          hyperparameters: aiConfig.hyperparameters,
+        }),
+      });
+      if (!mlResp.ok) {
+        const errText = await mlResp.text();
+        console.error("[QuickBuild] ml-backend error:", errText);
+        throw new Error(`ml-backend returned ${mlResp.status}`);
       }
-    } else {
-      console.log("[QuickBuild] No ML backend URL, simulating entire pipeline");
-      await simulateTrainingAndValidation(supabase, run.id, trainingRun.id, user.id, aiConfig);
+    } catch (e: any) {
+      console.error("[QuickBuild] Failed to trigger ml-backend:", e.message);
+      await supabase.from("quick_build_runs").update({ status: "failed", error_message: `Training failed: ${e.message}` }).eq("id", run.id);
+      throw e;
     }
 
     return new Response(
@@ -532,131 +523,4 @@ serve(async (req) => {
   }
 });
 
-// Simulate the entire training + validation pipeline
-async function simulateTrainingAndValidation(
-  supabase: any,
-  quickBuildId: string,
-  trainingRunId: string,
-  userId: string,
-  aiConfig: any
-) {
-  // Simulate training
-  await supabase.from("training_runs").update({ status: "running" }).eq("id", trainingRunId);
-  await new Promise((r) => setTimeout(r, 2000));
-
-  const results: Record<string, { accuracy: number; f1: number; recall: number }> = {
-    random_forest: {
-      accuracy: +(0.65 + Math.random() * 0.15).toFixed(4),
-      f1: +(0.60 + Math.random() * 0.15).toFixed(4),
-      recall: +(0.58 + Math.random() * 0.15).toFixed(4),
-    },
-    gradient_boosting: {
-      accuracy: +(0.67 + Math.random() * 0.13).toFixed(4),
-      f1: +(0.62 + Math.random() * 0.13).toFixed(4),
-      recall: +(0.60 + Math.random() * 0.13).toFixed(4),
-    },
-    logistic_regression: {
-      accuracy: +(0.55 + Math.random() * 0.15).toFixed(4),
-      f1: +(0.50 + Math.random() * 0.15).toFixed(4),
-      recall: +(0.48 + Math.random() * 0.15).toFixed(4),
-    },
-  };
-
-  const bestModel = Object.entries(results).reduce(
-    (best, [name, m]) => (m.accuracy > (best.metrics?.accuracy || 0) ? { name, metrics: m } : best),
-    { name: "", metrics: null as any }
-  );
-
-  await supabase
-    .from("training_runs")
-    .update({
-      status: "completed",
-      results,
-      best_model_name: bestModel.name,
-      best_model_metrics: bestModel.metrics,
-      completed_at: new Date().toISOString(),
-    })
-    .eq("id", trainingRunId);
-
-  // Update quick build to validating
-  await supabase
-    .from("quick_build_runs")
-    .update({ status: "validating" })
-    .eq("id", quickBuildId);
-
-  // Simulate validation
-  const { data: valRun } = await supabase
-    .from("validation_runs")
-    .insert({
-      user_id: userId,
-      training_run_id: trainingRunId,
-      start_date: aiConfig.validation_date_range.start,
-      end_date: aiConfig.validation_date_range.end,
-      status: "running",
-    })
-    .select()
-    .single();
-
-  if (valRun) {
-    await supabase
-      .from("quick_build_runs")
-      .update({ validation_run_id: valRun.id })
-      .eq("id", quickBuildId);
-
-    await new Promise((r) => setTimeout(r, 1500));
-
-    const valMetrics = {
-      accuracy: +(bestModel.metrics.accuracy - 0.02 + Math.random() * 0.04).toFixed(4),
-      f1: +(bestModel.metrics.f1 - 0.02 + Math.random() * 0.04).toFixed(4),
-      recall: +(bestModel.metrics.recall - 0.02 + Math.random() * 0.04).toFixed(4),
-      precision: +(0.60 + Math.random() * 0.12).toFixed(4),
-    };
-
-    const signalDist = {
-      BUY: Math.floor(30 + Math.random() * 20),
-      SELL: Math.floor(25 + Math.random() * 20),
-      HOLD: Math.floor(40 + Math.random() * 30),
-    };
-
-    await supabase
-      .from("validation_runs")
-      .update({
-        status: "completed",
-        metrics: valMetrics,
-        signal_distribution: signalDist,
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", valRun.id);
-  }
-
-  // Mark quick build complete
-  await supabase
-    .from("quick_build_runs")
-    .update({
-      status: "completed",
-      results: { training: results, best_model: bestModel },
-      completed_at: new Date().toISOString(),
-    })
-    .eq("id", quickBuildId);
-
-  console.log(`[QuickBuild] Simulation complete for ${quickBuildId}`);
-
-  // Ingest into strategy knowledge (fire-and-forget)
-  try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (supabaseUrl && serviceKey) {
-      fetch(`${supabaseUrl}/functions/v1/strategy-knowledge`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-        body: JSON.stringify({
-          action: "ingest",
-          symbol: aiConfig.training_date_range ? aiConfig.symbol || "UNKNOWN" : "UNKNOWN",
-          source_type: "quick_build",
-          indicators_used: aiConfig.indicators || {},
-          risk_params: { theta: aiConfig.theta, horizon: aiConfig.horizon },
-        }),
-      }).catch(() => {});
-    }
-  } catch {}
-}
+// Simulation removed — all training uses real ml-backend pipeline
