@@ -238,6 +238,14 @@ export function BacktestPanel({ config }: BacktestPanelProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Quick date presets */}
+          <div className="flex gap-1.5 flex-wrap">
+            {DATE_PRESETS.map(p => (
+              <Button key={p.label} variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={() => applyPreset(p.months)}>
+                {p.label}
+              </Button>
+            ))}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">Start Date</Label>
