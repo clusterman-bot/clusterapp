@@ -611,7 +611,8 @@ serve(async (req) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          Authorization: `Bearer ${token}`,
+          apikey: Deno.env.get("SUPABASE_ANON_KEY") || SUPABASE_SERVICE_ROLE_KEY,
         },
         body: JSON.stringify({
           training_run_id: trainingRun.id,
