@@ -59,11 +59,32 @@ interface BacktestPanelProps {
   };
 }
 
+const getDateString = (d: Date) => d.toISOString().split('T')[0];
+const sixMonthsAgo = () => {
+  const d = new Date(); d.setMonth(d.getMonth() - 6); return getDateString(d);
+};
+const today = () => getDateString(new Date());
+
+const DATE_PRESETS = [
+  { label: '1M', months: 1 },
+  { label: '3M', months: 3 },
+  { label: '6M', months: 6 },
+  { label: '1Y', months: 12 },
+  { label: '2Y', months: 24 },
+];
+
 export function BacktestPanel({ config }: BacktestPanelProps) {
-  const [startDate, setStartDate] = useState('2023-01-01');
-  const [endDate, setEndDate] = useState('2024-01-01');
+  const [startDate, setStartDate] = useState(sixMonthsAgo());
+  const [endDate, setEndDate] = useState(today());
   const [initialCapital, setInitialCapital] = useState('100000');
   const [timeframe, setTimeframe] = useState('1Day');
+
+  const applyPreset = (months: number) => {
+    const end = new Date();
+    const start = new Date(); start.setMonth(start.getMonth() - months);
+    setStartDate(getDateString(start));
+    setEndDate(getDateString(end));
+  };
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [chunkProgress, setChunkProgress] = useState<{ current: number; total: number } | null>(null);
@@ -217,6 +238,14 @@ export function BacktestPanel({ config }: BacktestPanelProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Quick date presets */}
+          <div className="flex gap-1.5 flex-wrap">
+            {DATE_PRESETS.map(p => (
+              <Button key={p.label} variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={() => applyPreset(p.months)}>
+                {p.label}
+              </Button>
+            ))}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">Start Date</Label>

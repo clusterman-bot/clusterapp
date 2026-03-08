@@ -21,11 +21,28 @@ export default function RunBacktest() {
   const { data: model, isLoading: modelLoading } = useModel(id!);
   const createBacktest = useCreateBacktest();
 
+  const getDateString = (d: Date) => d.toISOString().split('T')[0];
+  const sixMonthsAgo = () => { const d = new Date(); d.setMonth(d.getMonth() - 6); return getDateString(d); };
+
   const [name, setName] = useState('');
-  const [startDate, setStartDate] = useState('2023-01-01');
-  const [endDate, setEndDate] = useState('2024-01-01');
+  const [startDate, setStartDate] = useState(sixMonthsAgo());
+  const [endDate, setEndDate] = useState(getDateString(new Date()));
   const [initialCapital, setInitialCapital] = useState('100000');
   const [benchmark, setBenchmark] = useState('SPY');
+
+  const DATE_PRESETS = [
+    { label: '1M', months: 1 },
+    { label: '3M', months: 3 },
+    { label: '6M', months: 6 },
+    { label: '1Y', months: 12 },
+    { label: '2Y', months: 24 },
+  ];
+  const applyPreset = (months: number) => {
+    const end = new Date();
+    const start = new Date(); start.setMonth(start.getMonth() - months);
+    setStartDate(getDateString(start));
+    setEndDate(getDateString(end));
+  };
 
   if (!user) {
     navigate('/auth');
@@ -100,6 +117,14 @@ export default function RunBacktest() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Quick presets */}
+                <div className="flex gap-2 flex-wrap">
+                  {DATE_PRESETS.map(p => (
+                    <Button key={p.label} variant="outline" size="sm" onClick={() => applyPreset(p.months)}>
+                      {p.label}
+                    </Button>
+                  ))}
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="name">Backtest Name (optional)</Label>
                   <Input
