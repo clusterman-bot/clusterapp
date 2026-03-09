@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
+// Force rebuild to clear stale chunks
 import { useAuth } from '@/hooks/useAuth';
 import { useEmailVerified } from '@/hooks/useEmailVerified';
 import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
